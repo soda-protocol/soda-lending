@@ -1,0 +1,33 @@
+[package]
+name = "soda-lending-contract"
+version = "0.0.1"
+authors = ["gyllone <gyl19930522@163.com>"]
+edition = "2018"
+
+[dependencies]
+arrayref = "0.3.6"
+flux-aggregator = { git = "https://github.com/octopus-network/solana-flux-aggregator", rev = "9cfaec5", features = ["no-entrypoint"] }
+num-derive = "0.3"
+num-traits = "0.2"
+solana-program = "1.7.9"
+spl-token = "3.1.0"
+thiserror = "1.0"
+uint = "0.9"
+
+[dev-dependencies]
+assert_matches = "1.5.0"
+base64 = "0.13"
+log = "0.4.14"
+proptest = "1.0"
+solana-program-test = "1.7.9"
+solana-sdk = "1.7.9"
+serde = "1.0"
+serde_yaml = "0.8"
+
+[features]
+no-entrypoint = []
+test-bpf = []
+test-dump-genesis-accounts = []
+
+[lib]
+crate-type = ["cdylib", "lib"]
