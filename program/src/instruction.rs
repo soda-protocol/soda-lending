@@ -15,41 +15,53 @@ use std::{convert::TryInto, mem::size_of};
 /// Instructions supported by the lending program.
 #[derive(Clone, Debug, PartialEq)]
 pub enum LendingInstruction {
-    // 0
+    /// 0
     InitManager {
+        ///
         quote_decimal: u8,
     },
-    // 1
+    /// 1
     InitMarketReserveWithoutLiquidity {
+        ///
         liquidate_fee_rate: u64,
+        ///
         liquidate_limit_rate: u64,
     },
-    // 2
+    /// 2
     InitMarketReserveWithLiquidity {
+        ///
         liquidate_fee_rate: u64,
+        ///
         liquidate_limit_rate: u64,
+        ///
         min_borrow_utilization_rate: u64,
+        ///
         max_borrow_utilization_rate: u64,
+        ///
         interest_fee_rate: u64, 
     },
-    // 3
+    /// 3
     InitUserObligation,
-    // 4
+    /// 4
     InitUserAsset,
-    // 5
+    /// 5
     DepositLiquidity {
+        ///
         amount: u64,
     },
-    // 6
+    /// 6
     WithdrawLiquidity {
+        ///
         amount: u64,
     },
-    // 7
+    /// 7
     DepositCollateral {
+        ///
         amount: u64,
     },
-    // 8
+    /// 8
     BorrowLiquidity {
+        ///
         amount: u64,
     },
 }
@@ -199,6 +211,7 @@ impl LendingInstruction {
     }
 }
 
+///
 pub fn init_manager(
     program_id: Pubkey,
     manager_info: Pubkey,
@@ -217,6 +230,7 @@ pub fn init_manager(
     }
 }
 
+///
 pub fn init_market_reserve_without_liquidity(
     program_id: Pubkey,
     manager_info: Pubkey,

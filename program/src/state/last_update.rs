@@ -20,7 +20,7 @@ pub struct LastUpdate {
 }
 
 impl Sealed for LastUpdate {}
-
+///
 pub const LAST_UPDATE_LEN: usize = 9;
 
 impl Pack for LastUpdate {

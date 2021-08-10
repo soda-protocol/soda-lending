@@ -12,16 +12,23 @@ use solana_program::{
     pubkey::{Pubkey, PUBKEY_BYTES}
 };
 
+///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Liquidity {
+    ///
     pub available: u64,
+    ///
     pub borrowed: u64,
+    ///
     pub interest: u64,
+    ///
     pub fee: u64,
+    ///
     pub loss: u64,
 }
 
 impl Liquidity {
+    ///
     pub fn utilization_rate(&self) -> Result<Rate, ProgramError> {
         let total = self.available
             .checked_add(self.borrowed)
@@ -31,7 +38,7 @@ impl Liquidity {
             .try_div(total)?
             .try_into()
     }
-
+    ///
     pub fn deposit(&mut self, amount: u64) -> ProgramResult {
         self.available = self.available
             .checked_add(amount)
@@ -39,7 +46,7 @@ impl Liquidity {
 
         Ok(())
     }
-
+    ///
     pub fn borrow_out(&mut self, amount: u64) -> ProgramResult {
         self.available = self.available
             .checked_sub(amount)
@@ -51,7 +58,7 @@ impl Liquidity {
 
         Ok(())
     }
-
+    ///
     pub fn repay(&mut self, fund: &Fund) -> ProgramResult {
         self.available = self.available
             .checked_add(fund.principal)
@@ -65,7 +72,7 @@ impl Liquidity {
 
         Ok(())
     }
-
+    ///
     pub fn liquidate(&mut self, fund: &Fund, fee: u64) -> ProgramResult {
         self.available = self.available
             .checked_add(fund.principal)
@@ -83,7 +90,7 @@ impl Liquidity {
         
         Ok(())
     }
-
+    ///
     pub fn withdraw(&mut self, fund: &Fund, fee: u64) -> ProgramResult {
         if fund.interest > self.interest {
             msg!("insufficient interest reserve: {}", fund.interest);
@@ -107,7 +114,7 @@ impl Liquidity {
 
         Ok(())
     }
-
+    ///
     pub fn withdraw_fee(&mut self, fee: u64) -> ProgramResult {
         self.fee = self.fee
             .checked_sub(fee)
@@ -115,7 +122,7 @@ impl Liquidity {
         
         Ok(())
     }
-
+    ///
     pub fn fill_loss(&mut self, loss: u64) -> ProgramResult {
         if loss > self.loss {
             self.loss = 0;
@@ -129,7 +136,7 @@ impl Liquidity {
 
         Ok(())
     }
-
+    ///
     pub fn add_loss(&mut self, loss: u64) -> ProgramResult {
         self.loss = self.loss
             .checked_add(loss)
@@ -139,13 +146,20 @@ impl Liquidity {
     }
 }
 
+///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LiquidityInfo {
+    ///
     pub interest_rate_oracle: Pubkey,
+    ///
     pub borrow_rate_oracle: Pubkey,
+    ///
     pub min_borrow_utilization_rate: u64,
+    ///
     pub max_borrow_utilization_rate: u64,
-    pub interest_fee_rate: u64, 
+    ///
+    pub interest_fee_rate: u64,
+    ///
     pub liquidity: Liquidity,
 }
 
@@ -241,14 +255,19 @@ impl Pack for LiquidityInfo {
     }
 }
 
+///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CollateralInfo {
+    ///
     pub liquidate_fee_rate: u64,
+    ///
     pub liquidate_limit_rate: u64,
+    ///
     pub amount: u64,
 }
 
 impl CollateralInfo {
+    ///
     pub fn add(&mut self, amount: u64) -> ProgramResult {
         self.amount = self.amount
             .checked_add(amount)
@@ -256,7 +275,7 @@ impl CollateralInfo {
         
         Ok(())
     }
-
+    ///
     pub fn reduce(&mut self, amount: u64) -> ProgramResult {
         self.amount = self.amount
             .checked_sub(amount)

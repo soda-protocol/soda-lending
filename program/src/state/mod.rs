@@ -37,7 +37,7 @@ pub const SLOTS_PER_YEAR: u64 =
 
 /// 
 pub const MAX_OBLIGATION_COLLATERALS: usize = 3;
-
+///
 const COPTION_SOME_TAG: u8 = 1;
 const COPTION_NONE_TAG: u8 = 0;
 

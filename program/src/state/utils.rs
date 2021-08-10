@@ -11,27 +11,36 @@ use solana_program::{
 };
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 
+///
 #[derive(Clone, Debug, PartialEq)]
 pub struct CollateralConfig {
+    ///
     pub liquidate_fee_rate: u64,
+    ///
     pub liquidate_limit_rate: u64,
 }
 
+///
 #[derive(Clone, Debug, PartialEq)]
 pub struct LiquidityConfig {
+    ///
     pub min_borrow_utilization_rate: u64,
+    ///
     pub max_borrow_utilization_rate: u64,
+    ///
     pub interest_fee_rate: u64, 
 }
-
+///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TokenInfo {
+    ///
     pub account: Pubkey,
+    ///
     pub price_oracle: Pubkey,
 }
 
 impl Sealed for TokenInfo {}
-
+///
 pub const TOKEN_INFO_LEN: usize = 64;
 
 impl Pack for TokenInfo {
@@ -71,25 +80,31 @@ impl Pack for TokenInfo {
         })
     }
 }
-
+///
 #[derive(Clone, Copy, Debug)]
 pub struct Fund {
+    ///
     pub principal: u64,
+    ///
     pub interest: u64,
 }
-
+///
 #[derive(Clone, Copy, Debug)]
 pub struct Pair {
+    ///
     pub amount: u64,
+    ///
     pub price: Decimal,
 }
-
+///
 #[derive(Clone, Copy, Debug)]
 pub struct Settle {
+    ///
     pub price_oracle: Pubkey,
+    ///
     pub price: Decimal,
 }
-
+///
 #[inline(always)]
 pub fn price_conversion(price: u64, decimal: u8) -> Result<Decimal, ProgramError> {
     let decimals = 10u64
@@ -98,7 +113,7 @@ pub fn price_conversion(price: u64, decimal: u8) -> Result<Decimal, ProgramError
 
     Decimal::from(price).try_div(decimals)
 }
-
+///
 #[inline(always)]
 pub fn calculate_interest(base: u64, rate: Rate, elapsed: Slot) -> Result<u64, ProgramError> {
     Decimal::from(base)
@@ -107,7 +122,7 @@ pub fn calculate_interest(base: u64, rate: Rate, elapsed: Slot) -> Result<u64, P
         .try_div(SLOTS_PER_YEAR)?
         .try_ceil_u64()
 }
-
+///
 #[inline(always)]
 pub fn calculate_compound_interest(base: u64, rate: Rate, elapsed: Slot) -> Result<u64, ProgramError> {
     let compounded_interest_rate = rate
@@ -119,14 +134,14 @@ pub fn calculate_compound_interest(base: u64, rate: Rate, elapsed: Slot) -> Resu
         .try_mul(compounded_interest_rate)?
         .try_ceil_u64()
 }
-
+///
 #[inline(always)]
 pub fn calculate_interest_fee(interest: u64, fee_rate: Rate) -> Result<u64, ProgramError> {
     Decimal::from(interest)
         .try_mul(fee_rate)?
         .try_ceil_u64()
 }
-
+///
 #[inline(always)]
 pub fn validate_liquidation_limit(loan_value: Decimal, collaterals_value: Decimal) -> ProgramResult {
     if collaterals_value > loan_value {
@@ -135,7 +150,8 @@ pub fn validate_liquidation_limit(loan_value: Decimal, collaterals_value: Decima
         Err(LendingError::ObligationCollateralsLiquidatitonLimit.into())
     }
 }
-
+///
+#[inline(always)]
 pub fn calculate_liquidation_fee(
     collaterals_value: Decimal,
     loan: Pair,

@@ -12,10 +12,14 @@ use solana_program::{
     pubkey::{Pubkey, PUBKEY_BYTES}
 };
 
+///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Collateral {
+    ///
     pub price_oracle: Pubkey,
+    ///
     pub liquidate_limit_rate: u64,
+    ///
     pub amount: u64,
 }
 
@@ -68,24 +72,25 @@ impl Pack for Collateral {
 }
 
 impl Collateral {
+    ///
     pub fn value(&self, price: &Decimal) -> Result<Decimal, ProgramError> {
         price
             .try_mul(self.amount)?
             .try_mul(Rate::from_scaled_val(self.liquidate_limit_rate))
     }
-
+    ///
     pub fn actual_value(&self, price: &Decimal) -> Result<Decimal, ProgramError> {
         price
             .try_mul(self.amount)
     }
-
+    ///
     pub fn deposit(&mut self, amount: u64) -> ProgramResult {
         self.amount = self.amount
             .checked_add(amount)
             .ok_or(LendingError::MathOverflow)?;
         Ok(())
     }
-
+    ///
     pub fn redeem(&mut self, amount: u64) -> Result<bool, ProgramError> {
         self.amount = self.amount
             .checked_sub(amount)
@@ -206,6 +211,7 @@ impl Pack for UserObligation {
 }
 
 impl UserObligation {
+    ///
     pub fn update_borrow_interest(&mut self, slot: Slot, borrow_rate: Rate) -> ProgramResult {
         let elapsed = self.last_update.slots_elapsed(slot)?;
         let interest = calculate_interest(self.borrowed_amount, borrow_rate, elapsed)?;
@@ -216,7 +222,7 @@ impl UserObligation {
 
         Ok(())
     }
-
+    ///
     pub fn borrow_out(&mut self, amount: u64) -> ProgramResult {
         self.dept_amount = self.dept_amount
             .checked_add(amount)
@@ -228,7 +234,7 @@ impl UserObligation {
 
         Ok(())
     }
-
+    ///
     pub fn repay(&mut self, amount: u64) -> Result<Fund, ProgramError> {
         self.dept_amount = self.dept_amount
             .checked_sub(amount)
@@ -249,7 +255,7 @@ impl UserObligation {
             })
         }
     }
-
+    ///
     pub fn pledge(&mut self, index: usize, amount: u64) -> ProgramResult {
         self.collaterals[index].amount = self.collaterals[index].amount
             .checked_add(amount)
@@ -257,7 +263,7 @@ impl UserObligation {
 
         Ok(())
     }
-
+    ///
     pub fn new_pledge(&mut self, collateral: Collateral) -> ProgramResult {
         if self.collaterals.len() >= MAX_OBLIGATION_COLLATERALS {
             Err(LendingError::ObligationCollateralsLimitExceed.into())
@@ -267,7 +273,7 @@ impl UserObligation {
             Ok(())
         }
     }
-
+    ///
     pub fn redeem(&mut self, index: usize, amount: u64) -> ProgramResult {
         self.collaterals[index].amount = self.collaterals[index].amount
             .checked_sub(amount)
@@ -279,7 +285,7 @@ impl UserObligation {
 
         Ok(())
     }
-
+    ///
     pub fn redeem_all(&mut self) -> ProgramResult {
         if self.dept_amount > 0 {
             Err(LendingError::ObligationCollateralsNotEmpty.into())
@@ -288,7 +294,7 @@ impl UserObligation {
             Ok(())
         }
     }
-
+    ///
     pub fn liquidate(
         &mut self,
         index: usize,
@@ -318,12 +324,12 @@ impl UserObligation {
     
         self.repay(repay_amount)
     }
-
+    ///
     pub fn liquidate_all(&mut self) -> Result<Fund, ProgramError> {
         self.collaterals.clear();
         self.repay(self.dept_amount)
     }
-
+    ///
     pub fn collaterals_value(&self, settles: &[Settle]) -> Result<Decimal, ProgramError> {
         self.collaterals
             .iter()
@@ -337,7 +343,7 @@ impl UserObligation {
                 }
             })
     }
-
+    ///
     pub fn collaterals_actual_value(&self, settles: &[Settle]) -> Result<Decimal, ProgramError> {
         self.collaterals
             .iter()
@@ -351,11 +357,11 @@ impl UserObligation {
                 }
             })
     }
-
+    ///
     pub fn loan_value(&self, price: Decimal) -> Result<Decimal, ProgramError> {
         price.try_mul(self.dept_amount)
     }
-
+    ///
     pub fn find_collateral(&self, price_oracle: &Pubkey) -> Option<usize> {
         self.collaterals
             .iter()

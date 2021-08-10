@@ -43,28 +43,41 @@ pub enum LendingError {
     /// Expected a different SPL Token program
     #[error("Input token program account is not valid")]
     InvalidTokenProgram,
+    ///
     #[error("Manager is invalid")]
     InvalidManager,
+    ///
     #[error("Manager owner is invalid")]
+    ///
     InvalidManagerOwner,
+    ///
     #[error("Manager authority is invalid")]
     InvalidManagerAuthority,
+    ///
     #[error("Invalid manager token account")]
     InvalidManagerTokenAccount,
+    ///
     #[error("Market reserve is invalid")]
     InvalidMarketReserve,
+    ///
     #[error("Price oracle is invalid")]
     InvalidPriceOracle,
+    ///
     #[error("Interest oracle is invalid")]
     InvalidInterestOracle,
+    ///
     #[error("Borrow rate oracle is invalid")]
     InvalidBorrowRateOracle,
+    ///
     #[error("User asset owner is invalid")]
     InvalidUserAssetOwner,
+    ///
     #[error("Invalid user token account")]
     InvalidUserTokenAccount,
+    ///
     #[error("User authority is invalid")]
     InvalidUserAuthority,
+    ///
     #[error("Invalid user obligation")]
     InvalidUserObligation,
 
@@ -183,37 +196,49 @@ pub enum LendingError {
     /// Not enough liquidity after flash loan
     #[error("Not enough liquidity after flash loan")]
     NotEnoughLiquidityAfterFlashLoan,
-
+    ///
     #[error("Obligation collaterals not matched")]
     ObligationCollateralsNotMatched,
+    ///
     #[error("Obligation collaterals are not empty")]
     ObligationCollateralsNotEmpty,
+    ///
     #[error("Obligation collaterals need to be liquidated")]
     ObligationCollateralsLiquidatitonLimit,
+    ///
     #[error("Obligation collaterals limit exceeded")]
     ObligationCollateralsLimitExceed,
+    ///
     #[error("Obligation collateral not found")]
     ObligationCollateralNotFound,
+    ///
     #[error("Obligation collateral index exceeded")]
     ObligationCollateralIndexExceed,
+    ///
     #[error("Obligation collateral amount insufficient")]
     ObligationCollateralAmountInsufficient,
+    ///
     #[error("Obligation dept amount insufficient")]
     ObligationDeptAmountInsufficient,
-
+    ///
     #[error("Market Reserve liquidity is not available")]
     MarketReserveLiquidityNotAvailable,
+    ///
     #[error("Market Reserve liquidity utilization rate exceeds limit")]
     MarketReserveLiquidityUtilizationTooLarge,
+    ///
     #[error("Market Reserve liquidity utilization rate is lower than limit")]
     MarketReserveLiquidityUtilizationTooSmall,
+    ///
     #[error("Market Reserve liquidity available insufficient")]
     MarketReserveLiquidityAvailableInsufficent,
+    ///
     #[error("Market Reserve liquidity fee insufficient")]
     MarketReserveLiquidityFeeInsufficent,
+    ///
     #[error("Market Reserve collateral insufficient")]
     MarketReserveCollateralInsufficent,
-
+    ///
     #[error("User Asset insufficient")]
     UserAssetInsufficient,
 }

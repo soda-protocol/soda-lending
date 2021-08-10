@@ -12,6 +12,7 @@ use solana_program::{
     pubkey::{Pubkey, PUBKEY_BYTES}
 };
 
+///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct UserAsset {
     ///
@@ -106,6 +107,7 @@ impl Pack for UserAsset {
 }
 
 impl UserAsset {
+    ///
     pub fn update_interest(&mut self, slot: Slot, interest_rate: Rate) -> ProgramResult {
         let elapsed = slot
             .checked_sub(self.timestamp)
@@ -118,7 +120,7 @@ impl UserAsset {
 
         Ok(())
     }
-
+    ///
     pub fn deposit(&mut self, amount: u64) -> ProgramResult {
         self.principle_amount = self.principle_amount
             .checked_add(amount)
@@ -129,7 +131,7 @@ impl UserAsset {
         
         Ok(())
     }
-
+    ///
     pub fn withdraw(&mut self, amount: u64) -> Result<Fund, ProgramError> {
         let acc_interest = self.total_amount
             .checked_sub(self.principle_amount)
@@ -153,7 +155,7 @@ impl UserAsset {
             })
         }
     }
-
+    ///
     pub fn change_owner(&mut self, new_owner: Pubkey) {
         self.owner = new_owner;
     }
