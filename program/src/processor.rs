@@ -556,6 +556,7 @@ fn process_borrow_liquidity(
         manager_info.key.as_ref(),
         &[manager.bump_seed]
     ];
+    let decimal = manager.quote_decimal;
     drop(manager);
     let manager_authority = Pubkey::create_program_address(authority_signer_seeds, program_id)?;
 
@@ -613,7 +614,6 @@ fn process_borrow_liquidity(
     // 2. borrow
     user_obligation.borrow_out(amount)?;
     // 3. calculate loan value
-    let decimal = manager.quote_decimal;
     let price = price_conversion(read_median(liquidity_price_oracle_info)?.median, decimal)?;
     let loan_value = user_obligation.loan_value(price)?;
     // 4. calculate collaterals value
