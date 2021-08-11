@@ -174,7 +174,7 @@ impl LendingInstruction {
         match *self {
             Self::InitManager { quote_currency } => {
                 buf.push(0);
-                buf.extend(quote_currency.into_iter());
+                buf.extend_from_slice(quote_currency.as_ref());
             }
             Self::InitMarketReserveWithoutLiquidity { 
                 liquidate_fee_rate,
