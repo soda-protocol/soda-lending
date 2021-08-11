@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+///
 use super::*;
 use crate::{
     error::LendingError,
@@ -11,6 +13,9 @@ use solana_program::{
     program_pack::{IsInitialized, Pack, Sealed},
     pubkey::{Pubkey, PUBKEY_BYTES}
 };
+
+/// 
+const MAX_OBLIGATION_COLLATERALS: usize = 3;
 
 ///
 #[derive(Clone, Debug, Default, PartialEq)]

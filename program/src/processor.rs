@@ -1,15 +1,16 @@
 //! Program state processor
+use std::convert::TryInto;
 use crate::{
     error::LendingError,
     instruction::LendingInstruction,
-    math::Rate,
+    math::{Rate, Decimal, TryDiv, TryMul},
+    pyth,
     state::{
-        CollateralConfig, CollateralInfo, Collateral, LastUpdate, Liquidity, LiquidityConfig,
+        CollateralConfig, CollateralInfo, Collateral, LastUpdate, Liquidity, LiquidityConfig, RateOracle,
         LiquidityInfo, Manager, MarketReserve, PROGRAM_VERSION, TokenInfo, UserAsset, UserObligation,
-        Fund, Settle, price_conversion, calculate_interest_fee, validate_liquidation_limit,
+        Fund, Settle, calculate_interest_fee, validate_liquidation_limit,
     },
 };
-use flux_aggregator::{borsh_state::InitBorshState, read_median, state::Aggregator};
 use num_traits::FromPrimitive;
 use solana_program::{
     account_info::{next_account_info, AccountInfo},
@@ -33,16 +34,16 @@ pub fn process_instruction(
 ) -> ProgramResult {
     let instruction = LendingInstruction::unpack(input)?;
     match instruction {
-        LendingInstruction::InitManager { quote_decimal } => {
+        LendingInstruction::InitManager { quote_currency } => {
             msg!("Instruction: Init Lending Manager");
-            process_init_manager(program_id, accounts, quote_decimal)
+            process_init_manager(program_id, accounts, quote_currency)
         }
         LendingInstruction::InitMarketReserveWithoutLiquidity {
             liquidate_fee_rate,
             liquidate_limit_rate,
         } => {
             msg!("Instruction: Init Market Reserve Without Liquidity");
-            process_init_market_reserve(program_id, accounts, &CollateralConfig{
+            process_init_market_reserve(program_id, accounts, CollateralConfig{
                 liquidate_fee_rate,
                 liquidate_limit_rate,
             }, None)
@@ -55,10 +56,10 @@ pub fn process_instruction(
             interest_fee_rate,
         } => {
             msg!("Instruction: Init Market Reserve With Liquidity");
-            process_init_market_reserve(program_id, accounts, &CollateralConfig{
+            process_init_market_reserve(program_id, accounts, CollateralConfig{
                 liquidate_fee_rate,
                 liquidate_limit_rate,
-            }, Some(&LiquidityConfig{
+            }, Some(LiquidityConfig{
                 min_borrow_utilization_rate,
                 max_borrow_utilization_rate,
                 interest_fee_rate,
@@ -94,13 +95,14 @@ pub fn process_instruction(
 fn process_init_manager(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    quote_decimal: u8,
+    quote_currency: [u8; 32],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
     let manager_info = next_account_info(account_info_iter)?;
     let owner_info = next_account_info(account_info_iter)?;
     let token_program_id = next_account_info(account_info_iter)?;
+    let oracle_program_id = next_account_info(account_info_iter)?;
 
     if manager_info.owner != program_id {
         msg!("manager provided is not owned by the lending program");
@@ -112,25 +114,54 @@ fn process_init_manager(
     let manager = Manager{
         version: PROGRAM_VERSION,
         bump_seed: Pubkey::find_program_address(&[manager_info.key.as_ref()], program_id).1,
-        quote_decimal,
         owner: *owner_info.key,
+        quote_currency,
         token_program_id: *token_program_id.key,
+        pyth_program_id: *oracle_program_id.key,
     };
-    Manager::pack(manager, &mut manager_info.data.borrow_mut())
+    Manager::pack(manager, &mut manager_info.try_borrow_mut_data()?)
+}
+
+fn process_init_rate_oracle(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
+    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
+    let rate_oracle_info = next_account_info(account_info_iter)?;
+    let owner_info = next_account_info(account_info_iter)?;
+
+    if rate_oracle_info.owner != program_id {
+        msg!("Rate oracle owner provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
+    }
+    assert_rent_exempt(rent, rate_oracle_info)?;
+    assert_uninitialized::<RateOracle>(rate_oracle_info)?;
+
+    let rate_oracle = RateOracle {
+        version: PROGRAM_VERSION,
+        owner: *owner_info.key,
+        interest_rate: 0,
+        borrow_rate: 0,
+        last_update: LastUpdate::new(clock.slot),
+    };
+    RateOracle::pack(rate_oracle, &mut rate_oracle_info.try_borrow_mut_data()?)
 }
 
 fn process_init_market_reserve(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    collateral_config: &CollateralConfig,
-    liquidity_config: Option<&LiquidityConfig>,
+    collateral_config: CollateralConfig,
+    liquidity_config: Option<LiquidityConfig>,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
     let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
     let manager_info = next_account_info(account_info_iter)?;
     let market_reserve_info = next_account_info(account_info_iter)?;
-    let price_oracle_info = next_account_info(account_info_iter)?;
+    let pyth_product_info = next_account_info(account_info_iter)?;
+    let pyth_price_info = next_account_info(account_info_iter)?;
     let token_account_info = next_account_info(account_info_iter)?;
     let authority_info = next_account_info(account_info_iter)?;
 
@@ -138,7 +169,7 @@ fn process_init_market_reserve(
         msg!("Manager ower provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    let manager = Manager::unpack(&manager_info.data.borrow())?;
+    let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
     let manager_authority = &Pubkey::create_program_address(&[manager_info.key.as_ref(),
         &[manager.bump_seed]], program_id)?;
 
@@ -149,48 +180,74 @@ fn process_init_market_reserve(
     assert_rent_exempt(rent, market_reserve_info)?;
     assert_uninitialized::<MarketReserve>(market_reserve_info)?;
 
-    let price_oracle = Aggregator::load_initialized(price_oracle_info)?;
-    if price_oracle.config.decimals != manager.quote_decimal {
-        msg!("Quote token mint decimals does not match the aggregator config decimals provided");
+    if pyth_product_info.owner != &manager.pyth_program_id {
+        msg!("Pyth product account provided is not owned by the pyth program");
         return Err(LendingError::InvalidOracleConfig.into());
     }
-    drop(price_oracle);
+    let pyth_product_data = pyth_product_info.try_borrow_data()?;
+    let pyth_product = pyth::load::<pyth::Product>(&pyth_product_data)
+        .map_err(|_| ProgramError::InvalidAccountData)?;
+    if pyth_product.magic != pyth::MAGIC {
+        msg!("Pyth product account provided is not a valid Pyth account");
+        return Err(LendingError::InvalidOracleConfig.into());
+    }
+    if pyth_product.ver != pyth::VERSION_2 {
+        msg!("Pyth product account provided has a different version than expected");
+        return Err(LendingError::InvalidOracleConfig.into());
+    }
+    if pyth_product.atype != pyth::AccountType::Product as u32 {
+        msg!("Pyth product account provided is not a valid Pyth product account");
+        return Err(LendingError::InvalidOracleConfig.into());
+    }
+    let quote_currency = get_pyth_product_quote_currency(pyth_product)?;
+    if manager.quote_currency != quote_currency {
+        msg!("Lending market quote currency does not match the oracle quote currency");
+        return Err(LendingError::InvalidOracleConfig.into());
+    }
+
+    if pyth_price_info.owner != &manager.pyth_program_id {
+        msg!("Pyth price account provided is not owned by the lending market oracle program");
+        return Err(LendingError::InvalidOracleConfig.into());
+    }
+    let pyth_price_pubkey_bytes: &[u8; 32] = pyth_price_info.key
+        .as_ref()
+        .try_into()
+        .map_err(|_| LendingError::InvalidAccountInput)?;
+    if pyth_price_pubkey_bytes != &pyth_product.px_acc.val {
+        msg!("Pyth product price account does not match the Pyth price provided");
+        return Err(LendingError::InvalidOracleConfig.into());
+    }
 
     if token_account_info.owner != &manager.token_program_id {
         msg!("Token account info owner provided is not owned by the token program in manager");
         return Err(LendingError::InvalidTokenProgram.into());
     }
-    let token_account = Account::unpack(&token_account_info.data.borrow())?;
+    let token_account = Account::unpack(&token_account_info.try_borrow_data()?)?;
     if &token_account.owner != manager_authority {
         msg!("Token account owner is not matched with manager authority");
         return Err(LendingError::InvalidTokenAccount.into());
     }
-    drop(token_account);
 
     if authority_info.key != &manager.owner {
         msg!("Only manager owner can create reserve");
         return Err(LendingError::InvalidManagerOwner.into());
     }
-    drop(manager);
     if !authority_info.is_signer {
         msg!("authority is not a signer");
         return Err(LendingError::InvalidSigner.into());
     }
 
     let liquidity_info = if let Some(liquidity_config) = liquidity_config {
-        let interest_rate_oracle_info = next_account_info(account_info_iter)?;
-        Aggregator::load_initialized(interest_rate_oracle_info)?;
-
-        let borrow_rate_oracle_info = next_account_info(account_info_iter)?;
-        Aggregator::load_initialized(borrow_rate_oracle_info)?;
+        let rate_oracle_info = next_account_info(account_info_iter)?;
+        if rate_oracle_info.owner != program_id {
+            return Err(LendingError::InvalidAccountOwner.into());
+        }
+        RateOracle::unpack(&rate_oracle_info.try_borrow_data()?)?;
 
         COption::Some(LiquidityInfo{
-            interest_rate_oracle: *interest_rate_oracle_info.key,
-            borrow_rate_oracle: *borrow_rate_oracle_info.key,
-            min_borrow_utilization_rate: liquidity_config.min_borrow_utilization_rate,
-            max_borrow_utilization_rate: liquidity_config.max_borrow_utilization_rate,
-            interest_fee_rate: liquidity_config.interest_fee_rate,
+            rate_oracle: *rate_oracle_info.key,
             liquidity: Liquidity::default(),
+            config: liquidity_config,
         })
     } else {
         COption::None
@@ -202,16 +259,15 @@ fn process_init_market_reserve(
         manager: *manager_info.key,
         token_info: TokenInfo{
             account: *token_account_info.key,
-            price_oracle: *price_oracle_info.key,
-        },
-        collateral_info: CollateralInfo{
-            liquidate_fee_rate: collateral_config.liquidate_fee_rate,
-            liquidate_limit_rate: collateral_config.liquidate_limit_rate,
-            amount: 0,
+            price_oracle: *pyth_price_info.key,
         },
         liquidity_info,
+        collateral_info: CollateralInfo{
+            amount: 0,
+            config: collateral_config,
+        },
     };
-    MarketReserve::pack(market_reserve, &mut market_reserve_info.data.borrow_mut())
+    MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)
 }
 
 fn process_init_user_obligation(
@@ -229,7 +285,7 @@ fn process_init_user_obligation(
         msg!("MarketReserve owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    MarketReserve::unpack(&market_reserve_info.data.borrow())?;
+    MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
 
     if user_obligation_info.owner != program_id {
         msg!("UserObligation owner provided is not owned by the lending program");
@@ -247,7 +303,7 @@ fn process_init_user_obligation(
         borrowed_amount: 0,
         dept_amount: 0,
     };
-    UserObligation::pack(user_obligation, &mut user_obligation_info.data.borrow_mut())
+    UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
 }
 
 fn process_init_user_asset(
@@ -265,7 +321,7 @@ fn process_init_user_asset(
         msg!("MarketReserve owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    MarketReserve::unpack(&market_reserve_info.data.borrow())?;
+    MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
 
     if user_asset_info.owner != program_id {
         msg!("UserAsset owner provided is not owned by the lending program");
@@ -282,7 +338,7 @@ fn process_init_user_asset(
         principle_amount: 0,
         total_amount: 0,
     };
-    UserAsset::pack(user_asset, &mut user_asset_info.data.borrow_mut())
+    UserAsset::pack(user_asset, &mut user_asset_info.try_borrow_mut_data()?)
 }
 
 fn process_deposit_liquidity(
@@ -297,7 +353,7 @@ fn process_deposit_liquidity(
 
     let account_info_iter = &mut accounts.iter();
     let market_reserve_info = next_account_info(account_info_iter)?;
-    let interest_rate_oracle_info = next_account_info(account_info_iter)?;
+    let rate_oracle_info = next_account_info(account_info_iter)?;
     let user_asset_info = next_account_info(account_info_iter)?;
     let manager_token_account_info = next_account_info(account_info_iter)?;
     let user_token_account_info = next_account_info(account_info_iter)?;
@@ -309,22 +365,25 @@ fn process_deposit_liquidity(
         msg!("MarketReserve owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    let mut market_reserve = MarketReserve::unpack(&market_reserve_info.data.borrow())?;
+    let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     let liquidity_info = market_reserve.liquidity_info
         .as_mut()
         .ok_or(LendingError::MarketReserveLiquidityNotAvailable)?;
 
-    if interest_rate_oracle_info.key != &liquidity_info.interest_rate_oracle {
-        msg!("MarketReserve liquidity interest rate oracle is not matched with provided");
-        return Err(LendingError::InvalidInterestOracle.into());
+    if rate_oracle_info.key != &liquidity_info.rate_oracle {
+        msg!("MarketReserve liquidity rate oracle is not matched with provided");
+        return Err(LendingError::InvalidRateOracle.into());
     }
-    let interest_rate = read_median(interest_rate_oracle_info)?.median;
+    let rate_oracle = RateOracle::unpack(&rate_oracle_info.try_borrow_data()?)?;
+    if rate_oracle.last_update.is_stale(clock.slot)? {
+        return Err(LendingError::InvalidRateOracle.into());
+    }
 
     if user_asset_info.owner != program_id {
         msg!("UserAsset owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    let mut user_asset = UserAsset::unpack(&user_asset_info.data.borrow())?;
+    let mut user_asset = UserAsset::unpack(&user_asset_info.try_borrow_data()?)?;
     if &user_asset.reserve != market_reserve_info.key {
         msg!("UserAsset market reserve is not matched with accounts provided");
         return Err(LendingError::InvalidMarketReserve.into());
@@ -339,16 +398,18 @@ fn process_deposit_liquidity(
     }
 
     // 1. update
-    user_asset.update_interest(clock.slot, Rate::from_scaled_val(interest_rate))?;
+    user_asset.update_interest(clock.slot, Rate::from_scaled_val(rate_oracle.interest_rate))?;
     // 2. deposit in obligation
     user_asset.deposit(amount)?;
     // 3. deposit and update in market reserve
     liquidity_info.liquidity.deposit(amount)?;
+    // 4. update timestamp
     market_reserve.timestamp = clock.slot;
-    // 4. pack data
-    MarketReserve::pack(market_reserve, &mut market_reserve_info.data.borrow_mut())?;
-    UserAsset::pack(user_asset, &mut user_asset_info.data.borrow_mut())?;
-    // 5. transfer from user to manager
+    user_asset.timestamp = clock.slot;
+    // 5. pack data
+    MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
+    UserAsset::pack(user_asset, &mut user_asset_info.try_borrow_mut_data()?)?;
+    // 6. transfer from user to manager
     spl_token_transfer(TokenTransferParams {
         source: user_token_account_info.clone(),
         destination: manager_token_account_info.clone(),
@@ -374,7 +435,7 @@ fn process_withdraw_liquidity(
     let manager_authority_info = next_account_info(account_info_iter)?;
     let market_reserve_info = next_account_info(account_info_iter)?;
     let manager_token_account_info = next_account_info(account_info_iter)?;
-    let interest_rate_oracle_info = next_account_info(account_info_iter)?;
+    let rate_oracle_info = next_account_info(account_info_iter)?;
     let user_asset_info = next_account_info(account_info_iter)?;
     let user_token_account_info = next_account_info(account_info_iter)?;
     let user_authority_info = next_account_info(account_info_iter)?;
@@ -385,7 +446,7 @@ fn process_withdraw_liquidity(
         msg!("Manager ower provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    let manager = Manager::unpack(&manager_info.data.borrow())?;
+    let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
     let authority_signer_seeds = &[
         manager_info.key.as_ref(),
         &[manager.bump_seed]
@@ -402,7 +463,7 @@ fn process_withdraw_liquidity(
         msg!("MarketReserve owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    let mut market_reserve = MarketReserve::unpack(&market_reserve_info.data.borrow())?;
+    let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
         msg!("MarketReserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
@@ -415,17 +476,20 @@ fn process_withdraw_liquidity(
         return Err(LendingError::InvalidManagerTokenAccount.into()); 
     }
 
-    if interest_rate_oracle_info.key != &liquidity_info.interest_rate_oracle {
-        msg!("MarketReserve liquidity interest rate oracle is not matched with provided");
-        return Err(LendingError::InvalidInterestOracle.into());
+    if rate_oracle_info.key != &liquidity_info.rate_oracle {
+        msg!("MarketReserve liquidity rate oracle is not matched with provided");
+        return Err(LendingError::InvalidRateOracle.into());
     }
-    let interest_rate = read_median(interest_rate_oracle_info)?.median;
+    let rate_oracle = RateOracle::unpack(&rate_oracle_info.try_borrow_data()?)?;
+    if rate_oracle.last_update.is_stale(clock.slot)? {
+        return Err(LendingError::InvalidRateOracle.into());
+    }
 
     if user_asset_info.owner != program_id {
         msg!("UserAsset owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    let mut user_asset = UserAsset::unpack(&user_asset_info.data.borrow())?;
+    let mut user_asset = UserAsset::unpack(&user_asset_info.try_borrow_data()?)?;
     if &user_asset.reserve != market_reserve_info.key {
         msg!("UserAsset market reserve is not matched with accounts provided");
         return Err(LendingError::InvalidMarketReserve.into());
@@ -436,16 +500,16 @@ fn process_withdraw_liquidity(
     }
 
     // 1. update
-    user_asset.update_interest(clock.slot, Rate::from_scaled_val(interest_rate))?;
+    user_asset.update_interest(clock.slot, Rate::from_scaled_val(rate_oracle.interest_rate))?;
     // 2. withdraw
     let fund = user_asset.withdraw(amount)?;
     // 3. withdraw and update in market reserve
-    let fee = calculate_interest_fee(fund.interest, Rate::from_scaled_val(liquidity_info.interest_fee_rate))?;
+    let fee = calculate_interest_fee(fund.interest, Rate::from_scaled_val(liquidity_info.config.interest_fee_rate))?;
     liquidity_info.liquidity.withdraw(&fund, fee)?;
     market_reserve.timestamp = clock.slot;
     // 4. pack data
-    MarketReserve::pack(market_reserve, &mut market_reserve_info.data.borrow_mut())?;
-    UserAsset::pack(user_asset, &mut user_asset_info.data.borrow_mut())?;
+    MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
+    UserAsset::pack(user_asset, &mut user_asset_info.try_borrow_mut_data()?)?;
     // 5. transfer from manager to user
     spl_token_transfer(TokenTransferParams {
         source: manager_token_account_info.clone(),
@@ -480,7 +544,7 @@ fn process_deposit_collateral(
         msg!("Market reserve owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    let mut market_reserve = MarketReserve::unpack(&market_reserve_info.data.borrow())?;
+    let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
 
     if manager_token_account_info.key != &market_reserve.token_info.account {
         return Err(LendingError::InvalidManagerTokenAccount.into()); 
@@ -490,7 +554,7 @@ fn process_deposit_collateral(
         msg!("User Obligation owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    let mut user_obligation = UserObligation::unpack(&user_obligatiton_info.data.borrow())?;
+    let mut user_obligation = UserObligation::unpack(&user_obligatiton_info.try_borrow_data()?)?;
 
     if user_authority_info.key != &user_obligation.owner {
         return Err(LendingError::InvalidUserAuthority.into());
@@ -503,7 +567,7 @@ fn process_deposit_collateral(
     } else {
         user_obligation.new_pledge(Collateral{
             price_oracle: price_oracle.clone(),
-            liquidate_limit_rate: market_reserve.collateral_info.liquidate_limit_rate,
+            liquidate_limit_rate: market_reserve.collateral_info.config.liquidate_limit_rate,
             amount,
         })?;
     }
@@ -511,8 +575,8 @@ fn process_deposit_collateral(
     market_reserve.collateral_info.add(amount)?;
     market_reserve.timestamp = clock.slot;
     // 3. pack
-    UserObligation::pack(user_obligation, &mut user_obligatiton_info.data.borrow_mut())?;
-    MarketReserve::pack(market_reserve, &mut market_reserve_info.data.borrow_mut())?;
+    UserObligation::pack(user_obligation, &mut user_obligatiton_info.try_borrow_mut_data()?)?;
+    MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
     // 4. transfer from user to manager
     spl_token_transfer(TokenTransferParams {
         source: user_token_account_info.clone(),
@@ -540,7 +604,7 @@ fn process_borrow_liquidity(
     let manager_authority_info = next_account_info(account_info_iter)?;
     let market_reserve_info = next_account_info(account_info_iter)?;
     let liquidity_price_oracle_info = next_account_info(account_info_iter)?;
-    let borrow_rate_oracle_info = next_account_info(account_info_iter)?;
+    let rate_oracle_info = next_account_info(account_info_iter)?;
     let manager_token_account_info = next_account_info(account_info_iter)?;
     let user_obligatiton_info = next_account_info(account_info_iter)?;
     let user_token_account_info = next_account_info(account_info_iter)?;
@@ -551,13 +615,11 @@ fn process_borrow_liquidity(
         msg!("Manager ower provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    let manager = Manager::unpack(&manager_info.data.borrow())?;
+    let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
     let authority_signer_seeds = &[
         manager_info.key.as_ref(),
         &[manager.bump_seed]
     ];
-    let decimal = manager.quote_decimal;
-    drop(manager);
     let manager_authority = Pubkey::create_program_address(authority_signer_seeds, program_id)?;
 
     if manager_authority_info.key != &manager_authority {
@@ -570,7 +632,7 @@ fn process_borrow_liquidity(
         msg!("Market reserve owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    let mut market_reserve = MarketReserve::unpack(&market_reserve_info.data.borrow())?;
+    let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
         msg!("MarketReserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
@@ -583,8 +645,12 @@ fn process_borrow_liquidity(
         return Err(LendingError::InvalidPriceOracle.into());
     }
 
-    if borrow_rate_oracle_info.key != &liquidity_info.borrow_rate_oracle {
-        return Err(LendingError::InvalidBorrowRateOracle.into());
+    if rate_oracle_info.key != &liquidity_info.rate_oracle {
+        return Err(LendingError::InvalidRateOracle.into());
+    }
+    let rate_oracle = RateOracle::unpack(&rate_oracle_info.try_borrow_data()?)?;
+    if rate_oracle.last_update.is_stale(clock.slot)? {
+        return Err(LendingError::InvalidRateOracle.into());
     }
 
     if manager_token_account_info.key != &market_reserve.token_info.account {
@@ -595,7 +661,7 @@ fn process_borrow_liquidity(
         msg!("User Obligation owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    let mut user_obligation = UserObligation::unpack(&user_obligatiton_info.data.borrow())?;
+    let mut user_obligation = UserObligation::unpack(&user_obligatiton_info.try_borrow_data()?)?;
     if &user_obligation.reserve != market_reserve_info.key {
         return Err(LendingError::InvalidUserObligation.into());
     }
@@ -609,16 +675,15 @@ fn process_borrow_liquidity(
     }
 
     // 1. update obligation
-    let borrow_rate = read_median(borrow_rate_oracle_info)?.median;
-    user_obligation.update_borrow_interest(clock.slot, Rate::from_scaled_val(borrow_rate))?;
+    user_obligation.update_borrow_interest(clock.slot, Rate::from_scaled_val(rate_oracle.borrow_rate))?;
     // 2. borrow
     user_obligation.borrow_out(amount)?;
     // 3. calculate loan value
-    let price = price_conversion(read_median(liquidity_price_oracle_info)?.median, decimal)?;
+    let price = get_pyth_price(liquidity_price_oracle_info, clock)?;
     let loan_value = user_obligation.loan_value(price)?;
     // 4. calculate collaterals value
     let settles = account_info_iter.map(|price_oracle_info| {
-        let price = price_conversion(read_median(price_oracle_info)?.median, decimal)?;
+        let price = get_pyth_price(price_oracle_info, clock)?;
 
         Ok(Settle{
             price_oracle: *price_oracle_info.key,
@@ -631,10 +696,12 @@ fn process_borrow_liquidity(
     validate_liquidation_limit(loan_value, collaterals_value)?;
     // 6. borrow and update in reserve
     liquidity_info.liquidity.borrow_out(amount)?;
+    // 7. update timestamp
     market_reserve.timestamp = clock.slot;
+    user_obligation.last_update.update_slot(clock.slot);
     // 7. pack
-    UserObligation::pack(user_obligation, &mut user_obligatiton_info.data.borrow_mut())?;
-    MarketReserve::pack(market_reserve, &mut market_reserve_info.data.borrow_mut())?;
+    UserObligation::pack(user_obligation, &mut user_obligatiton_info.try_borrow_mut_data()?)?;
+    MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
     // 8. transfer
     spl_token_transfer(TokenTransferParams {
         source: manager_token_account_info.clone(),
@@ -656,11 +723,99 @@ fn assert_rent_exempt(rent: &Rent, account_info: &AccountInfo) -> ProgramResult 
 }
 
 fn assert_uninitialized<T: Pack + IsInitialized>(account_info: &AccountInfo) -> ProgramResult {
-    let account: T = T::unpack_unchecked(&account_info.data.borrow())?;
+    let account: T = T::unpack_unchecked(&account_info.try_borrow_data()?)?;
     if account.is_initialized() {
         Err(LendingError::AlreadyInitialized.into())
     } else {
         Ok(())
+    }
+}
+
+fn get_pyth_product_quote_currency(pyth_product: &pyth::Product) -> Result<[u8; 32], ProgramError> {
+    const LEN: usize = 14;
+    const KEY: &[u8; LEN] = b"quote_currency";
+
+    let mut start = 0;
+    while start < pyth::PROD_ATTR_SIZE {
+        let mut length = pyth_product.attr[start] as usize;
+        start += 1;
+
+        if length == LEN {
+            let mut end = start + length;
+            if end > pyth::PROD_ATTR_SIZE {
+                msg!("Pyth product attribute key length too long");
+                return Err(LendingError::InvalidOracleConfig.into());
+            }
+
+            let key = &pyth_product.attr[start..end];
+            if key == KEY {
+                start += length;
+                length = pyth_product.attr[start] as usize;
+                start += 1;
+
+                end = start + length;
+                if length > 32 || end > pyth::PROD_ATTR_SIZE {
+                    msg!("Pyth product quote currency value too long");
+                    return Err(LendingError::InvalidOracleConfig.into());
+                }
+
+                let mut value = [0u8; 32];
+                value[0..length].copy_from_slice(&pyth_product.attr[start..end]);
+                return Ok(value);
+            }
+        }
+
+        start += length;
+        start += 1 + pyth_product.attr[start] as usize;
+    }
+
+    msg!("Pyth product quote currency not found");
+    Err(LendingError::InvalidOracleConfig.into())
+}
+
+fn get_pyth_price(pyth_price_info: &AccountInfo, clock: &Clock) -> Result<Decimal, ProgramError> {
+    const STALE_AFTER_SLOTS_ELAPSED: u64 = 5;
+
+    let pyth_price_data = pyth_price_info.try_borrow_data()?;
+    let pyth_price = pyth::load::<pyth::Price>(&pyth_price_data)
+        .map_err(|_| ProgramError::InvalidAccountData)?;
+
+    if pyth_price.ptype != pyth::PriceType::Price {
+        msg!("Oracle price type is invalid");
+        return Err(LendingError::InvalidOracleConfig.into());
+    }
+
+    let slots_elapsed = clock.slot
+        .checked_sub(pyth_price.valid_slot)
+        .ok_or(LendingError::MathOverflow)?;
+    if slots_elapsed >= STALE_AFTER_SLOTS_ELAPSED {
+        msg!("Oracle price is stale");
+        return Err(LendingError::InvalidOracleConfig.into());
+    }
+
+    let price: u64 = pyth_price.agg.price.try_into().map_err(|_| {
+        msg!("Oracle price cannot be negative");
+        LendingError::InvalidOracleConfig
+    })?;
+
+    if pyth_price.expo >= 0 {
+        let exponent = pyth_price.expo
+            .try_into()
+            .map_err(|_| LendingError::MathOverflow)?;
+        let zeros = 10u64
+            .checked_pow(exponent)
+            .ok_or(LendingError::MathOverflow)?;
+        Decimal::from(price).try_mul(zeros)
+    } else {
+        let exponent = pyth_price.expo
+            .checked_abs()
+            .ok_or(LendingError::MathOverflow)?
+            .try_into()
+            .map_err(|_| LendingError::MathOverflow)?;
+        let decimals = 10u64
+            .checked_pow(exponent)
+            .ok_or(LendingError::MathOverflow)?;
+        Decimal::from(price).try_div(decimals)
     }
 }
 

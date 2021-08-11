@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+///
 use super::*;
 use crate::{
     error::LendingError,
@@ -11,25 +13,6 @@ use solana_program::{
 };
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 
-///
-#[derive(Clone, Debug, PartialEq)]
-pub struct CollateralConfig {
-    ///
-    pub liquidate_fee_rate: u64,
-    ///
-    pub liquidate_limit_rate: u64,
-}
-
-///
-#[derive(Clone, Debug, PartialEq)]
-pub struct LiquidityConfig {
-    ///
-    pub min_borrow_utilization_rate: u64,
-    ///
-    pub max_borrow_utilization_rate: u64,
-    ///
-    pub interest_fee_rate: u64, 
-}
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TokenInfo {
@@ -103,15 +86,6 @@ pub struct Settle {
     pub price_oracle: Pubkey,
     ///
     pub price: Decimal,
-}
-///
-#[inline(always)]
-pub fn price_conversion(price: u64, decimal: u8) -> Result<Decimal, ProgramError> {
-    let decimals = 10u64
-        .checked_pow(decimal as u32)
-        .ok_or(LendingError::MathOverflow)?;
-
-    Decimal::from(price).try_div(decimals)
 }
 ///
 #[inline(always)]

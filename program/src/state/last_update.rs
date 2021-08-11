@@ -71,10 +71,7 @@ impl LastUpdate {
 
     /// Return slots elapsed since given slot
     pub fn slots_elapsed(&self, slot: Slot) -> Result<u64, ProgramError> {
-        let slots_elapsed = slot
-            .checked_sub(self.slot)
-            .ok_or(LendingError::MathOverflow)?;
-        Ok(slots_elapsed)
+       slot.checked_sub(self.slot).ok_or(LendingError::MathOverflow.into())
     }
 
     /// Set last update slot

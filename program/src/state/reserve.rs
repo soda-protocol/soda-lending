@@ -1,4 +1,6 @@
-use std::convert::{Into, TryInto};
+#![allow(missing_docs)]
+///
+use std::convert::TryInto;
 use super::*;
 use crate::{error::LendingError, math::{Rate, TryDiv}};
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
@@ -148,24 +150,29 @@ impl Liquidity {
 
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct LiquidityInfo {
-    ///
-    pub interest_rate_oracle: Pubkey,
-    ///
-    pub borrow_rate_oracle: Pubkey,
+pub struct LiquidityConfig {
     ///
     pub min_borrow_utilization_rate: u64,
     ///
     pub max_borrow_utilization_rate: u64,
     ///
-    pub interest_fee_rate: u64,
+    pub interest_fee_rate: u64, 
+}
+
+///
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LiquidityInfo {
+    ///
+    pub rate_oracle: Pubkey,
     ///
     pub liquidity: Liquidity,
+    ///
+    pub config: LiquidityConfig,
 }
 
 impl Sealed for LiquidityInfo {}
 
-const MARKET_RESERVE_LIQUIDITY_INFO_LEN: usize = 128;
+const MARKET_RESERVE_LIQUIDITY_INFO_LEN: usize = 96;
 
 impl Pack for LiquidityInfo {
     const LEN: usize = MARKET_RESERVE_LIQUIDITY_INFO_LEN;
@@ -174,19 +181,17 @@ impl Pack for LiquidityInfo {
         let output = array_mut_ref![output, 0, MARKET_RESERVE_LIQUIDITY_INFO_LEN];
         #[allow(clippy::ptr_offset_with_cast)]
         let (
-            interest_rate_oracle,
-            borrow_rate_oracle,
-            min_borrow_utilization_rate,
-            max_borrow_utilization_rate,
-            interest_fee_rate,
+            rate_oracle,
             available,
             borrowed,
             interest,
             fee,
             loss,
+            min_borrow_utilization_rate,
+            max_borrow_utilization_rate,
+            interest_fee_rate,
         ) = mut_array_refs![
             output,
-            PUBKEY_BYTES,
             PUBKEY_BYTES,
             8,
             8,
@@ -198,35 +203,32 @@ impl Pack for LiquidityInfo {
             8
         ];
 
-        interest_rate_oracle.copy_from_slice(self.interest_rate_oracle.as_ref());
-        borrow_rate_oracle.copy_from_slice(self.borrow_rate_oracle.as_ref());
-        *min_borrow_utilization_rate = self.min_borrow_utilization_rate.to_le_bytes();
-        *max_borrow_utilization_rate = self.max_borrow_utilization_rate.to_le_bytes();
-        *interest_fee_rate = self.interest_fee_rate.to_le_bytes();
+        rate_oracle.copy_from_slice(self.rate_oracle.as_ref());
         *available = self.liquidity.available.to_le_bytes();
         *borrowed = self.liquidity.borrowed.to_le_bytes();
         *interest = self.liquidity.interest.to_le_bytes();
         *fee = self.liquidity.fee.to_le_bytes();
         *loss = self.liquidity.loss.to_le_bytes();
+        *min_borrow_utilization_rate = self.config.min_borrow_utilization_rate.to_le_bytes();
+        *max_borrow_utilization_rate = self.config.max_borrow_utilization_rate.to_le_bytes();
+        *interest_fee_rate = self.config.interest_fee_rate.to_le_bytes();
     }
 
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
         let input = array_ref![input, 0, MARKET_RESERVE_LIQUIDITY_INFO_LEN];
         #[allow(clippy::ptr_offset_with_cast)]
         let (
-            interest_rate_oracle,
-            borrow_rate_oracle,
-            min_borrow_utilization_rate,
-            max_borrow_utilization_rate,
-            interest_fee_rate,
+            rate_oracle,
             available,
             borrowed,
             interest,
             fee,
             loss,
+            min_borrow_utilization_rate,
+            max_borrow_utilization_rate,
+            interest_fee_rate,
         ) = array_refs![
             input,
-            PUBKEY_BYTES,
             PUBKEY_BYTES,
             8,
             8,
@@ -239,31 +241,89 @@ impl Pack for LiquidityInfo {
         ];
 
         Ok(Self{
-            interest_rate_oracle: Pubkey::new_from_array(*interest_rate_oracle),
-            borrow_rate_oracle: Pubkey::new_from_array(*borrow_rate_oracle),
-            min_borrow_utilization_rate: u64::from_le_bytes(*min_borrow_utilization_rate),
-            max_borrow_utilization_rate: u64::from_le_bytes(*max_borrow_utilization_rate),
-            interest_fee_rate: u64::from_le_bytes(*interest_fee_rate),
+            rate_oracle: Pubkey::new_from_array(*rate_oracle),
             liquidity: Liquidity{
                 available: u64::from_le_bytes(*available),
                 borrowed: u64::from_le_bytes(*borrowed),
                 interest: u64::from_le_bytes(*interest),
                 fee: u64::from_le_bytes(*fee),
                 loss: u64::from_le_bytes(*loss),
-            }
+            },
+            config: LiquidityConfig {
+                min_borrow_utilization_rate: u64::from_le_bytes(*min_borrow_utilization_rate),
+                max_borrow_utilization_rate: u64::from_le_bytes(*max_borrow_utilization_rate),
+                interest_fee_rate: u64::from_le_bytes(*interest_fee_rate),
+            },
         })
     }
 }
 
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct CollateralInfo {
+pub struct CollateralConfig {
     ///
     pub liquidate_fee_rate: u64,
     ///
     pub liquidate_limit_rate: u64,
+}
+
+///
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct CollateralInfo {
     ///
     pub amount: u64,
+    ///
+    pub config: CollateralConfig,
+}
+
+impl Sealed for CollateralInfo {}
+
+const MARKET_RESERVE_COLLATERAL_INFO_LEN: usize = 24;
+
+impl Pack for CollateralInfo {
+    const LEN: usize = MARKET_RESERVE_COLLATERAL_INFO_LEN;
+
+    fn pack_into_slice(&self, output: &mut [u8]) {
+        let output = array_mut_ref![output, 0, MARKET_RESERVE_COLLATERAL_INFO_LEN];
+        #[allow(clippy::ptr_offset_with_cast)]
+        let (
+            amount,
+            liquidate_fee_rate,
+            liquidate_limit_rate,
+        ) = mut_array_refs![
+            output,
+            8,
+            8,
+            8
+        ];
+
+        *amount = self.amount.to_le_bytes();
+        *liquidate_fee_rate = self.config.liquidate_fee_rate.to_le_bytes();
+        *liquidate_limit_rate = self.config.liquidate_limit_rate.to_le_bytes();
+    }
+
+    fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
+        let input = array_ref![input, 0, MARKET_RESERVE_COLLATERAL_INFO_LEN];
+        #[allow(clippy::ptr_offset_with_cast)]
+        let (
+            amount,
+            liquidate_fee_rate,
+            liquidate_limit_rate,
+        ) = array_refs![
+            input,
+            8,
+            8,
+            8
+        ];
+
+        Ok(Self{
+            amount: u64::from_le_bytes(*amount),
+            config: CollateralConfig {
+                liquidate_fee_rate: u64::from_le_bytes(*liquidate_fee_rate),
+                liquidate_limit_rate: u64::from_le_bytes(*liquidate_limit_rate),
+            },
+        })
+    }
 }
 
 impl CollateralInfo {
@@ -309,7 +369,7 @@ impl IsInitialized for MarketReserve {
     }
 }
 
-const MARKET_RESERVE_LEN: usize = 258;
+const MARKET_RESERVE_LEN: usize = 226;
 
 impl Pack for MarketReserve {
     const LEN: usize = MARKET_RESERVE_LEN;
@@ -323,9 +383,7 @@ impl Pack for MarketReserve {
             manager,
             token_info,
             liquidity_info,
-            liquidate_fee_rate,
-            liquidate_limit_rate,
-            amount,
+            collateral_info,
         ) = mut_array_refs![
             output,
             1,
@@ -333,9 +391,7 @@ impl Pack for MarketReserve {
             PUBKEY_BYTES,
             TOKEN_INFO_LEN,
             1 + MARKET_RESERVE_LIQUIDITY_INFO_LEN,
-            8,
-            8,
-            8
+            MARKET_RESERVE_COLLATERAL_INFO_LEN
         ];
 
         *version = self.version.to_le_bytes();
@@ -343,9 +399,7 @@ impl Pack for MarketReserve {
         manager.copy_from_slice(self.manager.as_ref());
         self.token_info.pack_into_slice(token_info);
         pack_coption_struct(&self.liquidity_info, liquidity_info);
-        *liquidate_fee_rate = self.collateral_info.liquidate_fee_rate.to_le_bytes();
-        *liquidate_limit_rate = self.collateral_info.liquidate_limit_rate.to_le_bytes();
-        *amount = self.collateral_info.amount.to_le_bytes();
+        self.collateral_info.pack_into_slice(collateral_info);
     }
 
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -357,9 +411,7 @@ impl Pack for MarketReserve {
             manager,
             token_info,
             liquidity_info,
-            liquidate_fee_rate,
-            liquidate_limit_rate,
-            amount,
+            collateral_info,
         ) = array_refs![
             input,
             1,
@@ -367,9 +419,7 @@ impl Pack for MarketReserve {
             PUBKEY_BYTES,
             TOKEN_INFO_LEN,
             1 + MARKET_RESERVE_LIQUIDITY_INFO_LEN,
-            8,
-            8,
-            8
+            MARKET_RESERVE_COLLATERAL_INFO_LEN
         ];
 
         let version = u8::from_le_bytes(*version);
@@ -380,6 +430,7 @@ impl Pack for MarketReserve {
 
         let token_info = TokenInfo::unpack_from_slice(token_info)?;
         let liquidity_info = unpack_coption_struct::<LiquidityInfo>(liquidity_info)?;
+        let collateral_info = CollateralInfo::unpack_from_slice(collateral_info)?;
 
         Ok(Self{
             version,
@@ -387,11 +438,7 @@ impl Pack for MarketReserve {
             manager: Pubkey::new_from_array(*manager),
             token_info,
             liquidity_info,
-            collateral_info: CollateralInfo{
-                liquidate_fee_rate: u64::from_le_bytes(*liquidate_fee_rate),
-                liquidate_limit_rate: u64::from_le_bytes(*liquidate_limit_rate),
-                amount: u64::from_le_bytes(*amount),
-            },
+            collateral_info,
         })
     }
 }

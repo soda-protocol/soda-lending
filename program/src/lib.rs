@@ -8,6 +8,7 @@ pub mod instruction;
 pub mod math;
 pub mod processor;
 pub mod state;
+pub mod pyth;
 
 // Export current sdk types for downstream users building with a different sdk version
 pub use solana_program;

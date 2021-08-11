@@ -5,6 +5,7 @@ mod last_update;
 mod reserve;
 mod obligation;
 mod asset;
+mod oracle;
 mod utils;
 
 pub use manager::*;
@@ -12,6 +13,7 @@ pub use last_update::*;
 pub use obligation::*;
 pub use reserve::*;
 pub use asset::*;
+pub use oracle::*;
 pub use utils::*;
 
 use crate::math::Decimal;
@@ -35,8 +37,6 @@ pub const UNINITIALIZED_VERSION: u8 = 0;
 pub const SLOTS_PER_YEAR: u64 =
     DEFAULT_TICKS_PER_SECOND / DEFAULT_TICKS_PER_SLOT * SECONDS_PER_DAY * 365;
 
-/// 
-pub const MAX_OBLIGATION_COLLATERALS: usize = 3;
 ///
 const COPTION_SOME_TAG: u8 = 1;
 const COPTION_NONE_TAG: u8 = 0;

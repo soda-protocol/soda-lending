@@ -10,7 +10,7 @@ use solana_program::{
     pubkey::Pubkey,
     sysvar
 };
-use std::{convert::TryInto, mem::size_of};
+use std::{convert::{TryInto, TryFrom}, mem::size_of};
 
 /// Instructions supported by the lending program.
 #[derive(Clone, Debug, PartialEq)]
@@ -18,7 +18,7 @@ pub enum LendingInstruction {
     /// 0
     InitManager {
         ///
-        quote_decimal: u8,
+        quote_currency: [u8; 32],
     },
     /// 1
     InitMarketReserveWithoutLiquidity {
@@ -74,8 +74,8 @@ impl LendingInstruction {
             .ok_or(LendingError::InstructionUnpackError)?;
         Ok(match tag {
             0 => {
-                let (quote_decimal, _rest) = Self::unpack_u8(rest)?;
-                Self::InitManager { quote_decimal }
+                let (quote_currency, _rest) = Self::unpack_bytes32(rest)?;
+                Self::InitManager { quote_currency }
             }
             1 => {
                 let (liquidate_fee_rate, rest) = Self::unpack_u64(rest)?;
@@ -154,13 +154,27 @@ impl LendingInstruction {
         Ok((amount, rest))
     }
 
+    fn unpack_bytes32(input: &[u8]) -> Result<([u8; 32], &[u8]), ProgramError> {
+        if input.len() < 32 {
+            msg!("32 bytes cannot be unpacked");
+            return Err(LendingError::InstructionUnpackError.into());
+        }
+        let (bytes, rest) = input.split_at(32);
+
+        Ok((
+            *<&[u8; 32]>::try_from(bytes)
+                .map_err(|_| LendingError::InstructionUnpackError)?,
+            rest
+        ))
+    }
+
     /// Packs a [LendingInstruction](enum.LendingInstruction.html) into a byte buffer.
     pub fn pack(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(size_of::<Self>());
         match *self {
-            Self::InitManager { quote_decimal } => {
+            Self::InitManager { quote_currency } => {
                 buf.push(0);
-                buf.extend_from_slice(&quote_decimal.to_le_bytes());
+                buf.extend(quote_currency.into_iter());
             }
             Self::InitMarketReserveWithoutLiquidity { 
                 liquidate_fee_rate,
@@ -216,7 +230,7 @@ pub fn init_manager(
     program_id: Pubkey,
     manager_info: Pubkey,
     owner_info: Pubkey,
-    quote_decimal: u8,
+    quote_currency: [u8; 32],
 ) -> Instruction {
     Instruction {
         program_id,
@@ -226,7 +240,7 @@ pub fn init_manager(
             AccountMeta::new_readonly(owner_info, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
-        data: LendingInstruction::InitManager { quote_decimal }.pack(),
+        data: LendingInstruction::InitManager { quote_currency }.pack(),
     }
 }
 

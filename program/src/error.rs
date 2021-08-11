@@ -63,11 +63,8 @@ pub enum LendingError {
     #[error("Price oracle is invalid")]
     InvalidPriceOracle,
     ///
-    #[error("Interest oracle is invalid")]
-    InvalidInterestOracle,
-    ///
-    #[error("Borrow rate oracle is invalid")]
-    InvalidBorrowRateOracle,
+    #[error("Rate oracle is invalid")]
+    InvalidRateOracle,
     ///
     #[error("User asset owner is invalid")]
     InvalidUserAssetOwner,
