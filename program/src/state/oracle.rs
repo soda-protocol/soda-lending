@@ -1,28 +1,52 @@
 #![allow(missing_docs)]
 ///
 use super::*;
+use crate::error::LendingError;
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use solana_program::{
-    clock::Slot,
-    program_error::ProgramError,
-    program_pack::{IsInitialized, Pack, Sealed},
+    clock::Slot, 
+    entrypoint::ProgramResult, 
+    program_error::ProgramError, 
+    program_pack::{IsInitialized, Pack, Sealed}, 
     pubkey::{Pubkey, PUBKEY_BYTES}
 };
+
+const MAX_RATE_EXPIRED_SLOT: u64 = 1000;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RateOracle {
     pub version: u8,
     pub owner: Pubkey,
+    pub status: bool,
+    pub timestamp: Slot,
     pub interest_rate: u64,
     pub borrow_rate: u64,
-    pub last_update: LastUpdate,
 }
 
 impl RateOracle {
     pub fn feed(&mut self, interest_rate: u64, borrow_rate: u64, slot: Slot) {
         self.interest_rate = interest_rate;
         self.borrow_rate = borrow_rate;
-        self.last_update.update_slot(slot);
+        self.timestamp = slot;
+        self.status = true;
+    }
+
+    pub fn check_valid(&self, slot: Slot) -> ProgramResult {
+        if self.status {
+            let eplased = self.timestamp
+                .checked_sub(slot)
+                .ok_or(LendingError::MathOverflow)?;
+
+            if eplased < MAX_RATE_EXPIRED_SLOT {
+                return Ok(());
+            }
+        }
+
+        Err(LendingError::RateOracleNotAvailable.into())
+    }
+
+    pub fn mark_stale(&mut self) {
+        self.status = false;
     }
 }
 
@@ -44,23 +68,26 @@ impl Pack for RateOracle {
         let (
             version,
             owner,
+            status,
+            timestamp,
             interest_rate,
             borrow_rate,
-            last_update,
         ) = mut_array_refs![
             output,
             1,
             PUBKEY_BYTES,
+            1,
             8,
             8,
-            LAST_UPDATE_LEN
+            8
         ];
 
         *version = self.version.to_le_bytes();
         owner.copy_from_slice(self.owner.as_ref());
+        pack_bool(self.status, status);
+        *timestamp = self.timestamp.to_le_bytes();
         *interest_rate = self.interest_rate.to_le_bytes();
         *borrow_rate = self.borrow_rate.to_le_bytes();
-        self.last_update.pack_into_slice(last_update);
     }
 
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -69,26 +96,33 @@ impl Pack for RateOracle {
         let (
             version,
             owner,
+            status,
+            timestamp,
             interest_rate,
             borrow_rate,
-            last_update,
         ) = array_refs![
             input,
             1,
             PUBKEY_BYTES,
+            1,
             8,
             8,
-            LAST_UPDATE_LEN
+            8
         ];
 
-        let last_update = LastUpdate::unpack_from_slice(last_update)?;
+        let version = u8::from_le_bytes(*version);
+        if version > PROGRAM_VERSION {
+            msg!("RateOracle version does not match lending program version");
+            return Err(ProgramError::InvalidAccountData);
+        }
 
         Ok(Self{
-            version: u8::from_le_bytes(*version),
+            version,
             owner: Pubkey::new_from_array(*owner),
+            status: unpack_bool(status)?,
+            timestamp: u64::from_le_bytes(*timestamp),
             interest_rate: u64::from_le_bytes(*interest_rate),
             borrow_rate: u64::from_le_bytes(*borrow_rate),
-            last_update,
         })
     }
 }

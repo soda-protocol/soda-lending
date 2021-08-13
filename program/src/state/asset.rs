@@ -134,7 +134,7 @@ impl UserAsset {
         Ok(())
     }
     ///
-    pub fn withdraw(&mut self, amount: u64) -> Result<Fund, ProgramError> {
+    pub fn withdraw(&mut self, amount: u64) -> Result<Settle, ProgramError> {
         let acc_interest = self.total_amount
             .checked_sub(self.principle_amount)
             .ok_or(LendingError::MathOverflow)?;
@@ -146,19 +146,15 @@ impl UserAsset {
         if amount > acc_interest {
             self.principle_amount = self.total_amount;
 
-            Ok(Fund{
-                principal: amount - acc_interest,
+            Ok(Settle{
+                total: amount,
                 interest: acc_interest,
             })
         } else {
-            Ok(Fund{
-                principal: 0,
+            Ok(Settle{
+                total: amount,
                 interest: amount,
             })
         }
-    }
-    ///
-    pub fn change_owner(&mut self, new_owner: Pubkey) {
-        self.owner = new_owner;
     }
 }

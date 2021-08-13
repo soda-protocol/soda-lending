@@ -9,8 +9,8 @@ arrayref = "0.3.6"
 bytemuck = "1.7.2"
 num-derive = "0.3"
 num-traits = "0.2"
-solana-program = "1.6.20"
-spl-token = { version = "3.1.0", features = [ "no-entrypoint" ] }
+solana-program = "1.7.9"
+spl-token = { version = "3.2.0", features = [ "no-entrypoint" ] }
 thiserror = "1.0"
 uint = "0.9"
 
@@ -19,8 +19,8 @@ assert_matches = "1.5.0"
 base64 = "0.13"
 log = "0.4.14"
 proptest = "1.0"
-solana-program-test = "1.6.20"
-solana-sdk = "1.6.20"
+solana-program-test = "1.7.9"
+solana-sdk = "1.7.9"
 serde = "1.0"
 serde_yaml = "0.8"
 

@@ -61,7 +61,7 @@ impl Pack for Manager {
         *version = self.version.to_le_bytes();
         *bump_seed = self.bump_seed.to_le_bytes();
         owner.copy_from_slice(self.owner.as_ref());
-        quote_currency.copy_from_slice(self.quote_currency.as_ref());
+        quote_currency.copy_from_slice(&self.quote_currency[..]);
         token_program_id.copy_from_slice(self.token_program_id.as_ref());
         pyth_program_id.copy_from_slice(self.pyth_program_id.as_ref());
     }

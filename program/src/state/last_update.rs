@@ -54,11 +54,9 @@ impl Pack for LastUpdate {
             1
         ];
 
-        let stale = unpack_bool(stale)?;
-
         Ok(Self{
             slot: Slot::from_le_bytes(*slot),
-            stale,
+            stale: unpack_bool(stale)?,
         })
     }
 }
@@ -66,7 +64,7 @@ impl Pack for LastUpdate {
 impl LastUpdate {
     /// Create new last update
     pub fn new(slot: Slot) -> Self {
-        Self { slot, stale: true }
+        Self { slot, stale: false }
     }
 
     /// Return slots elapsed since given slot

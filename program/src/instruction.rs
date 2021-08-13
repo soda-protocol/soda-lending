@@ -2,6 +2,7 @@
 
 use crate::{
     error::LendingError,
+    state::{LiquidityConfig, CollateralConfig},
 };
 use solana_program::{
     instruction::{AccountMeta, Instruction},
@@ -21,46 +22,76 @@ pub enum LendingInstruction {
         quote_currency: [u8; 32],
     },
     /// 1
+    InitRateOracle,
+    /// 2
     InitMarketReserveWithoutLiquidity {
         ///
-        liquidate_fee_rate: u64,
-        ///
-        liquidate_limit_rate: u64,
-    },
-    /// 2
-    InitMarketReserveWithLiquidity {
-        ///
-        liquidate_fee_rate: u64,
-        ///
-        liquidate_limit_rate: u64,
-        ///
-        min_borrow_utilization_rate: u64,
-        ///
-        max_borrow_utilization_rate: u64,
-        ///
-        interest_fee_rate: u64, 
+        collateral_config: CollateralConfig,
     },
     /// 3
-    InitUserObligation,
+    InitMarketReserveWithLiquidity {
+        ///
+        collateral_config: CollateralConfig,
+        ///
+        liquidity_config: LiquidityConfig,
+    },
     /// 4
-    InitUserAsset,
+    InitUserObligation,
     /// 5
+    InitUserAsset,
+    /// 6
     DepositLiquidity {
         ///
         amount: u64,
     },
-    /// 6
+    /// 7
     WithdrawLiquidity {
         ///
         amount: u64,
     },
-    /// 7
+    /// 8
     DepositCollateral {
         ///
         amount: u64,
     },
-    /// 8
+    /// 9
     BorrowLiquidity {
+        ///
+        amount: u64,
+    },
+    /// 10
+    RepayLoan {
+        ///
+        amount: u64,
+    },
+    /// 11
+    RedeemCollateral {
+        ///
+        amount: u64,      
+    },
+    /// 12
+    Liquidate {
+        ///
+        is_arbitrary: bool,
+        ///
+        amount: u64,   
+    },
+    /// 13
+    FeedRateOracle {
+        ///
+        interest_rate: u64,
+        ///
+        borrow_rate: u64,
+    },
+    /// 14
+    PauseRateOracle,
+    /// 15
+    AddLiquidityToReserve {
+        ///
+        liquidity_config: LiquidityConfig,   
+    },
+    /// 16
+    WithdrawFee {
         ///
         amount: u64,
     },
@@ -77,53 +108,96 @@ impl LendingInstruction {
                 let (quote_currency, _rest) = Self::unpack_bytes32(rest)?;
                 Self::InitManager { quote_currency }
             }
-            1 => {
-                let (liquidate_fee_rate, rest) = Self::unpack_u64(rest)?;
-                let (liquidate_limit_rate, _rest) = Self::unpack_u64(rest)?;
-
-                Self::InitMarketReserveWithoutLiquidity {
-                    liquidate_fee_rate,
-                    liquidate_limit_rate,
-                }
-            }
+            1 => Self::InitRateOracle,
             2 => {
-                let (liquidate_fee_rate, rest) = Self::unpack_u64(rest)?;
-                let (liquidate_limit_rate, rest) = Self::unpack_u64(rest)?;
-                let (min_borrow_utilization_rate, rest) = Self::unpack_u64(rest)?;
-                let (max_borrow_utilization_rate, rest) = Self::unpack_u64(rest)?;
-                let (interest_fee_rate, _rest) = Self::unpack_u64(rest)?;
-
-                Self::InitMarketReserveWithLiquidity {
-                    liquidate_fee_rate,
-                    liquidate_limit_rate,
-                    min_borrow_utilization_rate,
-                    max_borrow_utilization_rate,
-                    interest_fee_rate,
-                }
+                let (collateral_config, _rest) = Self::unpack_collateral_config(rest)?;
+                Self::InitMarketReserveWithoutLiquidity { collateral_config }
             }
-            3 => Self::InitUserObligation,
-            4 => Self::InitUserAsset,
-            5 => {
+            3 => {
+                let (collateral_config, rest) = Self::unpack_collateral_config(rest)?;
+                let (liquidity_config, _rest) = Self::unpack_liquidity_config(rest)?;
+                Self::InitMarketReserveWithLiquidity { collateral_config, liquidity_config }
+            }
+            4 => Self::InitUserObligation,
+            5 => Self::InitUserAsset,
+            6 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::DepositLiquidity { amount }
             }
-            6 => {
+            7 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::WithdrawLiquidity { amount }
             },
-            7 => {
+            8 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::DepositCollateral { amount }
             },
-            8 => {
+            9 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::BorrowLiquidity { amount }
+            }
+            10 => {
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::RepayLoan { amount }
+            }
+            11 => {
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::RedeemCollateral { amount }
+            }
+            12 => {
+                let (is_arbitrary, rest) = Self::unpack_bool(rest)?;
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::Liquidate { is_arbitrary, amount }
+            }
+            13 => {
+                let (interest_rate, rest) = Self::unpack_u64(rest)?;
+                let (borrow_rate, _rest) = Self::unpack_u64(rest)?;
+                Self::FeedRateOracle { interest_rate, borrow_rate }
+            }
+            14 => Self::PauseRateOracle,
+            15 => {
+                let (liquidity_config, _rest) = Self::unpack_liquidity_config(rest)?;
+                Self::AddLiquidityToReserve { liquidity_config }
+            }
+            16 => {
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::WithdrawFee { amount }
             }
             _ => {
                 msg!("Instruction cannot be unpacked");
                 return Err(LendingError::InstructionUnpackError.into());
             }
         })
+    }
+
+    fn unpack_collateral_config(input: &[u8]) -> Result<(CollateralConfig, &[u8]), ProgramError> {
+        let (liquidate_fee_rate, rest) = Self::unpack_u64(input)?;
+        let (arbitrary_liquidate_rate, rest) = Self::unpack_u64(rest)?;
+        let (liquidate_limit, rest) = Self::unpack_u8(rest)?;
+        let (effective_value_rate, rest) = Self::unpack_u8(rest)?;
+        let (close_factor, rest) = Self::unpack_u8(rest)?;
+
+        Ok((
+            CollateralConfig {
+                liquidate_fee_rate,
+                arbitrary_liquidate_rate,
+                liquidate_limit,
+                effective_value_rate,
+                close_factor,
+            }, rest
+        ))
+    }
+
+    fn unpack_liquidity_config(input: &[u8]) -> Result<(LiquidityConfig, &[u8]), ProgramError> {
+        let (interest_fee_rate, rest) = Self::unpack_u64(input)?;
+        let (max_borrow_utilization_rate, rest) = Self::unpack_u8(rest)?;
+
+        Ok((
+            LiquidityConfig {
+                interest_fee_rate,
+                max_borrow_utilization_rate,
+            }, rest
+        ))
     }
 
     fn unpack_u64(input: &[u8]) -> Result<(u64, &[u8]), ProgramError> {
@@ -154,6 +228,22 @@ impl LendingInstruction {
         Ok((amount, rest))
     }
 
+    fn unpack_bool(input: &[u8]) -> Result<(bool, &[u8]), ProgramError> {
+        if input.is_empty() {
+            msg!("bool cannot be unpacked");
+            return Err(LendingError::InstructionUnpackError.into());
+        }
+        let (amount, rest) = input.split_first().ok_or(LendingError::InstructionUnpackError)?;
+        match *amount {
+            0 => Ok((false, rest)),
+            1 => Ok((true, rest)),
+            _ => {
+                msg!("Boolean cannot be unpacked");
+                Err(LendingError::InstructionUnpackError.into())
+            }
+        }
+    }
+
     fn unpack_bytes32(input: &[u8]) -> Result<([u8; 32], &[u8]), ProgramError> {
         if input.len() < 32 {
             msg!("32 bytes cannot be unpacked");
@@ -174,54 +264,81 @@ impl LendingInstruction {
         match *self {
             Self::InitManager { quote_currency } => {
                 buf.push(0);
-                buf.extend_from_slice(quote_currency.as_ref());
+                buf.extend_from_slice(&quote_currency[..]);
             }
-            Self::InitMarketReserveWithoutLiquidity { 
-                liquidate_fee_rate,
-                liquidate_limit_rate,
-            } => {
-                buf.push(1);
-                buf.extend_from_slice(&liquidate_fee_rate.to_le_bytes());
-                buf.extend_from_slice(&liquidate_limit_rate.to_le_bytes());
+            Self::InitRateOracle => buf.push(1),
+            Self::InitMarketReserveWithoutLiquidity { collateral_config } => {
+                buf.push(2);
+                Self::pack_collateral_config(collateral_config, &mut buf);
             }
             Self::InitMarketReserveWithLiquidity {
-                liquidate_fee_rate,
-                liquidate_limit_rate,
-                min_borrow_utilization_rate,
-                max_borrow_utilization_rate,
-                interest_fee_rate,
+                collateral_config,
+                liquidity_config 
             } => {
-                buf.push(2);
-                buf.extend_from_slice(&liquidate_fee_rate.to_le_bytes());
-                buf.extend_from_slice(&liquidate_limit_rate.to_le_bytes());
-                buf.extend_from_slice(&min_borrow_utilization_rate.to_le_bytes());
-                buf.extend_from_slice(&max_borrow_utilization_rate.to_le_bytes());
-                buf.extend_from_slice(&interest_fee_rate.to_le_bytes());
-            }
-            Self::InitUserObligation => {
                 buf.push(3);
+                Self::pack_collateral_config(collateral_config, &mut buf);
+                Self::pack_liquidity_config(liquidity_config, &mut buf);
             }
-            Self::InitUserAsset => {
-                buf.push(4);
-            }
+            Self::InitUserObligation => buf.push(4),
+            Self::InitUserAsset => buf.push(5),
             Self::DepositLiquidity { amount } => {
-                buf.push(5);
+                buf.push(6);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             Self::WithdrawLiquidity { amount } => {
-                buf.push(6);
-                buf.extend_from_slice(&amount.to_le_bytes()); 
-            }
-            Self::DepositCollateral { amount } => {
                 buf.push(7);
                 buf.extend_from_slice(&amount.to_le_bytes()); 
             }
-            Self::BorrowLiquidity { amount } => {
+            Self::DepositCollateral { amount } => {
                 buf.push(8);
                 buf.extend_from_slice(&amount.to_le_bytes()); 
             }
+            Self::BorrowLiquidity { amount } => {
+                buf.push(9);
+                buf.extend_from_slice(&amount.to_le_bytes()); 
+            }
+            Self::RepayLoan { amount } => {
+                buf.push(10);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::RedeemCollateral { amount } => {
+                buf.push(11);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::Liquidate { is_arbitrary, amount } => {
+                buf.push(12);
+                buf.extend_from_slice(&[is_arbitrary as u8][..]);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::FeedRateOracle { interest_rate, borrow_rate } => {
+                buf.push(13);
+                buf.extend_from_slice(&interest_rate.to_le_bytes());
+                buf.extend_from_slice(&borrow_rate.to_le_bytes());
+            }
+            Self::PauseRateOracle => buf.push(14),
+            Self::AddLiquidityToReserve { liquidity_config } => {
+                buf.push(15);
+                Self::pack_liquidity_config(liquidity_config, &mut buf);
+            }
+            Self::WithdrawFee { amount } => {
+                buf.push(16);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
         }
         buf
+    }
+
+    fn pack_collateral_config(collateral_config: CollateralConfig, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(&collateral_config.liquidate_fee_rate.to_le_bytes());
+        buf.extend_from_slice(&collateral_config.arbitrary_liquidate_rate.to_le_bytes());
+        buf.extend_from_slice(&collateral_config.liquidate_limit.to_le_bytes());
+        buf.extend_from_slice(&collateral_config.effective_value_rate.to_le_bytes());
+        buf.extend_from_slice(&collateral_config.close_factor.to_le_bytes());
+    }
+
+    fn pack_liquidity_config(liquidity_config: LiquidityConfig, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(&liquidity_config.interest_fee_rate.to_le_bytes());
+        buf.extend_from_slice(&liquidity_config.max_borrow_utilization_rate.to_le_bytes());
     }
 }
 
@@ -244,32 +361,31 @@ pub fn init_manager(
     }
 }
 
-///
-pub fn init_market_reserve_without_liquidity(
-    program_id: Pubkey,
-    manager_info: Pubkey,
-    market_reserve_info: Pubkey,
-    price_oracle_info: Pubkey,
-    token_account_info: Pubkey,
-    authority_info: Pubkey,
-    liquidate_fee_rate: u64,
-    liquidate_limit_rate: u64,
-) -> Instruction {
-    Instruction {
-        program_id,
-        accounts: vec![
-            AccountMeta::new_readonly(sysvar::rent::id(), false),
-            AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(manager_info, false),
-            AccountMeta::new(market_reserve_info, false),
-            AccountMeta::new_readonly(price_oracle_info, false),
-            AccountMeta::new_readonly(token_account_info, false),
-            AccountMeta::new_readonly(authority_info, true),
-        ],
-        data: LendingInstruction::InitMarketReserveWithoutLiquidity {
-            liquidate_fee_rate,
-            liquidate_limit_rate,
-        }.pack(),
-    }
-}
+// pub fn init_market_reserve_without_liquidity(
+//     program_id: Pubkey,
+//     manager_info: Pubkey,
+//     market_reserve_info: Pubkey,
+//     price_oracle_info: Pubkey,
+//     token_account_info: Pubkey,
+//     authority_info: Pubkey,
+//     liquidate_fee_rate: u64,
+//     liquidate_limit_rate: u64,
+// ) -> Instruction {
+//     Instruction {
+//         program_id,
+//         accounts: vec![
+//             AccountMeta::new_readonly(sysvar::rent::id(), false),
+//             AccountMeta::new_readonly(sysvar::clock::id(), false),
+//             AccountMeta::new_readonly(manager_info, false),
+//             AccountMeta::new(market_reserve_info, false),
+//             AccountMeta::new_readonly(price_oracle_info, false),
+//             AccountMeta::new_readonly(token_account_info, false),
+//             AccountMeta::new_readonly(authority_info, true),
+//         ],
+//         data: LendingInstruction::InitMarketReserveWithoutLiquidity {
+//             liquidate_fee_rate,
+//             liquidate_limit_rate,
+//         }.pack(),
+//     }
+// }
 

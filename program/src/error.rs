@@ -77,7 +77,15 @@ pub enum LendingError {
     ///
     #[error("Invalid user obligation")]
     InvalidUserObligation,
-
+    ///
+    #[error("Rate oracle authority is invalid")]
+    InvalidOracleAuthority,
+    ///
+    #[error("Invalid liquidity config")]
+    InvalidLiquidityConfig,
+    ///
+    #[error("Invalid collateral config")]
+    InvalidCollateralConfig,
     // 10
     /// Invalid amount, must be greater than zero
     #[error("Input amount is invalid")]
@@ -200,8 +208,11 @@ pub enum LendingError {
     #[error("Obligation collaterals are not empty")]
     ObligationCollateralsNotEmpty,
     ///
-    #[error("Obligation collaterals need to be liquidated")]
-    ObligationCollateralsLiquidatitonLimit,
+    #[error("Obligation collaterals are not healthy")]
+    ObligationNotHealthy,
+    ///
+    #[error("Obligation liquidation is not available")]
+    ObligationLiquidationNotAvailable,
     ///
     #[error("Obligation collaterals limit exceeded")]
     ObligationCollateralsLimitExceed,
@@ -216,16 +227,13 @@ pub enum LendingError {
     ObligationCollateralAmountInsufficient,
     ///
     #[error("Obligation dept amount insufficient")]
-    ObligationDeptAmountInsufficient,
+    ObligationRepayTooMuch,
     ///
-    #[error("Market Reserve liquidity is not available")]
-    MarketReserveLiquidityNotAvailable,
+    #[error("Market Reserve liquidity does not exist")]
+    MarketReserveLiquidityNotExist,
     ///
     #[error("Market Reserve liquidity utilization rate exceeds limit")]
     MarketReserveLiquidityUtilizationTooLarge,
-    ///
-    #[error("Market Reserve liquidity utilization rate is lower than limit")]
-    MarketReserveLiquidityUtilizationTooSmall,
     ///
     #[error("Market Reserve liquidity available insufficient")]
     MarketReserveLiquidityAvailableInsufficent,
@@ -236,8 +244,20 @@ pub enum LendingError {
     #[error("Market Reserve collateral insufficient")]
     MarketReserveCollateralInsufficent,
     ///
+    #[error("Market Reserve is stale")]
+    MarketReserveStale,
+    ///
+    #[error("Market Reserve already has liquidity property")]
+    MarketReserveLiquidityAlreadyExist,
+    ///
     #[error("User Asset insufficient")]
     UserAssetInsufficient,
+    ///
+    #[error("Rate Oracle is not available")]
+    RateOracleNotAvailable,
+    ///
+    #[error("Liquidation too much")]
+    LiquidationTooMuch,
 }
 
 impl From<LendingError> for ProgramError {
