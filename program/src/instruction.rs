@@ -485,7 +485,6 @@ pub fn deposit_liquidity(
     user_asset_info: Pubkey,
     user_authority_info: Pubkey,
     user_token_account_info: Pubkey,
-    token_program_id: Pubkey,
     amount: u64,
 ) -> Instruction {
     Instruction {
@@ -497,7 +496,7 @@ pub fn deposit_liquidity(
             AccountMeta::new(user_asset_info, false),
             AccountMeta::new_readonly(user_authority_info, true),
             AccountMeta::new_readonly(user_token_account_info, false),
-            AccountMeta::new_readonly(token_program_id, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::DepositLiquidity{ amount }.pack(),
     }
@@ -513,7 +512,6 @@ pub fn withdraw_liquidity(
     user_asset_info: Pubkey,
     user_authority_info: Pubkey,
     user_token_account_info: Pubkey,
-    token_program_id: Pubkey,
     amount: u64,
 ) -> Instruction {
     let (manager_authority_info, _bump_seed) = Pubkey::find_program_address(
@@ -533,7 +531,7 @@ pub fn withdraw_liquidity(
             AccountMeta::new(user_asset_info, false),
             AccountMeta::new_readonly(user_authority_info, true),
             AccountMeta::new_readonly(user_token_account_info, false),
-            AccountMeta::new_readonly(token_program_id, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::WithdrawLiquidity{ amount }.pack(),
     }
@@ -547,7 +545,6 @@ pub fn deposit_collateral(
     user_obligatiton_info: Pubkey,
     user_authority_info: Pubkey,
     user_token_account_info: Pubkey,
-    token_program_id: Pubkey,
     amount: u64,
 ) -> Instruction {
     Instruction {
@@ -559,7 +556,7 @@ pub fn deposit_collateral(
             AccountMeta::new(user_obligatiton_info, false),
             AccountMeta::new_readonly(user_authority_info, true),
             AccountMeta::new_readonly(user_token_account_info, false),
-            AccountMeta::new_readonly(token_program_id, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::DepositCollateral{ amount }.pack(),
     }
@@ -576,7 +573,6 @@ pub fn borrow_liquidity(
     user_obligatiton_info: Pubkey,
     user_authority_info: Pubkey,
     user_token_account_info: Pubkey,
-    token_program_id: Pubkey,
     price_oracle_infos: Vec<Pubkey>,
     amount: u64,
 ) -> Instruction {
@@ -596,7 +592,7 @@ pub fn borrow_liquidity(
         AccountMeta::new(user_obligatiton_info, false),
         AccountMeta::new_readonly(user_authority_info, true),
         AccountMeta::new_readonly(user_token_account_info, false),
-        AccountMeta::new_readonly(token_program_id, false),
+        AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
     accounts.extend(
@@ -621,7 +617,6 @@ pub fn repay_loan(
     user_obligatiton_info: Pubkey,
     user_authority_info: Pubkey,
     user_token_account_info: Pubkey,
-    token_program_id: Pubkey,
     amount: u64,
 ) -> Instruction {
     Instruction {
@@ -634,7 +629,7 @@ pub fn repay_loan(
             AccountMeta::new(user_obligatiton_info, false),
             AccountMeta::new_readonly(user_authority_info, true),
             AccountMeta::new_readonly(user_token_account_info, false),
-            AccountMeta::new_readonly(token_program_id, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::RepayLoan{ amount }.pack(),
     }
@@ -652,7 +647,6 @@ pub fn redeem_collateral(
     user_obligatiton_info: Pubkey,
     user_authority_info: Pubkey,
     user_token_account_info: Pubkey,
-    token_program_id: Pubkey,
     price_oracle_infos: Vec<Pubkey>,
     amount: u64,
 ) -> Instruction {
@@ -673,7 +667,7 @@ pub fn redeem_collateral(
         AccountMeta::new(user_obligatiton_info, false),
         AccountMeta::new_readonly(user_authority_info, true),
         AccountMeta::new_readonly(user_token_account_info, false),
-        AccountMeta::new_readonly(token_program_id, false),
+        AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
     accounts.extend(
@@ -703,7 +697,6 @@ pub fn liquidate(
     liquidator_authority_info: Pubkey,
     liquidator_liquidity_account_info: Pubkey,
     liquidator_collateral_account_info: Pubkey,
-    token_program_id: Pubkey,
     price_oracle_infos: Vec<Pubkey>,
     is_arbitrary: bool,
     amount: u64,
@@ -727,7 +720,7 @@ pub fn liquidate(
         AccountMeta::new_readonly(liquidator_authority_info, true),
         AccountMeta::new_readonly(liquidator_liquidity_account_info, false),
         AccountMeta::new_readonly(liquidator_collateral_account_info, false),
-        AccountMeta::new_readonly(token_program_id, false),
+        AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
     accounts.extend(
@@ -806,7 +799,6 @@ pub fn withdraw_fee(
     manager_token_account_info: Pubkey,
     authority_info: Pubkey,
     receiver_token_account_info: Pubkey,
-    token_program_id: Pubkey,
     amount: u64,
 ) -> Instruction {
     let (manager_authority_info, _bump_seed) = Pubkey::find_program_address(
@@ -824,7 +816,7 @@ pub fn withdraw_fee(
             AccountMeta::new_readonly(manager_token_account_info, false),
             AccountMeta::new_readonly(authority_info, true),
             AccountMeta::new_readonly(receiver_token_account_info, false),
-            AccountMeta::new_readonly(token_program_id, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::WithdrawFee{ amount }.pack(),
     }
