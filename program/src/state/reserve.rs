@@ -37,9 +37,9 @@ impl Liquidity {
             .checked_add(self.borrowed)
             .ok_or(LendingError::MathOverflow)?;
 
-        Decimal::from(self.borrowed)
-            .try_div(total)?
-            .try_into()
+        Rate::one()
+            .try_mul(self.borrowed)?
+            .try_div(total)
     }
     ///
     pub fn deposit(&mut self, amount: u64) -> ProgramResult {
@@ -387,7 +387,7 @@ impl IsInitialized for MarketReserve {
     }
 }
 
-const MARKET_RESERVE_LEN: usize = 218;
+const MARKET_RESERVE_LEN: usize = 219;
 
 impl Pack for MarketReserve {
     const LEN: usize = MARKET_RESERVE_LEN;

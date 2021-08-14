@@ -8,7 +8,7 @@ use crate::{
     state::{
         CollateralConfig, CollateralInfo, Collateral, LastUpdate, Liquidity, LiquidityConfig, RateOracle,
         LiquidityInfo, Manager, MarketReserve, PROGRAM_VERSION, TokenInfo, UserAsset, UserObligation,
-        Price, calculate_interest_fee, calculate_liquidation_fee,
+        Price, PriceInfo, calculate_interest_fee, calculate_liquidation_fee,
     },
 };
 use num_traits::FromPrimitive;
@@ -24,7 +24,7 @@ use solana_program::{
     pubkey::Pubkey,
     sysvar::{clock::Clock, rent::Rent, Sysvar},
 };
-use spl_token::state::Account;
+use spl_token::state::{Account, Mint};
 
 /// Processes an instruction
 pub fn process_instruction(
@@ -127,6 +127,8 @@ fn process_init_manager(
     assert_rent_exempt(rent, manager_info)?;
     assert_uninitialized::<Manager>(manager_info)?;
 
+
+    
     let manager = Manager{
         version: PROGRAM_VERSION,
         bump_seed: Pubkey::find_program_address(&[manager_info.key.as_ref()], program_id).1,
@@ -178,6 +180,7 @@ fn process_init_market_reserve(
     let market_reserve_info = next_account_info(account_info_iter)?;
     let pyth_product_info = next_account_info(account_info_iter)?;
     let pyth_price_info = next_account_info(account_info_iter)?;
+    let token_mint_info = next_account_info(account_info_iter)?;
     let token_account_info = next_account_info(account_info_iter)?;
     let authority_info = next_account_info(account_info_iter)?;
 
@@ -234,6 +237,12 @@ fn process_init_market_reserve(
         return Err(LendingError::InvalidOracleConfig.into());
     }
 
+    if token_mint_info.owner != &manager.token_program_id {
+        msg!("Token mint info owner provided is not owned by the token program in manager");
+        return Err(LendingError::InvalidTokenProgram.into()); 
+    }
+    let token_mint = Mint::unpack(&token_mint_info.try_borrow_data()?)?;
+
     if token_account_info.owner != &manager.token_program_id {
         msg!("Token account info owner provided is not owned by the token program in manager");
         return Err(LendingError::InvalidTokenProgram.into());
@@ -276,6 +285,7 @@ fn process_init_market_reserve(
         token_info: TokenInfo{
             account: *token_account_info.key,
             price_oracle: *pyth_price_info.key,
+            decimal: token_mint.decimals,
         },
         liquidity_info,
         collateral_info: CollateralInfo{
@@ -587,6 +597,7 @@ fn process_deposit_collateral(
     } else {
         user_obligation.new_deposit(Collateral{
             price_oracle: price_oracle.clone(),
+            decimal: market_reserve.token_info.decimal,
             liquidate_limit: market_reserve.collateral_info.config.liquidate_limit,
             effective_value_rate: market_reserve.collateral_info.config.effective_value_rate,
             amount,
@@ -671,6 +682,8 @@ fn process_borrow_liquidity(
     if liquidity_price_oracle_info.key != &market_reserve.token_info.price_oracle {
         return Err(LendingError::InvalidPriceOracle.into());
     }
+    let liquidity_price = Price::new(get_pyth_price(liquidity_price_oracle_info, clock)?,
+        market_reserve.token_info.decimal)?;
 
     if rate_oracle_info.key != &liquidity_info.rate_oracle {
         return Err(LendingError::InvalidRateOracle.into());
@@ -701,9 +714,8 @@ fn process_borrow_liquidity(
     // 2. borrow
     user_obligation.borrow_out(amount)?;
     // 3. check obligation healthy
-    let liquidity_price = get_pyth_price(liquidity_price_oracle_info, clock)?;
     let collateral_prices = account_info_iter.map(|price_oracle_info| Ok(
-        Price{
+        PriceInfo{
             price_oracle: *price_oracle_info.key,
             price: get_pyth_price(price_oracle_info, clock)?,
         }
@@ -868,6 +880,8 @@ fn process_redeem_collateral(
     if price_oracle_info.key != &market_reserve.token_info.price_oracle {
         return Err(LendingError::InvalidPriceOracle.into());
     }
+    let liquidity_price = Price::new(get_pyth_price(price_oracle_info, clock)?,
+        market_reserve.token_info.decimal)?;
 
     if rate_oracle_info.key != &liquidity_info.rate_oracle {
         return Err(LendingError::InvalidRateOracle.into());
@@ -914,9 +928,8 @@ fn process_redeem_collateral(
     let index = user_obligation.find_collateral(&market_reserve.token_info.price_oracle)?;
     user_obligation.redeem(index, amount)?;
     // 3. check obligation healthy
-    let liquidity_price = get_pyth_price(price_oracle_info, clock)?;
     let collateral_prices = account_info_iter.map(|price_oracle_info| Ok(
-        Price{
+        PriceInfo{
             price_oracle: *price_oracle_info.key,
             price: get_pyth_price(price_oracle_info, clock)?,
         }
@@ -1006,6 +1019,8 @@ fn process_liquidate(
     if price_oracle_info.key != &liquidity_market_reserve.token_info.price_oracle {
         return Err(LendingError::InvalidPriceOracle.into());
     }
+    let liquidity_price = Price::new(get_pyth_price(price_oracle_info, clock)?,
+        liquidity_market_reserve.token_info.decimal)?;
 
     if rate_oracle_info.key != &liquidity_info.rate_oracle {
         return Err(LendingError::InvalidRateOracle.into());
@@ -1048,9 +1063,8 @@ fn process_liquidate(
     // 2. find liquidating collateral index
     let index = user_obligation.find_collateral(&collateral_market_reserve.token_info.price_oracle)?;
     // 3. check liquidation condition
-    let liquidity_price = get_pyth_price(price_oracle_info, clock)?;
     let collateral_prices = account_info_iter.map(|price_oracle_info| Ok(
-        Price{
+        PriceInfo{
             price_oracle: *price_oracle_info.key,
             price: get_pyth_price(price_oracle_info, clock)?,
         }
@@ -1077,7 +1091,7 @@ fn process_liquidate(
         )?;
         // 5. calculate liquidation fee
         let fee = calculate_liquidation_fee(
-            collateral_prices[index].price,
+            Price::new(collateral_prices[index].price, collateral_market_reserve.token_info.decimal)?,
             amount,
             liquidity_price,
             settle.total,

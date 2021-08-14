@@ -196,11 +196,13 @@ pub struct TokenInfo {
     pub account: Pubkey,
     ///
     pub price_oracle: Pubkey,
+    ///
+    pub decimal: u8,
 }
 
 impl Sealed for TokenInfo {}
 ///
-pub const TOKEN_INFO_LEN: usize = 64;
+pub const TOKEN_INFO_LEN: usize = 65;
 
 impl Pack for TokenInfo {
     const LEN: usize = TOKEN_INFO_LEN;
@@ -211,14 +213,17 @@ impl Pack for TokenInfo {
         let (
             account,
             price_oracle,
+            decimal,
         ) = mut_array_refs![
             output,
             PUBKEY_BYTES,
-            PUBKEY_BYTES
+            PUBKEY_BYTES,
+            1
         ];
 
         account.copy_from_slice(self.account.as_ref());
         price_oracle.copy_from_slice(self.price_oracle.as_ref());
+        *decimal = self.decimal.to_le_bytes();
     }
 
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -227,15 +232,18 @@ impl Pack for TokenInfo {
         let (
             account,
             price_oracle,
+            decimal,
         ) = array_refs![
             input,
             PUBKEY_BYTES,
-            PUBKEY_BYTES
+            PUBKEY_BYTES,
+            1
         ];
 
         Ok(Self{
             account: Pubkey::new_from_array(*account),
             price_oracle: Pubkey::new_from_array(*price_oracle),
+            decimal: u8::from_le_bytes(*decimal),
         })
     }
 }
@@ -249,19 +257,38 @@ pub struct Settle {
 }
 ///
 #[derive(Clone, Copy, Debug)]
-pub struct Price {
+pub struct PriceInfo {
     ///
     pub price_oracle: Pubkey,
     ///
     pub price: Decimal,
 }
 ///
+#[derive(Clone, Copy, Debug)]
+pub struct Price {
+    ///
+    pub decimals: u64,
+    ///
+    pub price: Decimal,
+}
+///
+impl Price {
+    ///
+    pub fn new(price: Decimal, decimal: u8) -> Result<Self, ProgramError> {
+        let decimals = 10u64
+            .checked_pow(decimal as u32)
+            .ok_or(LendingError::MathOverflow)?;
+
+        Ok(Self{ decimals, price })
+    }
+}
+///
 #[inline(always)]
 pub fn calculate_interest(base: u64, rate: Rate, elapsed: Slot) -> Result<u64, ProgramError> {
     Decimal::from(base)
         .try_mul(elapsed)?
-        .try_mul(rate)?
         .try_div(SLOTS_PER_YEAR)?
+        .try_mul(rate)?
         .try_ceil_u64()
 }
 ///
@@ -286,15 +313,18 @@ pub fn calculate_interest_fee(interest: u64, fee_rate: Rate) -> Result<u64, Prog
 ///
 #[inline(always)]
 pub fn calculate_liquidation_fee(
-    collateral_price: Decimal,
+    collateral_price: Price,
     collateral_amount: u64,
-    loan_price: Decimal,
+    loan_price: Price,
     loan_amount: u64,
     fee_rate: Rate,
 ) -> Result<u64, ProgramError> {
-    let equivalent_amount = collateral_price
+    let equivalent_amount = collateral_price.price
         .try_mul(collateral_amount)?
-        .try_div(loan_price)?
+        .try_div(collateral_price.decimals)?
+        .try_mul(loan_price.decimals)?
+        .try_div(loan_amount)?
+        .try_div(loan_price.price)?
         .try_round_u64()?;
 
     let bonus = equivalent_amount

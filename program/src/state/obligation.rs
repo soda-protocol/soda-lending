@@ -19,6 +19,8 @@ pub struct Collateral {
     ///
     pub price_oracle: Pubkey,
     ///
+    pub decimal: u8,
+    ///
     pub liquidate_limit: u8,
     ///
     pub effective_value_rate: u8,
@@ -28,7 +30,7 @@ pub struct Collateral {
 
 impl Sealed for Collateral {}
 
-const COLLATERAL_LEN: usize = 42;
+const COLLATERAL_LEN: usize = 43;
 
 impl Pack for Collateral {
     const LEN: usize = COLLATERAL_LEN;
@@ -38,6 +40,7 @@ impl Pack for Collateral {
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             price_oracle,
+            decimal,
             liquidate_limit,
             effective_value_rate,
             amount,
@@ -46,10 +49,12 @@ impl Pack for Collateral {
             PUBKEY_BYTES,
             1,
             1,
+            1,
             8
         ];
 
         price_oracle.copy_from_slice(self.price_oracle.as_ref());
+        *decimal = self.decimal.to_le_bytes();
         *liquidate_limit = self.liquidate_limit.to_le_bytes();
         *effective_value_rate = self.effective_value_rate.to_le_bytes();
         *amount = self.amount.to_le_bytes();
@@ -60,6 +65,7 @@ impl Pack for Collateral {
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             price_oracle,
+            decimal,
             liquidate_limit,
             effective_value_rate,
             amount,
@@ -68,11 +74,13 @@ impl Pack for Collateral {
             PUBKEY_BYTES,
             1,
             1,
+            1,
             8
         ];
 
         Ok(Self{
             price_oracle: Pubkey::new_from_array(*price_oracle),
+            decimal: u8::from_le_bytes(*decimal),
             liquidate_limit: u8::from_le_bytes(*liquidate_limit),
             effective_value_rate: u8::from_le_bytes(*effective_value_rate),
             amount: u64::from_le_bytes(*amount),
@@ -83,19 +91,35 @@ impl Pack for Collateral {
 impl Collateral {
     ///
     pub fn liquidate_value(&self, price: Decimal) -> Result<Decimal, ProgramError> {
+        let decimals = 10u64
+            .checked_pow(self.decimal as u32)
+            .ok_or(LendingError::MathOverflow)?;
+
         price
             .try_mul(self.amount)?
+            .try_div(decimals)?
             .try_mul(Rate::from_percent(self.liquidate_limit))
     }
     ///
     pub fn effective_value(&self, price: Decimal) -> Result<Decimal, ProgramError> {
+        let decimals = 10u64
+            .checked_pow(self.decimal as u32)
+            .ok_or(LendingError::MathOverflow)?;
+
         price
             .try_mul(self.amount)?
+            .try_div(decimals)?
             .try_mul(Rate::from_percent(self.effective_value_rate))
     }
     ///
     pub fn max_value(&self, price: Decimal) -> Result<Decimal, ProgramError> {
-        price.try_mul(self.amount)
+        let decimals = 10u64
+            .checked_pow(self.decimal as u32)
+            .ok_or(LendingError::MathOverflow)?;
+
+        price
+            .try_mul(self.amount)?
+            .try_div(decimals)
     }
     ///
     pub fn deposit(&mut self, amount: u64) -> ProgramResult {
@@ -139,7 +163,7 @@ impl IsInitialized for UserObligation {
     }
 }
 
-const USER_OBLIGATITION_LEN: usize = 301;
+const USER_OBLIGATITION_LEN: usize = 306;
 
 impl Pack for UserObligation {
     const LEN: usize = USER_OBLIGATITION_LEN;
@@ -327,9 +351,11 @@ impl UserObligation {
         }
     }
     ///
-    pub fn check_healthy(&self, prices: &[Price], price: Decimal) -> ProgramResult {
+    pub fn check_healthy(&self, prices: &[PriceInfo], loan_price: Price) -> ProgramResult {
         let collaterals_value = self.collaterals_effective_value(prices)?;
-        let loan_value = price.try_mul(self.dept_amount)?;
+        let loan_value = loan_price.price
+            .try_mul(self.dept_amount)?
+            .try_div(loan_price.decimals)?;
 
         if collaterals_value > loan_value {
             Ok(())
@@ -343,16 +369,14 @@ impl UserObligation {
         index: usize,
         amount: u64,
         close_factor: Rate,
-        collateral_prices: &[Price],
-        liquidity_price: Decimal,
+        collateral_prices: &[PriceInfo],
+        loan_price: Price,
     ) -> Result<Settle, ProgramError> {
         // validation
-        self.check_liquidation(collateral_prices, liquidity_price)?;
+        self.check_liquidation(collateral_prices, loan_price)?;
 
         // max liquidation limit check
-        let liquidation_ratio: Rate = Decimal::from(amount)
-            .try_div(self.collaterals[index].amount)?
-            .try_into()?;
+        let liquidation_ratio = Rate::from_scaled_val(amount).try_div(self.collaterals[index].amount)?;
         if liquidation_ratio >= close_factor {
             return Err(LendingError::LiquidationTooMuch.into())
         }
@@ -382,16 +406,22 @@ impl UserObligation {
         &mut self,
         index: usize,
         amount: u64,
-        collateral_prices: &[Price],
-        liquidity_price: Decimal,
+        collateral_prices: &[PriceInfo],
+        loan_price: Price,
         arbitrary_liquidate_rate: Rate,
     ) -> Result<Settle, ProgramError> {
         // validation
-        self.check_arbitrary_liquidation(collateral_prices, liquidity_price)?;
+        self.check_arbitrary_liquidation(collateral_prices, loan_price)?;
+
+        let decimals = 10u64
+            .checked_pow(self.collaterals[index].decimal as u32)
+            .ok_or(LendingError::MathOverflow)?;
 
         let repay_amount = collateral_prices[index].price
             .try_mul(amount)?
-            .try_div(liquidity_price)?
+            .try_div(decimals)?
+            .try_mul(loan_price.decimals)?
+            .try_div(loan_price.price)?
             .try_mul(arbitrary_liquidate_rate)?
             .try_round_u64()?;
         
@@ -407,7 +437,7 @@ impl UserObligation {
         self.repay(repay_amount)
     }
     ///
-    fn collaterals_liquidation_value(&self, prices: &[Price]) -> Result<Decimal, ProgramError> {
+    fn collaterals_liquidation_value(&self, prices: &[PriceInfo]) -> Result<Decimal, ProgramError> {
         self.collaterals
             .iter()
             .zip(prices.iter())
@@ -421,7 +451,7 @@ impl UserObligation {
             })
     }
     ///
-    fn collaterals_effective_value(&self, prices: &[Price]) -> Result<Decimal, ProgramError> {
+    fn collaterals_effective_value(&self, prices: &[PriceInfo]) -> Result<Decimal, ProgramError> {
         self.collaterals
             .iter()
             .zip(prices.iter())
@@ -435,7 +465,7 @@ impl UserObligation {
             })
     }
     ///
-    fn collaterals_max_value(&self, prices: &[Price]) -> Result<Decimal, ProgramError> {
+    fn collaterals_max_value(&self, prices: &[PriceInfo]) -> Result<Decimal, ProgramError> {
         self.collaterals
             .iter()
             .zip(prices.iter())
@@ -449,9 +479,11 @@ impl UserObligation {
             })
     }
     ///
-    fn check_liquidation(&self, prices: &[Price], price: Decimal) -> ProgramResult {
+    fn check_liquidation(&self, prices: &[PriceInfo], loan_price: Price) -> ProgramResult {
         let collaterals_value = self.collaterals_liquidation_value(prices)?;
-        let loan_value = price.try_mul(self.dept_amount)?;
+        let loan_value = loan_price.price
+            .try_mul(self.dept_amount)?
+            .try_div(loan_price.decimals)?;
 
         if collaterals_value <= loan_value {
             Ok(())
@@ -460,9 +492,11 @@ impl UserObligation {
         }
     }
     ///
-    fn check_arbitrary_liquidation(&self, prices: &[Price], price: Decimal) -> ProgramResult {
+    fn check_arbitrary_liquidation(&self, prices: &[PriceInfo], loan_price: Price) -> ProgramResult {
         let collaterals_value = self.collaterals_max_value(prices)?;
-        let loan_value = price.try_mul(self.dept_amount)?;
+        let loan_value = loan_price.price
+            .try_mul(self.dept_amount)?
+            .try_div(loan_price.decimals)?;
 
         if collaterals_value <= loan_value {
             Ok(())
