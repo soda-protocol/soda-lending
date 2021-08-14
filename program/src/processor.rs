@@ -291,11 +291,11 @@ fn process_init_user_obligation(
     accounts: &[AccountInfo],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
+    let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
+    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
     let market_reserve_info = next_account_info(account_info_iter)?;
     let user_obligation_info = next_account_info(account_info_iter)?;
     let owner_info = next_account_info(account_info_iter)?;
-    let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
-    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
 
     if market_reserve_info.owner != program_id {
         msg!("MarketReserve owner provided is not owned by the lending program");
@@ -327,11 +327,11 @@ fn process_init_user_asset(
     accounts: &[AccountInfo],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
+    let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
+    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
     let market_reserve_info = next_account_info(account_info_iter)?;
     let user_asset_info = next_account_info(account_info_iter)?;
     let owner_info = next_account_info(account_info_iter)?;
-    let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
-    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
 
     if market_reserve_info.owner != program_id {
         msg!("MarketReserve owner provided is not owned by the lending program");
@@ -368,14 +368,14 @@ fn process_deposit_liquidity(
     }
 
     let account_info_iter = &mut accounts.iter();
+    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
     let market_reserve_info = next_account_info(account_info_iter)?;
+    let manager_token_account_info = next_account_info(account_info_iter)?;
     let rate_oracle_info = next_account_info(account_info_iter)?;
     let user_asset_info = next_account_info(account_info_iter)?;
-    let manager_token_account_info = next_account_info(account_info_iter)?;
-    let user_token_account_info = next_account_info(account_info_iter)?;
     let user_authority_info = next_account_info(account_info_iter)?;
+    let user_token_account_info = next_account_info(account_info_iter)?;
     let token_program_id = next_account_info(account_info_iter)?;
-    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
 
     if market_reserve_info.owner != program_id {
         msg!("MarketReserve owner provided is not owned by the lending program");
@@ -386,6 +386,10 @@ fn process_deposit_liquidity(
     let liquidity_info = market_reserve.liquidity_info
         .as_mut()
         .ok_or(LendingError::MarketReserveLiquidityNotExist)?;
+
+    if manager_token_account_info.key != &market_reserve.token_info.account {
+        return Err(LendingError::InvalidManagerTokenAccount.into()); 
+    }
 
     if rate_oracle_info.key != &liquidity_info.rate_oracle {
         msg!("MarketReserve liquidity rate oracle is not matched with provided");
@@ -402,10 +406,6 @@ fn process_deposit_liquidity(
     if &user_asset.reserve != market_reserve_info.key {
         msg!("UserAsset market reserve is not matched with accounts provided");
         return Err(LendingError::InvalidMarketReserve.into());
-    }
-
-    if manager_token_account_info.key != &market_reserve.token_info.account {
-        return Err(LendingError::InvalidManagerTokenAccount.into()); 
     }
 
     if user_authority_info.key != &user_asset.owner {
@@ -446,16 +446,16 @@ fn process_withdraw_liquidity(
     }
 
     let account_info_iter = &mut accounts.iter();
+    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
     let manager_info = next_account_info(account_info_iter)?;
     let manager_authority_info = next_account_info(account_info_iter)?;
     let market_reserve_info = next_account_info(account_info_iter)?;
     let manager_token_account_info = next_account_info(account_info_iter)?;
     let rate_oracle_info = next_account_info(account_info_iter)?;
     let user_asset_info = next_account_info(account_info_iter)?;
-    let user_token_account_info = next_account_info(account_info_iter)?;
     let user_authority_info = next_account_info(account_info_iter)?;
+    let user_token_account_info = next_account_info(account_info_iter)?;
     let token_program_id = next_account_info(account_info_iter)?;
-    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
 
     if manager_info.owner != program_id {
         msg!("Manager ower provided is not owned by the lending program");
@@ -511,6 +511,10 @@ fn process_withdraw_liquidity(
     if user_authority_info.key != &user_asset.owner {
         return Err(LendingError::InvalidUserAuthority.into());
     }
+    if !user_authority_info.is_signer {
+        msg!("authority is not a signer");
+        return Err(LendingError::InvalidSigner.into());
+    }
 
     // 1. update
     user_asset.update_interest(clock.slot, Rate::from_scaled_val(rate_oracle.interest_rate))?;
@@ -547,13 +551,13 @@ fn process_deposit_collateral(
     }
 
     let account_info_iter = &mut accounts.iter();
+    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
     let market_reserve_info = next_account_info(account_info_iter)?;
     let manager_token_account_info = next_account_info(account_info_iter)?;
     let user_obligatiton_info = next_account_info(account_info_iter)?;
-    let user_token_account_info = next_account_info(account_info_iter)?;
     let user_authority_info = next_account_info(account_info_iter)?;
+    let user_token_account_info = next_account_info(account_info_iter)?;
     let token_program_id = next_account_info(account_info_iter)?;
-    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
 
     if market_reserve_info.owner != program_id {
         msg!("Market reserve owner provided is not owned by the lending program");
@@ -622,12 +626,12 @@ fn process_borrow_liquidity(
     let manager_info = next_account_info(account_info_iter)?;
     let manager_authority_info = next_account_info(account_info_iter)?;
     let market_reserve_info = next_account_info(account_info_iter)?;
+    let manager_token_account_info = next_account_info(account_info_iter)?;
     let liquidity_price_oracle_info = next_account_info(account_info_iter)?;
     let rate_oracle_info = next_account_info(account_info_iter)?;
-    let manager_token_account_info = next_account_info(account_info_iter)?;
     let user_obligatiton_info = next_account_info(account_info_iter)?;
-    let user_token_account_info = next_account_info(account_info_iter)?;
     let user_authority_info = next_account_info(account_info_iter)?;
+    let user_token_account_info = next_account_info(account_info_iter)?;
     let token_program_id = next_account_info(account_info_iter)?;
 
     if manager_info.owner != program_id {
@@ -660,6 +664,10 @@ fn process_borrow_liquidity(
         .as_mut()
         .ok_or(LendingError::MarketReserveLiquidityNotExist)?;
 
+    if manager_token_account_info.key != &market_reserve.token_info.account {
+        return Err(LendingError::InvalidManagerTokenAccount.into()); 
+    }
+
     if liquidity_price_oracle_info.key != &market_reserve.token_info.price_oracle {
         return Err(LendingError::InvalidPriceOracle.into());
     }
@@ -669,10 +677,6 @@ fn process_borrow_liquidity(
     }
     let rate_oracle = RateOracle::unpack(&rate_oracle_info.try_borrow_data()?)?;
     rate_oracle.check_valid(clock.slot)?;
-
-    if manager_token_account_info.key != &market_reserve.token_info.account {
-        return Err(LendingError::InvalidManagerTokenAccount.into()); 
-    }
 
     if user_obligatiton_info.owner != program_id {
         msg!("User Obligation owner provided is not owned by the lending program");
@@ -705,6 +709,7 @@ fn process_borrow_liquidity(
         }
     )).collect::<Result<Vec<_>, ProgramError>>()?;
     user_obligation.check_healthy(&collateral_prices, liquidity_price)?;
+    drop(collateral_prices);
     // 4. borrow in reserve
     liquidity_info.liquidity.borrow_out(amount)?;
     // 5. update timestamp
@@ -917,6 +922,7 @@ fn process_redeem_collateral(
         }
     )).collect::<Result<Vec<_>, ProgramError>>()?;
     user_obligation.check_healthy(&collateral_prices, liquidity_price)?;
+    drop(collateral_prices);
     // 6. redeem in reserve
     market_reserve.collateral_info.redeem(amount)?;
     // 7. update timestamp
