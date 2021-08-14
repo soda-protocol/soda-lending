@@ -347,6 +347,7 @@ pub fn init_manager(
     program_id: Pubkey,
     manager_info: Pubkey,
     owner_info: Pubkey,
+    oracle_program_id: Pubkey,
     quote_currency: [u8; 32],
 ) -> Instruction {
     Instruction {
@@ -355,6 +356,7 @@ pub fn init_manager(
             AccountMeta::new_readonly(sysvar::rent::id(), false),
             AccountMeta::new(manager_info, false),
             AccountMeta::new_readonly(owner_info, false),
+            AccountMeta::new_readonly(oracle_program_id, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::InitManager { quote_currency }.pack(),

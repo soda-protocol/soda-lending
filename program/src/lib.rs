@@ -13,4 +13,4 @@ pub mod pyth;
 // Export current sdk types for downstream users building with a different sdk version
 pub use solana_program;
 
-solana_program::declare_id!("SodaBasicLending888888888888888888888888888");
+solana_program::declare_id!("SodaLending66666666666666666666666666666666");

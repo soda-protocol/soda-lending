@@ -24,7 +24,7 @@ use solana_program::{
     pubkey::Pubkey,
     sysvar::{clock::Clock, rent::Rent, Sysvar},
 };
-use spl_token::state::{Account, Mint};
+use spl_token::{check_program_account, state::{Account, Mint}};
 
 /// Processes an instruction
 pub fn process_instruction(
@@ -117,8 +117,8 @@ fn process_init_manager(
     let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
     let manager_info = next_account_info(account_info_iter)?;
     let owner_info = next_account_info(account_info_iter)?;
-    let token_program_id = next_account_info(account_info_iter)?;
     let oracle_program_id = next_account_info(account_info_iter)?;
+    let token_program_id = next_account_info(account_info_iter)?;
 
     if manager_info.owner != program_id {
         msg!("manager provided is not owned by the lending program");
@@ -127,7 +127,7 @@ fn process_init_manager(
     assert_rent_exempt(rent, manager_info)?;
     assert_uninitialized::<Manager>(manager_info)?;
 
-
+    check_program_account(&token_program_id.key)?;
     
     let manager = Manager{
         version: PROGRAM_VERSION,
