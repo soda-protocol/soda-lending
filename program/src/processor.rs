@@ -432,10 +432,10 @@ fn process_deposit_liquidity(
 
     // 1. update
     user_asset.update_interest(clock.slot, Rate::from_scaled_val(rate_oracle.interest_rate))?;
-    // 2. deposit in obligation
-    user_asset.deposit(amount)?;
-    // 3. deposit in market reserve
-    liquidity_info.liquidity.deposit(amount)?;
+    // // 2. deposit in obligation
+    // user_asset.deposit(amount)?;
+    // // 3. deposit in market reserve
+    // liquidity_info.liquidity.deposit(amount)?;
     // 4. update timestamp
     market_reserve.last_update.update_slot(clock.slot);
     user_asset.timestamp = clock.slot;

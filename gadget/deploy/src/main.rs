@@ -181,7 +181,7 @@ fn main() {
         &Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
         &Pubkey::from_str("CpE7sLcgUorqqgHdmsKerTPW1yWRaLPfQj9pWj7YojHG").unwrap(),
         &Pubkey::from_str("GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN").unwrap(),
-        1_000_000_000_000,
+        1,
         block_hash,
     );
     match client.send_and_confirm_transaction(&transaction) {
