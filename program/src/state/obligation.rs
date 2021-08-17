@@ -262,7 +262,7 @@ impl UserObligation {
     ///
     pub fn update_borrow_interest(&mut self, slot: Slot, borrow_rate: Rate) -> ProgramResult {
         let elapsed = self.last_update.slots_elapsed(slot)?;
-        let interest = calculate_interest(self.borrowed_amount, borrow_rate, elapsed)?;
+        let interest = calculate_borrow_interest(self.borrowed_amount, borrow_rate, elapsed)?;
 
         self.dept_amount = self.dept_amount
             .checked_add(interest)

@@ -115,10 +115,7 @@ impl UserAsset {
             .checked_sub(self.timestamp)
             .ok_or(LendingError::MathOverflow)?;
 
-        let interest = calculate_compound_interest(self.total_amount, interest_rate, elapsed)?;
-        self.total_amount = self.total_amount
-            .checked_add(interest)
-            .ok_or(LendingError::MathOverflow)?;
+        self.total_amount = calculate_compound_sum(self.total_amount, interest_rate, elapsed)?;
 
         Ok(())
     }
@@ -127,6 +124,7 @@ impl UserAsset {
         self.principle_amount = self.principle_amount
             .checked_add(amount)
             .ok_or(LendingError::MathOverflow)?;
+            
         self.total_amount = self.total_amount
             .checked_add(amount)
             .ok_or(LendingError::MathOverflow)?;

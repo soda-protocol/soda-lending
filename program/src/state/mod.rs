@@ -38,8 +38,7 @@ pub const PROGRAM_VERSION: u8 = 1;
 pub const UNINITIALIZED_VERSION: u8 = 0;
 
 /// Number of slots per year
-pub const SLOTS_PER_YEAR: u64 =
-    DEFAULT_TICKS_PER_SECOND / DEFAULT_TICKS_PER_SLOT * SECONDS_PER_DAY * 365;
+pub const SLOTS_PER_YEAR: u64 = DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY * 365 / DEFAULT_TICKS_PER_SLOT;
 
 ///
 pub const COPTION_LEN: usize = 4;
@@ -284,7 +283,7 @@ impl Price {
 }
 ///
 #[inline(always)]
-pub fn calculate_interest(base: u64, rate: Rate, elapsed: Slot) -> Result<u64, ProgramError> {
+pub fn calculate_borrow_interest(base: u64, rate: Rate, elapsed: Slot) -> Result<u64, ProgramError> {
     Decimal::from(base)
         .try_mul(elapsed)?
         .try_div(SLOTS_PER_YEAR)?
@@ -293,7 +292,7 @@ pub fn calculate_interest(base: u64, rate: Rate, elapsed: Slot) -> Result<u64, P
 }
 ///
 #[inline(always)]
-pub fn calculate_compound_interest(base: u64, rate: Rate, elapsed: Slot) -> Result<u64, ProgramError> {
+pub fn calculate_compound_sum(base: u64, rate: Rate, elapsed: Slot) -> Result<u64, ProgramError> {
     let compounded_interest_rate = rate
         .try_div(SLOTS_PER_YEAR)?
         .try_add(Rate::one())?
@@ -334,4 +333,26 @@ pub fn calculate_liquidation_fee(
     Decimal::from(bonus)
         .try_mul(fee_rate)?
         .try_ceil_u64()
+}
+
+#[cfg(test)]
+mod test {
+    use crate::math::WAD;
+    use super::*;
+
+    #[test]
+    fn test_calculate_borrow_interest() {
+        assert_eq!(
+            calculate_borrow_interest(100_000_000_000, Rate::from_percent(10), 78840000).unwrap(),
+            10_000_000_000,
+        );
+    }
+
+    #[test]
+    fn test_calculate_compound_sum() {
+        assert_eq!(
+            calculate_compound_sum(100_000_000_000, Rate::from_percent(10), 78840000).unwrap(),
+            110_517_091_793,
+        );
+    }
 }
