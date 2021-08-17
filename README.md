@@ -1,3 +1,3 @@
 # Soda Lending Contract
 ## program id
-Gx1nzGdgWa7pdV9khQYNhE4HhpKbiLyoXRcVxVGB3LFF
+SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ

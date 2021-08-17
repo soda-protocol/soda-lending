@@ -12,7 +12,7 @@ use solana_program::{
 };
 
 /// 
-const MAX_OBLIGATION_COLLATERALS: usize = 5;
+const MAX_OBLIGATION_COLLATERALS: usize = 3;
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Collateral {
@@ -163,7 +163,7 @@ impl IsInitialized for UserObligation {
     }
 }
 
-const USER_OBLIGATITION_LEN: usize = 306;
+const USER_OBLIGATITION_LEN: usize = 220;
 
 impl Pack for UserObligation {
     const LEN: usize = USER_OBLIGATITION_LEN;
