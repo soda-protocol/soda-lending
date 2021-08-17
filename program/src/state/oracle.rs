@@ -11,7 +11,7 @@ use solana_program::{
     pubkey::{Pubkey, PUBKEY_BYTES}
 };
 
-const MAX_RATE_EXPIRED_SLOT: u64 = 1000;
+const MAX_RATE_EXPIRED_SLOT: u64 = 10000000;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct RateOracle {
@@ -33,8 +33,8 @@ impl RateOracle {
 
     pub fn check_valid(&self, slot: Slot) -> ProgramResult {
         if self.status {
-            let eplased = self.timestamp
-                .checked_sub(slot)
+            let eplased = slot
+                .checked_sub(self.timestamp)
                 .ok_or(LendingError::MathOverflow)?;
 
             if eplased < MAX_RATE_EXPIRED_SLOT {
