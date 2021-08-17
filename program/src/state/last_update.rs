@@ -85,7 +85,7 @@ impl LastUpdate {
 
     /// Check if marked stale or last update slot is too long ago
     pub fn is_stale(&self, slot: Slot) -> Result<bool, ProgramError> {
-        Ok(self.stale || self.slots_elapsed(slot)? >= STALE_AFTER_SLOTS_ELAPSED)
+        Ok(self.stale || self.slots_elapsed(slot)? <= STALE_AFTER_SLOTS_ELAPSED)
     }
 }
 

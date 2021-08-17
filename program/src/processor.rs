@@ -311,7 +311,11 @@ fn process_init_user_obligation(
         msg!("MarketReserve owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
+    let market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
+    if market_reserve.liquidity_info.is_none() {
+        msg!("MarketReserve liquidity is not available");
+        return Err(LendingError::MarketReserveLiquidityNotExist.into());
+    }
 
     if user_obligation_info.owner != program_id {
         msg!("UserObligation owner provided is not owned by the lending program");
@@ -347,7 +351,11 @@ fn process_init_user_asset(
         msg!("MarketReserve owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
+    let market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
+    if market_reserve.liquidity_info.is_none() {
+        msg!("MarketReserve liquidity is not available");
+        return Err(LendingError::MarketReserveLiquidityNotExist.into());
+    }
 
     if user_asset_info.owner != program_id {
         msg!("UserAsset owner provided is not owned by the lending program");

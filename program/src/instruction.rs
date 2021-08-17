@@ -478,6 +478,7 @@ pub fn init_user_asset(
 #[allow(clippy::too_many_arguments)]
 pub fn deposit_liquidity(
     market_reserve_info: Pubkey,
+    manager_token_account_info: Pubkey,
     rate_oracle_info: Pubkey,
     user_asset_info: Pubkey,
     user_authority_info: Pubkey,
@@ -489,6 +490,7 @@ pub fn deposit_liquidity(
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
             AccountMeta::new(market_reserve_info, false),
+            AccountMeta::new_readonly(manager_token_account_info, false),
             AccountMeta::new_readonly(rate_oracle_info, false),
             AccountMeta::new(user_asset_info, false),
             AccountMeta::new_readonly(user_authority_info, true),
