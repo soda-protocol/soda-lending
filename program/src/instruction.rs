@@ -55,42 +55,44 @@ pub enum LendingInstruction {
         amount: u64,
     },
     /// 9
+    UpdateUserObligation,
+    /// 10
     BorrowLiquidity {
         ///
         amount: u64,
     },
-    /// 10
+    /// 11
     RepayLoan {
         ///
         amount: u64,
     },
-    /// 11
+    /// 12
     RedeemCollateral {
         ///
         amount: u64,      
     },
-    /// 12
+    /// 13
     Liquidate {
         ///
         is_arbitrary: bool,
         ///
         amount: u64,   
     },
-    /// 13
+    /// 14
     FeedRateOracle {
         ///
         interest_rate: u64,
         ///
         borrow_rate: u64,
     },
-    /// 14
-    PauseRateOracle,
     /// 15
+    PauseRateOracle,
+    /// 16
     AddLiquidityToReserve {
         ///
         liquidity_config: LiquidityConfig,   
     },
-    /// 16
+    /// 17
     WithdrawFee {
         ///
         amount: u64,
@@ -132,34 +134,35 @@ impl LendingInstruction {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::DepositCollateral { amount }
             },
-            9 => {
+            9 => Self::UpdateUserObligation,
+            10 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::BorrowLiquidity { amount }
             }
-            10 => {
+            11 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::RepayLoan { amount }
             }
-            11 => {
+            12 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::RedeemCollateral { amount }
             }
-            12 => {
+            13 => {
                 let (is_arbitrary, rest) = Self::unpack_bool(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::Liquidate { is_arbitrary, amount }
             }
-            13 => {
+            14 => {
                 let (interest_rate, rest) = Self::unpack_u64(rest)?;
                 let (borrow_rate, _rest) = Self::unpack_u64(rest)?;
                 Self::FeedRateOracle { interest_rate, borrow_rate }
             }
-            14 => Self::PauseRateOracle,
-            15 => {
+            15 => Self::PauseRateOracle,
+            16 => {
                 let (liquidity_config, _rest) = Self::unpack_liquidity_config(rest)?;
                 Self::AddLiquidityToReserve { liquidity_config }
             }
-            16 => {
+            17 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::WithdrawFee { amount }
             }
@@ -171,18 +174,18 @@ impl LendingInstruction {
     }
 
     fn unpack_collateral_config(input: &[u8]) -> Result<(CollateralConfig, &[u8]), ProgramError> {
-        let (liquidate_fee_rate, rest) = Self::unpack_u64(input)?;
-        let (arbitrary_liquidate_rate, rest) = Self::unpack_u64(rest)?;
-        let (liquidate_limit, rest) = Self::unpack_u8(rest)?;
-        let (effective_value_rate, rest) = Self::unpack_u8(rest)?;
+        let (liquidation_1_fee_rate, rest) = Self::unpack_u64(input)?;
+        let (liquidation_2_repay_rate, rest) = Self::unpack_u64(rest)?;
+        let (borrow_value_ratio, rest) = Self::unpack_u8(rest)?;
+        let (liquidation_value_ratio, rest) = Self::unpack_u8(rest)?;
         let (close_factor, rest) = Self::unpack_u8(rest)?;
 
         Ok((
             CollateralConfig {
-                liquidate_fee_rate,
-                arbitrary_liquidate_rate,
-                liquidate_limit,
-                effective_value_rate,
+                liquidation_1_fee_rate,
+                liquidation_2_repay_rate,
+                borrow_value_ratio,
+                liquidation_value_ratio,
                 close_factor,
             }, rest
         ))
@@ -293,35 +296,36 @@ impl LendingInstruction {
                 buf.push(8);
                 buf.extend_from_slice(&amount.to_le_bytes()); 
             }
+            Self::UpdateUserObligation => buf.push(9),
             Self::BorrowLiquidity { amount } => {
-                buf.push(9);
+                buf.push(10);
                 buf.extend_from_slice(&amount.to_le_bytes()); 
             }
             Self::RepayLoan { amount } => {
-                buf.push(10);
-                buf.extend_from_slice(&amount.to_le_bytes());
-            }
-            Self::RedeemCollateral { amount } => {
                 buf.push(11);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::Liquidate { is_arbitrary, amount } => {
+            Self::RedeemCollateral { amount } => {
                 buf.push(12);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::Liquidate { is_arbitrary, amount } => {
+                buf.push(13);
                 buf.extend_from_slice(&[is_arbitrary as u8][..]);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             Self::FeedRateOracle { interest_rate, borrow_rate } => {
-                buf.push(13);
+                buf.push(14);
                 buf.extend_from_slice(&interest_rate.to_le_bytes());
                 buf.extend_from_slice(&borrow_rate.to_le_bytes());
             }
-            Self::PauseRateOracle => buf.push(14),
+            Self::PauseRateOracle => buf.push(15),
             Self::AddLiquidityToReserve { liquidity_config } => {
-                buf.push(15);
+                buf.push(16);
                 Self::pack_liquidity_config(liquidity_config, &mut buf);
             }
             Self::WithdrawFee { amount } => {
-                buf.push(16);
+                buf.push(17);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
         }
@@ -329,10 +333,10 @@ impl LendingInstruction {
     }
 
     fn pack_collateral_config(collateral_config: CollateralConfig, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(&collateral_config.liquidate_fee_rate.to_le_bytes());
-        buf.extend_from_slice(&collateral_config.arbitrary_liquidate_rate.to_le_bytes());
-        buf.extend_from_slice(&collateral_config.liquidate_limit.to_le_bytes());
-        buf.extend_from_slice(&collateral_config.effective_value_rate.to_le_bytes());
+        buf.extend_from_slice(&collateral_config.liquidation_1_fee_rate.to_le_bytes());
+        buf.extend_from_slice(&collateral_config.liquidation_2_repay_rate.to_le_bytes());
+        buf.extend_from_slice(&collateral_config.borrow_value_ratio.to_le_bytes());
+        buf.extend_from_slice(&collateral_config.liquidation_value_ratio.to_le_bytes());
         buf.extend_from_slice(&collateral_config.close_factor.to_le_bytes());
     }
 
@@ -523,7 +527,7 @@ pub fn withdraw_liquidity(
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
             AccountMeta::new_readonly(manager_info, false),
-            AccountMeta::new_readonly(manager_authority_info, true),
+            AccountMeta::new_readonly(manager_authority_info, false),
             AccountMeta::new(market_reserve_info, false),
             AccountMeta::new(manager_token_account_info, false),
             AccountMeta::new_readonly(rate_oracle_info, false),
@@ -561,36 +565,19 @@ pub fn deposit_collateral(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn borrow_liquidity(
-    manager_info: Pubkey,
+pub fn update_user_obligation(
     market_reserve_info: Pubkey,
-    manager_token_account_info: Pubkey,
     liquidity_price_oracle_info: Pubkey,
     rate_oracle_info: Pubkey,
     user_obligatiton_info: Pubkey,
-    user_authority_info: Pubkey,
-    user_token_account_info: Pubkey,
     price_oracle_infos: Vec<Pubkey>,
-    amount: u64,
 ) -> Instruction {
-    let program_id = id();
-    let (manager_authority_info, _bump_seed) = Pubkey::find_program_address(
-        &[manager_info.as_ref()],
-        &program_id,
-    );
-
     let mut accounts = vec![
         AccountMeta::new_readonly(sysvar::clock::id(), false),
-        AccountMeta::new_readonly(manager_info, false),
-        AccountMeta::new_readonly(manager_authority_info, true),
-        AccountMeta::new(market_reserve_info, false),
-        AccountMeta::new(manager_token_account_info, false),
+        AccountMeta::new_readonly(market_reserve_info, false),
         AccountMeta::new_readonly(liquidity_price_oracle_info, false),
         AccountMeta::new_readonly(rate_oracle_info, false),
         AccountMeta::new(user_obligatiton_info, false),
-        AccountMeta::new_readonly(user_authority_info, true),
-        AccountMeta::new(user_token_account_info, false),
-        AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
     accounts.extend(
@@ -600,8 +587,41 @@ pub fn borrow_liquidity(
     );
 
     Instruction {
-        program_id,
+        program_id: id(),
         accounts,
+        data: LendingInstruction::UpdateUserObligation.pack(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn borrow_liquidity(
+    manager_info: Pubkey,
+    market_reserve_info: Pubkey,
+    manager_token_account_info: Pubkey,
+    user_obligatiton_info: Pubkey,
+    user_authority_info: Pubkey,
+    user_token_account_info: Pubkey,
+    amount: u64,
+) -> Instruction {
+    let program_id = id();
+    let (manager_authority_info, _bump_seed) = Pubkey::find_program_address(
+        &[manager_info.as_ref()],
+        &program_id,
+    );
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(manager_info, false),
+            AccountMeta::new_readonly(manager_authority_info, false),
+            AccountMeta::new(market_reserve_info, false),
+            AccountMeta::new(manager_token_account_info, false),
+            AccountMeta::new(user_obligatiton_info, false),
+            AccountMeta::new_readonly(user_authority_info, true),
+            AccountMeta::new(user_token_account_info, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
         data: LendingInstruction::BorrowLiquidity{ amount }.pack(),
     }
 }
@@ -636,14 +656,11 @@ pub fn repay_loan(
 pub fn redeem_collateral(
     manager_info: Pubkey,
     liquidity_market_reserve_info: Pubkey,
-    price_oracle_info: Pubkey,
-    rate_oracle_info: Pubkey,
     colleteral_market_reserve_info: Pubkey,
     manager_token_account_info: Pubkey,
     user_obligatiton_info: Pubkey,
     user_authority_info: Pubkey,
     user_token_account_info: Pubkey,
-    price_oracle_infos: Vec<Pubkey>,
     amount: u64,
 ) -> Instruction {
     let program_id = id();
@@ -652,30 +669,20 @@ pub fn redeem_collateral(
         &program_id,
     );
 
-    let mut accounts = vec![
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
-        AccountMeta::new_readonly(manager_info, false),
-        AccountMeta::new_readonly(manager_authority_info, true),
-        AccountMeta::new_readonly(liquidity_market_reserve_info, false),
-        AccountMeta::new_readonly(price_oracle_info, false),
-        AccountMeta::new_readonly(rate_oracle_info, false),
-        AccountMeta::new(colleteral_market_reserve_info, false),
-        AccountMeta::new(manager_token_account_info, false),
-        AccountMeta::new(user_obligatiton_info, false),
-        AccountMeta::new_readonly(user_authority_info, true),
-        AccountMeta::new(user_token_account_info, false),
-        AccountMeta::new_readonly(spl_token::id(), false),
-    ];
-
-    accounts.extend(
-        price_oracle_infos
-            .into_iter()
-            .map(|price_oracle| AccountMeta::new_readonly(price_oracle, false))
-    );
-
     Instruction {
         program_id,
-        accounts,
+        accounts: vec![
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(manager_info, false),
+            AccountMeta::new_readonly(manager_authority_info, false),
+            AccountMeta::new_readonly(liquidity_market_reserve_info, false),
+            AccountMeta::new(colleteral_market_reserve_info, false),
+            AccountMeta::new(manager_token_account_info, false),
+            AccountMeta::new(user_obligatiton_info, false),
+            AccountMeta::new_readonly(user_authority_info, true),
+            AccountMeta::new(user_token_account_info, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
         data: LendingInstruction::RedeemCollateral{ amount }.pack(),
     }
 }
@@ -685,15 +692,13 @@ pub fn liquidate(
     manager_info: Pubkey,
     liquidity_market_reserve_info: Pubkey,
     manager_liquidity_token_account_info: Pubkey,
-    price_oracle_info: Pubkey,
-    rate_oracle_info: Pubkey,
     colleteral_market_reserve_info: Pubkey,
+    collateral_price_oracle_info: Pubkey,
     manager_collateral_token_account_info: Pubkey,
     user_obligatiton_info: Pubkey,
     liquidator_authority_info: Pubkey,
     liquidator_liquidity_account_info: Pubkey,
     liquidator_collateral_account_info: Pubkey,
-    price_oracle_infos: Vec<Pubkey>,
     is_arbitrary: bool,
     amount: u64,
 ) -> Instruction {
@@ -703,32 +708,23 @@ pub fn liquidate(
         &program_id,
     );
 
-    let mut accounts = vec![
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
-        AccountMeta::new_readonly(manager_info, false),
-        AccountMeta::new_readonly(manager_authority_info, true),
-        AccountMeta::new(liquidity_market_reserve_info, false),
-        AccountMeta::new(manager_liquidity_token_account_info, false),
-        AccountMeta::new_readonly(price_oracle_info, false),
-        AccountMeta::new_readonly(rate_oracle_info, false),
-        AccountMeta::new(colleteral_market_reserve_info, false),
-        AccountMeta::new(manager_collateral_token_account_info, false),
-        AccountMeta::new(user_obligatiton_info, false),
-        AccountMeta::new_readonly(liquidator_authority_info, true),
-        AccountMeta::new(liquidator_liquidity_account_info, false),
-        AccountMeta::new(liquidator_collateral_account_info, false),
-        AccountMeta::new_readonly(spl_token::id(), false),
-    ];
-
-    accounts.extend(
-        price_oracle_infos
-            .into_iter()
-            .map(|price_oracle| AccountMeta::new_readonly(price_oracle, false))
-    );
-
     Instruction {
         program_id,
-        accounts,
+        accounts: vec![
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(manager_info, false),
+            AccountMeta::new_readonly(manager_authority_info, false),
+            AccountMeta::new(liquidity_market_reserve_info, false),
+            AccountMeta::new(manager_liquidity_token_account_info, false),
+            AccountMeta::new(colleteral_market_reserve_info, false),
+            AccountMeta::new_readonly(collateral_price_oracle_info, false),
+            AccountMeta::new(manager_collateral_token_account_info, false),
+            AccountMeta::new(user_obligatiton_info, false),
+            AccountMeta::new_readonly(liquidator_authority_info, true),
+            AccountMeta::new(liquidator_liquidity_account_info, false),
+            AccountMeta::new(liquidator_collateral_account_info, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
         data: LendingInstruction::Liquidate{ is_arbitrary, amount }.pack(),
     }
 }
@@ -805,7 +801,7 @@ pub fn withdraw_fee(
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
             AccountMeta::new_readonly(manager_info, false),
-            AccountMeta::new_readonly(manager_authority_info, true),
+            AccountMeta::new_readonly(manager_authority_info, false),
             AccountMeta::new(market_reserve_info, false),
             AccountMeta::new(manager_token_account_info, false),
             AccountMeta::new_readonly(authority_info, true),

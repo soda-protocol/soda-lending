@@ -380,6 +380,99 @@ pub fn do_deposit_liquidity(
     )
 }
 
+pub fn do_withdraw_liquidity(
+    user_authority: &Keypair,
+    manager_key: &Pubkey,
+    market_reserve_key: &Pubkey,
+    manager_token_account_key: &Pubkey,
+    rate_oracle_key: &Pubkey,
+    user_asset_key: &Pubkey,
+    user_token_account_key: &Pubkey,
+    amount: u64,
+    recent_blockhash: Hash,
+) -> Transaction {
+    let user_authority_key = &user_authority.pubkey();
+
+    Transaction::new_signed_with_payer(&[
+        withdraw_liquidity(
+            *manager_key,
+            *market_reserve_key,
+            *manager_token_account_key,
+            *rate_oracle_key,
+            *user_asset_key,
+            *user_authority_key,
+            *user_token_account_key,
+            amount,
+        ),
+    ],
+    Some(user_authority_key),
+        &[user_authority],
+        recent_blockhash,
+    )
+}
+
+pub fn do_deposit_collateral(
+    user_authority: &Keypair,
+    market_reserve_key: &Pubkey,
+    manager_token_account_key: &Pubkey,
+    user_obligation_key: &Pubkey,
+    user_token_account_key: &Pubkey,
+    amount: u64,
+    recent_blockhash: Hash,
+) -> Transaction {
+    let user_authority_key = &user_authority.pubkey();
+
+    Transaction::new_signed_with_payer(&[
+        deposit_collateral(
+            *market_reserve_key,
+            *manager_token_account_key,
+            *user_obligation_key,
+            *user_authority_key,
+            *user_token_account_key,
+            amount,
+        ),
+    ],
+    Some(user_authority_key),
+        &[user_authority],
+        recent_blockhash,
+    )
+}
+
+pub fn do_borrow_liquidity(
+    user_authority: Keypair,
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    liquidity_price_oracle_key: Pubkey,
+    rate_oracle_key: Pubkey,
+    user_obligatiton_key: Pubkey,
+    user_token_account_key: Pubkey,
+    collateral_price_oracle_keys: Vec<Pubkey>,
+    amount: u64,
+    recent_blockhash: Hash,
+) -> Transaction {
+    let user_authority_key = &user_authority.pubkey();
+
+    Transaction::new_signed_with_payer(&[
+        borrow_liquidity(
+            manager_key,
+            market_reserve_key,
+            manager_token_account_key,
+            liquidity_price_oracle_key,
+            rate_oracle_key,
+            user_obligatiton_key,
+            *user_authority_key,
+            user_token_account_key,
+            collateral_price_oracle_keys,
+            amount,
+        ),
+    ],
+    Some(user_authority_key),
+        &[&user_authority],
+        recent_blockhash,
+    )
+}
+
 pub fn do_feed_rate_oracle(
     authority: &Keypair,
     rate_oracle_key: &Pubkey,

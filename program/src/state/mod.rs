@@ -162,16 +162,16 @@ fn unpack_coption_struct<T: Pack>(src: &[u8]) -> Result<COption<T>, ProgramError
 //     }
 // }
 
-// fn pack_decimal(decimal: Decimal, dst: &mut [u8; 16]) {
-//     *dst = decimal
-//         .to_scaled_val()
-//         .expect("Decimal cannot be packed")
-//         .to_le_bytes();
-// }
+fn pack_decimal(decimal: Decimal, dst: &mut [u8; 16]) {
+    *dst = decimal
+        .to_scaled_val()
+        .expect("Decimal cannot be packed")
+        .to_le_bytes();
+}
 
-// fn unpack_decimal(src: &[u8; 16]) -> Decimal {
-//     Decimal::from_scaled_val(u128::from_le_bytes(*src))
-// }
+fn unpack_decimal(src: &[u8; 16]) -> Decimal {
+    Decimal::from_scaled_val(u128::from_le_bytes(*src))
+}
 
 fn pack_bool(boolean: bool, dst: &mut [u8; 1]) {
     *dst = (boolean as u8).to_le_bytes()
@@ -187,7 +187,6 @@ fn unpack_bool(src: &[u8; 1]) -> Result<bool, ProgramError> {
         }
     }
 }
-
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TokenInfo {
@@ -263,23 +262,9 @@ pub struct PriceInfo {
     pub price: Decimal,
 }
 ///
-#[derive(Clone, Copy, Debug)]
-pub struct Price {
-    ///
-    pub decimals: u64,
-    ///
-    pub price: Decimal,
-}
-///
-impl Price {
-    ///
-    pub fn new(price: Decimal, decimal: u8) -> Result<Self, ProgramError> {
-        let decimals = 10u64
-            .checked_pow(decimal as u32)
-            .ok_or(LendingError::MathOverflow)?;
-
-        Ok(Self{ decimals, price })
-    }
+#[inline(always)]
+pub fn calculate_decimals(decimal: u8) -> Result<u64, ProgramError> {
+    10u64.checked_pow(decimal as u32).ok_or(LendingError::MathOverflow.into())
 }
 ///
 #[inline(always)]
@@ -311,19 +296,22 @@ pub fn calculate_interest_fee(interest: u64, fee_rate: Rate) -> Result<u64, Prog
 }
 ///
 #[inline(always)]
+#[allow(clippy::too_many_arguments)]
 pub fn calculate_liquidation_fee(
-    collateral_price: Price,
+    collateral_price: Decimal,
+    collateral_decimals: u64,
     collateral_amount: u64,
-    loan_price: Price,
+    loan_price: Decimal,
+    loan_decimals: u64,
     loan_amount: u64,
     fee_rate: Rate,
 ) -> Result<u64, ProgramError> {
-    let equivalent_amount = collateral_price.price
+    let equivalent_amount = collateral_price
         .try_mul(collateral_amount)?
-        .try_div(collateral_price.decimals)?
-        .try_mul(loan_price.decimals)?
+        .try_div(collateral_decimals)?
+        .try_mul(loan_decimals)?
         .try_div(loan_amount)?
-        .try_div(loan_price.price)?
+        .try_div(loan_price)?
         .try_round_u64()?;
 
     let bonus = equivalent_amount
@@ -337,7 +325,6 @@ pub fn calculate_liquidation_fee(
 
 #[cfg(test)]
 mod test {
-    use crate::math::WAD;
     use super::*;
 
     #[test]

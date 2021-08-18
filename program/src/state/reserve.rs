@@ -1,6 +1,5 @@
 #![allow(missing_docs)]
 ///
-use std::convert::TryInto;
 use super::*;
 use crate::{
     error::LendingError,
@@ -242,23 +241,23 @@ impl LiquidityInfo {
 #[derive(Clone, Debug, Copy, Default, PartialEq)]
 pub struct CollateralConfig {
     ///
-    pub liquidate_fee_rate: u64,
+    pub liquidation_1_fee_rate: u64,
     ///
-    pub arbitrary_liquidate_rate: u64,
+    pub liquidation_2_repay_rate: u64,
     ///
-    pub liquidate_limit: u8,
+    pub borrow_value_ratio: u8,
     ///
-    pub effective_value_rate: u8,
+    pub liquidation_value_ratio: u8,
     ///
     pub close_factor: u8,
 }
 
 impl CollateralConfig {
     pub fn check_valid(&self) -> ProgramResult {
-        if self.liquidate_fee_rate < WAD &&
-            self.arbitrary_liquidate_rate < WAD &&
-            self.liquidate_limit < 100 &&
-            self.effective_value_rate < self.liquidate_limit &&
+        if self.liquidation_1_fee_rate < WAD &&
+            self.liquidation_2_repay_rate < WAD &&
+            self.borrow_value_ratio < self.liquidation_value_ratio &&
+            self.liquidation_value_ratio < 100 &&
             self.close_factor < 100 {
             Ok(())
         } else {
@@ -288,10 +287,10 @@ impl Pack for CollateralInfo {
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             amount,
-            liquidate_fee_rate,
-            arbitrary_liquidate_rate,
-            liquidate_limit,
-            effective_value_rate,
+            liquidation_1_fee_rate,
+            liquidation_2_repay_rate,
+            borrow_value_ratio,
+            liquidation_value_ratio,
             close_factor,
         ) = mut_array_refs![
             output,
@@ -304,10 +303,10 @@ impl Pack for CollateralInfo {
         ];
 
         *amount = self.amount.to_le_bytes();
-        *liquidate_fee_rate = self.config.liquidate_fee_rate.to_le_bytes();
-        *arbitrary_liquidate_rate = self.config.arbitrary_liquidate_rate.to_le_bytes();
-        *liquidate_limit = self.config.liquidate_limit.to_le_bytes();
-        *effective_value_rate = self.config.effective_value_rate.to_le_bytes();
+        *liquidation_1_fee_rate = self.config.liquidation_1_fee_rate.to_le_bytes();
+        *liquidation_2_repay_rate = self.config.liquidation_2_repay_rate.to_le_bytes();
+        *borrow_value_ratio = self.config.borrow_value_ratio.to_le_bytes();
+        *liquidation_value_ratio = self.config.liquidation_value_ratio.to_le_bytes();
         *close_factor = self.config.close_factor.to_le_bytes();
     }
 
@@ -316,10 +315,10 @@ impl Pack for CollateralInfo {
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             amount,
-            liquidate_fee_rate,
-            arbitrary_liquidate_rate,
-            liquidate_limit,
-            effective_value_rate,
+            liquidation_1_fee_rate,
+            liquidation_2_repay_rate,
+            borrow_value_ratio,
+            liquidation_value_ratio,
             close_factor,
         ) = array_refs![
             input,
@@ -334,10 +333,10 @@ impl Pack for CollateralInfo {
         Ok(Self{
             amount: u64::from_le_bytes(*amount),
             config: CollateralConfig {
-                liquidate_fee_rate: u64::from_le_bytes(*liquidate_fee_rate),
-                arbitrary_liquidate_rate: u64::from_le_bytes(*arbitrary_liquidate_rate),
-                liquidate_limit: u8::from_le_bytes(*liquidate_limit),
-                effective_value_rate: u8::from_le_bytes(*effective_value_rate),
+                liquidation_1_fee_rate: u64::from_le_bytes(*liquidation_1_fee_rate),
+                liquidation_2_repay_rate: u64::from_le_bytes(*liquidation_2_repay_rate),
+                borrow_value_ratio: u8::from_le_bytes(*borrow_value_ratio),
+                liquidation_value_ratio: u8::from_le_bytes(*liquidation_value_ratio),
                 close_factor: u8::from_le_bytes(*close_factor),
             },
         })
@@ -369,7 +368,7 @@ pub struct MarketReserve {
     /// Version of the struct
     pub version: u8,
     ///
-    pub last_update: LastUpdate,
+    pub timestamp: Slot,
     /// 
     pub manager: Pubkey,
     ///
@@ -387,7 +386,7 @@ impl IsInitialized for MarketReserve {
     }
 }
 
-const MARKET_RESERVE_LEN: usize = 219;
+const MARKET_RESERVE_LEN: usize = 218;
 
 impl Pack for MarketReserve {
     const LEN: usize = MARKET_RESERVE_LEN;
@@ -397,7 +396,7 @@ impl Pack for MarketReserve {
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             version,
-            last_update,
+            timestamp,
             manager,
             token_info,
             liquidity_info,
@@ -405,7 +404,7 @@ impl Pack for MarketReserve {
         ) = mut_array_refs![
             output,
             1,
-            LAST_UPDATE_LEN,
+            8,
             PUBKEY_BYTES,
             TOKEN_INFO_LEN,
             COPTION_LEN + MARKET_RESERVE_LIQUIDITY_INFO_LEN,
@@ -413,7 +412,7 @@ impl Pack for MarketReserve {
         ];
 
         *version = self.version.to_le_bytes();
-        self.last_update.pack_into_slice(&mut last_update[..]);
+        *timestamp = self.timestamp.to_le_bytes();
         manager.copy_from_slice(self.manager.as_ref());
         self.token_info.pack_into_slice(&mut token_info[..]);
         pack_coption_struct(&self.liquidity_info, &mut liquidity_info[..]);
@@ -425,7 +424,7 @@ impl Pack for MarketReserve {
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             version,
-            last_update,
+            timestamp,
             manager,
             token_info,
             liquidity_info,
@@ -433,7 +432,7 @@ impl Pack for MarketReserve {
         ) = array_refs![
             input,
             1,
-            LAST_UPDATE_LEN,
+            8,
             PUBKEY_BYTES,
             TOKEN_INFO_LEN,
             COPTION_LEN + MARKET_RESERVE_LIQUIDITY_INFO_LEN,
@@ -448,22 +447,11 @@ impl Pack for MarketReserve {
 
         Ok(Self{
             version,
-            last_update: LastUpdate::unpack_from_slice(&last_update[..])?,
+            timestamp: Slot::from_le_bytes(*timestamp),
             manager: Pubkey::new_from_array(*manager),
             token_info: TokenInfo::unpack_from_slice(&token_info[..])?,
             liquidity_info: unpack_coption_struct::<LiquidityInfo>(&liquidity_info[..])?,
             collateral_info: CollateralInfo::unpack_from_slice(&collateral_info[..])?,
         })
-    }
-}
-
-impl MarketReserve {
-    pub fn check_valid(&mut self, slot: Slot) -> ProgramResult {
-        if self.last_update.is_stale(slot)? {
-            Err(LendingError::MarketReserveStale.into())
-        } else {
-            self.last_update.mark_stale();
-            Ok(())
-        }
     }
 }

@@ -64,7 +64,7 @@ impl Pack for LastUpdate {
 impl LastUpdate {
     /// Create new last update
     pub fn new(slot: Slot) -> Self {
-        Self { slot, stale: false }
+        Self { slot, stale: true }
     }
 
     /// Return slots elapsed since given slot
@@ -73,19 +73,19 @@ impl LastUpdate {
     }
 
     /// Set last update slot
-    pub fn update_slot(&mut self, slot: Slot) {
+    pub fn update_slot(&mut self, slot: Slot, stale: bool) {
         self.slot = slot;
-        self.stale = false;
+        self.stale = stale;
     }
 
     /// Set stale to true
-    pub fn mark_stale(&mut self) {
-        self.stale = true;
-    }
+    // pub fn mark_stale(&mut self) {
+    //     self.stale = true;
+    // }
 
     /// Check if marked stale or last update slot is too long ago
     pub fn is_stale(&self, slot: Slot) -> Result<bool, ProgramError> {
-        Ok(self.stale || self.slots_elapsed(slot)? <= STALE_AFTER_SLOTS_ELAPSED)
+        Ok(self.stale || self.slots_elapsed(slot)? >= STALE_AFTER_SLOTS_ELAPSED)
     }
 }
 
