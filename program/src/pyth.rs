@@ -15,11 +15,13 @@ pub const PROD_HDR_SIZE: usize = 48;
 pub const PROD_ATTR_SIZE: usize = PROD_ACCT_SIZE - PROD_HDR_SIZE;
 
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct AccKey {
     pub val: [u8; 32],
 }
 
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub enum AccountType {
     Unknown,
     Mapping,
@@ -28,6 +30,7 @@ pub enum AccountType {
 }
 
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub enum PriceStatus {
     Unknown,
     Trading,
@@ -36,11 +39,13 @@ pub enum PriceStatus {
 }
 
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub enum CorpAction {
     NoCorpAct,
 }
 
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct PriceInfo {
     pub price: i64,
     pub conf: u64,
@@ -50,6 +55,7 @@ pub struct PriceInfo {
 }
 
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct PriceComp {
     publisher: AccKey,
     agg: PriceInfo,
@@ -57,12 +63,14 @@ pub struct PriceComp {
 }
 
 #[derive(PartialEq, Copy, Clone)]
+#[repr(C)]
 pub enum PriceType {
     Unknown,
     Price,
 }
 
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct Price {
     pub magic: u32,       // pyth magic number
     pub ver: u32,         // program version
@@ -96,6 +104,7 @@ unsafe impl Zeroable for Price {}
 unsafe impl Pod for Price {}
 
 #[derive(Copy, Clone)]
+#[repr(C)]
 pub struct Product {
     pub magic: u32,                 // pyth magic number
     pub ver: u32,                   // program version

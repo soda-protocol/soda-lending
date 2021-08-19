@@ -348,8 +348,8 @@ impl LendingInstruction {
 
 ///
 pub fn init_manager(
-    manager_info: Pubkey,
-    owner_info: Pubkey,
+    manager_key: Pubkey,
+    owner_key: Pubkey,
     oracle_program_id: Pubkey,
     quote_currency: [u8; 32],
 ) -> Instruction {
@@ -357,8 +357,8 @@ pub fn init_manager(
         program_id: id(),
         accounts: vec![
             AccountMeta::new_readonly(sysvar::rent::id(), false),
-            AccountMeta::new(manager_info, false),
-            AccountMeta::new_readonly(owner_info, false),
+            AccountMeta::new(manager_key, false),
+            AccountMeta::new_readonly(owner_key, false),
             AccountMeta::new_readonly(oracle_program_id, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
@@ -367,15 +367,15 @@ pub fn init_manager(
 }
 
 pub fn init_rate_oracle(
-    rate_oracle_info: Pubkey,
-    owner_info: Pubkey,
+    rate_oracle_key: Pubkey,
+    owner_key: Pubkey,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
             AccountMeta::new_readonly(sysvar::rent::id(), false),
-            AccountMeta::new(rate_oracle_info, false),
-            AccountMeta::new_readonly(owner_info, false),
+            AccountMeta::new(rate_oracle_key, false),
+            AccountMeta::new_readonly(owner_key, false),
         ],
         data: LendingInstruction::InitRateOracle.pack(),
     }
@@ -383,13 +383,13 @@ pub fn init_rate_oracle(
 
 #[allow(clippy::too_many_arguments)]
 pub fn init_market_reserve_without_liquidity(
-    manager_info: Pubkey,
-    market_reserve_info: Pubkey,
-    pyth_product_info: Pubkey,
-    pyth_price_info: Pubkey,
-    token_mint_info: Pubkey,
-    token_account_info: Pubkey,
-    authority_info: Pubkey,
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    pyth_product_key: Pubkey,
+    pyth_price_key: Pubkey,
+    token_mint_key: Pubkey,
+    token_account_key: Pubkey,
+    authority_key: Pubkey,
     collateral_config: CollateralConfig,
 ) -> Instruction {
     Instruction {
@@ -397,13 +397,13 @@ pub fn init_market_reserve_without_liquidity(
         accounts: vec![
             AccountMeta::new_readonly(sysvar::rent::id(), false),
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(manager_info, false),
-            AccountMeta::new(market_reserve_info, false),
-            AccountMeta::new_readonly(pyth_product_info, false),
-            AccountMeta::new_readonly(pyth_price_info, false),
-            AccountMeta::new_readonly(token_mint_info, false),
-            AccountMeta::new_readonly(token_account_info, false),
-            AccountMeta::new_readonly(authority_info, true),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new_readonly(pyth_product_key, false),
+            AccountMeta::new_readonly(pyth_price_key, false),
+            AccountMeta::new_readonly(token_mint_key, false),
+            AccountMeta::new_readonly(token_account_key, false),
+            AccountMeta::new_readonly(authority_key, true),
         ],
         data: LendingInstruction::InitMarketReserveWithoutLiquidity{ collateral_config }.pack(),
     }
@@ -411,14 +411,14 @@ pub fn init_market_reserve_without_liquidity(
 
 #[allow(clippy::too_many_arguments)]
 pub fn init_market_reserve_with_liquidity(
-    manager_info: Pubkey,
-    market_reserve_info: Pubkey,
-    pyth_product_info: Pubkey,
-    pyth_price_info: Pubkey,
-    token_mint_info: Pubkey,
-    token_account_info: Pubkey,
-    authority_info: Pubkey,
-    rate_oracle_info: Pubkey,
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    pyth_product_key: Pubkey,
+    pyth_price_key: Pubkey,
+    token_mint_key: Pubkey,
+    token_account_key: Pubkey,
+    authority_key: Pubkey,
+    rate_oracle_key: Pubkey,
     collateral_config: CollateralConfig,
     liquidity_config: LiquidityConfig,
 ) -> Instruction {
@@ -427,14 +427,14 @@ pub fn init_market_reserve_with_liquidity(
         accounts: vec![
             AccountMeta::new_readonly(sysvar::rent::id(), false),
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(manager_info, false),
-            AccountMeta::new(market_reserve_info, false),
-            AccountMeta::new_readonly(pyth_product_info, false),
-            AccountMeta::new_readonly(pyth_price_info, false),
-            AccountMeta::new_readonly(token_mint_info, false),
-            AccountMeta::new_readonly(token_account_info, false),
-            AccountMeta::new_readonly(authority_info, true),
-            AccountMeta::new_readonly(rate_oracle_info, false),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new_readonly(pyth_product_key, false),
+            AccountMeta::new_readonly(pyth_price_key, false),
+            AccountMeta::new_readonly(token_mint_key, false),
+            AccountMeta::new_readonly(token_account_key, false),
+            AccountMeta::new_readonly(authority_key, true),
+            AccountMeta::new_readonly(rate_oracle_key, false),
         ],
         data: LendingInstruction::InitMarketReserveWithLiquidity{
             collateral_config,
@@ -444,36 +444,36 @@ pub fn init_market_reserve_with_liquidity(
 }
 
 pub fn init_user_obligation(
-    market_reserve_info: Pubkey,
-    user_obligation_info: Pubkey,
-    owner_info: Pubkey,
+    market_reserve_key: Pubkey,
+    user_obligation_key: Pubkey,
+    owner_key: Pubkey,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
             AccountMeta::new_readonly(sysvar::rent::id(), false),
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(market_reserve_info, false),
-            AccountMeta::new(user_obligation_info, false),
-            AccountMeta::new_readonly(owner_info, false),
+            AccountMeta::new_readonly(market_reserve_key, false),
+            AccountMeta::new(user_obligation_key, false),
+            AccountMeta::new_readonly(owner_key, false),
         ],
         data: LendingInstruction::InitUserObligation.pack(),
     }
 }
 
 pub fn init_user_asset(
-    market_reserve_info: Pubkey,
-    user_asset_info: Pubkey,
-    owner_info: Pubkey,
+    market_reserve_key: Pubkey,
+    user_asset_key: Pubkey,
+    owner_key: Pubkey,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
             AccountMeta::new_readonly(sysvar::rent::id(), false),
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(market_reserve_info, false),
-            AccountMeta::new(user_asset_info, false),
-            AccountMeta::new_readonly(owner_info, false),
+            AccountMeta::new_readonly(market_reserve_key, false),
+            AccountMeta::new(user_asset_key, false),
+            AccountMeta::new_readonly(owner_key, false),
         ],
         data: LendingInstruction::InitUserAsset.pack(),
     }
@@ -481,24 +481,24 @@ pub fn init_user_asset(
 
 #[allow(clippy::too_many_arguments)]
 pub fn deposit_liquidity(
-    market_reserve_info: Pubkey,
-    manager_token_account_info: Pubkey,
-    rate_oracle_info: Pubkey,
-    user_asset_info: Pubkey,
-    user_authority_info: Pubkey,
-    user_token_account_info: Pubkey,
+    market_reserve_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    rate_oracle_key: Pubkey,
+    user_asset_key: Pubkey,
+    user_authority_key: Pubkey,
+    user_token_account_key: Pubkey,
     amount: u64,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new(market_reserve_info, false),
-            AccountMeta::new(manager_token_account_info, false),
-            AccountMeta::new_readonly(rate_oracle_info, false),
-            AccountMeta::new(user_asset_info, false),
-            AccountMeta::new_readonly(user_authority_info, true),
-            AccountMeta::new(user_token_account_info, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new(manager_token_account_key, false),
+            AccountMeta::new_readonly(rate_oracle_key, false),
+            AccountMeta::new(user_asset_key, false),
+            AccountMeta::new_readonly(user_authority_key, true),
+            AccountMeta::new(user_token_account_key, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::DepositLiquidity{ amount }.pack(),
@@ -507,18 +507,18 @@ pub fn deposit_liquidity(
 
 #[allow(clippy::too_many_arguments)]
 pub fn withdraw_liquidity(
-    manager_info: Pubkey,
-    market_reserve_info: Pubkey,
-    manager_token_account_info: Pubkey,
-    rate_oracle_info: Pubkey,
-    user_asset_info: Pubkey,
-    user_authority_info: Pubkey,
-    user_token_account_info: Pubkey,
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    rate_oracle_key: Pubkey,
+    user_asset_key: Pubkey,
+    user_authority_key: Pubkey,
+    user_token_account_key: Pubkey,
     amount: u64,
 ) -> Instruction {
     let program_id = id();
-    let (manager_authority_info, _bump_seed) = Pubkey::find_program_address(
-        &[manager_info.as_ref()],
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
         &program_id,
     );
 
@@ -526,14 +526,14 @@ pub fn withdraw_liquidity(
         program_id,
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(manager_info, false),
-            AccountMeta::new_readonly(manager_authority_info, false),
-            AccountMeta::new(market_reserve_info, false),
-            AccountMeta::new(manager_token_account_info, false),
-            AccountMeta::new_readonly(rate_oracle_info, false),
-            AccountMeta::new(user_asset_info, false),
-            AccountMeta::new_readonly(user_authority_info, true),
-            AccountMeta::new(user_token_account_info, false),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(manager_authority_key, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new(manager_token_account_key, false),
+            AccountMeta::new_readonly(rate_oracle_key, false),
+            AccountMeta::new(user_asset_key, false),
+            AccountMeta::new_readonly(user_authority_key, true),
+            AccountMeta::new(user_token_account_key, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::WithdrawLiquidity{ amount }.pack(),
@@ -542,22 +542,22 @@ pub fn withdraw_liquidity(
 
 #[allow(clippy::too_many_arguments)]
 pub fn deposit_collateral(
-    market_reserve_info: Pubkey,
-    manager_token_account_info: Pubkey,
-    user_obligatiton_info: Pubkey,
-    user_authority_info: Pubkey,
-    user_token_account_info: Pubkey,
+    market_reserve_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    user_obligatiton_key: Pubkey,
+    user_authority_key: Pubkey,
+    user_token_account_key: Pubkey,
     amount: u64,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new(market_reserve_info, false),
-            AccountMeta::new(manager_token_account_info, false),
-            AccountMeta::new(user_obligatiton_info, false),
-            AccountMeta::new_readonly(user_authority_info, true),
-            AccountMeta::new(user_token_account_info, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new(manager_token_account_key, false),
+            AccountMeta::new(user_obligatiton_key, false),
+            AccountMeta::new_readonly(user_authority_key, true),
+            AccountMeta::new(user_token_account_key, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::DepositCollateral{ amount }.pack(),
@@ -566,22 +566,22 @@ pub fn deposit_collateral(
 
 #[allow(clippy::too_many_arguments)]
 pub fn update_user_obligation(
-    market_reserve_info: Pubkey,
-    liquidity_price_oracle_info: Pubkey,
-    rate_oracle_info: Pubkey,
-    user_obligatiton_info: Pubkey,
-    price_oracle_infos: Vec<Pubkey>,
+    market_reserve_key: Pubkey,
+    liquidity_price_oracle_key: Pubkey,
+    rate_oracle_key: Pubkey,
+    user_obligatiton_key: Pubkey,
+    price_oracle_keys: Vec<Pubkey>,
 ) -> Instruction {
     let mut accounts = vec![
         AccountMeta::new_readonly(sysvar::clock::id(), false),
-        AccountMeta::new_readonly(market_reserve_info, false),
-        AccountMeta::new_readonly(liquidity_price_oracle_info, false),
-        AccountMeta::new_readonly(rate_oracle_info, false),
-        AccountMeta::new(user_obligatiton_info, false),
+        AccountMeta::new_readonly(market_reserve_key, false),
+        AccountMeta::new_readonly(liquidity_price_oracle_key, false),
+        AccountMeta::new_readonly(rate_oracle_key, false),
+        AccountMeta::new(user_obligatiton_key, false),
     ];
 
     accounts.extend(
-        price_oracle_infos
+        price_oracle_keys
             .into_iter()
             .map(|price_oracle| AccountMeta::new_readonly(price_oracle, false))
     );
@@ -595,17 +595,17 @@ pub fn update_user_obligation(
 
 #[allow(clippy::too_many_arguments)]
 pub fn borrow_liquidity(
-    manager_info: Pubkey,
-    market_reserve_info: Pubkey,
-    manager_token_account_info: Pubkey,
-    user_obligatiton_info: Pubkey,
-    user_authority_info: Pubkey,
-    user_token_account_info: Pubkey,
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    user_obligatiton_key: Pubkey,
+    user_authority_key: Pubkey,
+    user_token_account_key: Pubkey,
     amount: u64,
 ) -> Instruction {
     let program_id = id();
-    let (manager_authority_info, _bump_seed) = Pubkey::find_program_address(
-        &[manager_info.as_ref()],
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
         &program_id,
     );
 
@@ -613,13 +613,13 @@ pub fn borrow_liquidity(
         program_id,
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(manager_info, false),
-            AccountMeta::new_readonly(manager_authority_info, false),
-            AccountMeta::new(market_reserve_info, false),
-            AccountMeta::new(manager_token_account_info, false),
-            AccountMeta::new(user_obligatiton_info, false),
-            AccountMeta::new_readonly(user_authority_info, true),
-            AccountMeta::new(user_token_account_info, false),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(manager_authority_key, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new(manager_token_account_key, false),
+            AccountMeta::new(user_obligatiton_key, false),
+            AccountMeta::new_readonly(user_authority_key, true),
+            AccountMeta::new(user_token_account_key, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::BorrowLiquidity{ amount }.pack(),
@@ -628,24 +628,24 @@ pub fn borrow_liquidity(
 
 #[allow(clippy::too_many_arguments)]
 pub fn repay_loan(
-    market_reserve_info: Pubkey,
-    manager_token_account_info: Pubkey,
-    rate_oracle_info: Pubkey,
-    user_obligatiton_info: Pubkey,
-    user_authority_info: Pubkey,
-    user_token_account_info: Pubkey,
+    market_reserve_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    rate_oracle_key: Pubkey,
+    user_obligatiton_key: Pubkey,
+    user_authority_key: Pubkey,
+    user_token_account_key: Pubkey,
     amount: u64,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new(market_reserve_info, false),
-            AccountMeta::new(manager_token_account_info, false),
-            AccountMeta::new_readonly(rate_oracle_info, false),
-            AccountMeta::new(user_obligatiton_info, false),
-            AccountMeta::new_readonly(user_authority_info, true),
-            AccountMeta::new(user_token_account_info, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new(manager_token_account_key, false),
+            AccountMeta::new_readonly(rate_oracle_key, false),
+            AccountMeta::new(user_obligatiton_key, false),
+            AccountMeta::new_readonly(user_authority_key, true),
+            AccountMeta::new(user_token_account_key, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::RepayLoan{ amount }.pack(),
@@ -654,18 +654,18 @@ pub fn repay_loan(
 
 #[allow(clippy::too_many_arguments)]
 pub fn redeem_collateral(
-    manager_info: Pubkey,
-    liquidity_market_reserve_info: Pubkey,
-    colleteral_market_reserve_info: Pubkey,
-    manager_token_account_info: Pubkey,
-    user_obligatiton_info: Pubkey,
-    user_authority_info: Pubkey,
-    user_token_account_info: Pubkey,
+    manager_key: Pubkey,
+    liquidity_market_reserve_key: Pubkey,
+    colleteral_market_reserve_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    user_obligatiton_key: Pubkey,
+    user_authority_key: Pubkey,
+    user_token_account_key: Pubkey,
     amount: u64,
 ) -> Instruction {
     let program_id = id();
-    let (manager_authority_info, _bump_seed) = Pubkey::find_program_address(
-        &[manager_info.as_ref()],
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
         &program_id,
     );
 
@@ -673,14 +673,14 @@ pub fn redeem_collateral(
         program_id,
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(manager_info, false),
-            AccountMeta::new_readonly(manager_authority_info, false),
-            AccountMeta::new_readonly(liquidity_market_reserve_info, false),
-            AccountMeta::new(colleteral_market_reserve_info, false),
-            AccountMeta::new(manager_token_account_info, false),
-            AccountMeta::new(user_obligatiton_info, false),
-            AccountMeta::new_readonly(user_authority_info, true),
-            AccountMeta::new(user_token_account_info, false),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(manager_authority_key, false),
+            AccountMeta::new_readonly(liquidity_market_reserve_key, false),
+            AccountMeta::new(colleteral_market_reserve_key, false),
+            AccountMeta::new(manager_token_account_key, false),
+            AccountMeta::new(user_obligatiton_key, false),
+            AccountMeta::new_readonly(user_authority_key, true),
+            AccountMeta::new(user_token_account_key, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::RedeemCollateral{ amount }.pack(),
@@ -689,22 +689,22 @@ pub fn redeem_collateral(
 
 #[allow(clippy::too_many_arguments)]
 pub fn liquidate(
-    manager_info: Pubkey,
-    liquidity_market_reserve_info: Pubkey,
-    manager_liquidity_token_account_info: Pubkey,
-    colleteral_market_reserve_info: Pubkey,
-    collateral_price_oracle_info: Pubkey,
-    manager_collateral_token_account_info: Pubkey,
-    user_obligatiton_info: Pubkey,
-    liquidator_authority_info: Pubkey,
-    liquidator_liquidity_account_info: Pubkey,
-    liquidator_collateral_account_info: Pubkey,
+    manager_key: Pubkey,
+    liquidity_market_reserve_key: Pubkey,
+    manager_liquidity_token_account_key: Pubkey,
+    collateral_market_reserve_key: Pubkey,
+    collateral_price_oracle_key: Pubkey,
+    manager_collateral_token_account_key: Pubkey,
+    user_obligatiton_key: Pubkey,
+    liquidator_authority_key: Pubkey,
+    liquidator_liquidity_account_key: Pubkey,
+    liquidator_collateral_account_key: Pubkey,
     is_arbitrary: bool,
     amount: u64,
 ) -> Instruction {
     let program_id = id();
-    let (manager_authority_info, _bump_seed) = Pubkey::find_program_address(
-        &[manager_info.as_ref()],
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
         &program_id,
     );
 
@@ -712,17 +712,17 @@ pub fn liquidate(
         program_id,
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(manager_info, false),
-            AccountMeta::new_readonly(manager_authority_info, false),
-            AccountMeta::new(liquidity_market_reserve_info, false),
-            AccountMeta::new(manager_liquidity_token_account_info, false),
-            AccountMeta::new(colleteral_market_reserve_info, false),
-            AccountMeta::new_readonly(collateral_price_oracle_info, false),
-            AccountMeta::new(manager_collateral_token_account_info, false),
-            AccountMeta::new(user_obligatiton_info, false),
-            AccountMeta::new_readonly(liquidator_authority_info, true),
-            AccountMeta::new(liquidator_liquidity_account_info, false),
-            AccountMeta::new(liquidator_collateral_account_info, false),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(manager_authority_key, false),
+            AccountMeta::new(liquidity_market_reserve_key, false),
+            AccountMeta::new(manager_liquidity_token_account_key, false),
+            AccountMeta::new(collateral_market_reserve_key, false),
+            AccountMeta::new_readonly(collateral_price_oracle_key, false),
+            AccountMeta::new(manager_collateral_token_account_key, false),
+            AccountMeta::new(user_obligatiton_key, false),
+            AccountMeta::new_readonly(liquidator_authority_key, true),
+            AccountMeta::new(liquidator_liquidity_account_key, false),
+            AccountMeta::new(liquidator_collateral_account_key, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::Liquidate{ is_arbitrary, amount }.pack(),
@@ -730,8 +730,8 @@ pub fn liquidate(
 }
 
 pub fn feed_rate_oracle(
-    rate_oracle_info: Pubkey,
-    authority_info: Pubkey,
+    rate_oracle_key: Pubkey,
+    authority_key: Pubkey,
     interest_rate: u64,
     borrow_rate: u64,
 ) -> Instruction {
@@ -739,43 +739,43 @@ pub fn feed_rate_oracle(
         program_id: id(),
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new(rate_oracle_info, false),
-            AccountMeta::new_readonly(authority_info, true),
+            AccountMeta::new(rate_oracle_key, false),
+            AccountMeta::new_readonly(authority_key, true),
         ],
         data: LendingInstruction::FeedRateOracle{ interest_rate, borrow_rate }.pack(),
     }
 }
 
 pub fn pause_rate_oracle(
-    rate_oracle_info: Pubkey,
-    authority_info: Pubkey,
+    rate_oracle_key: Pubkey,
+    authority_key: Pubkey,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new(rate_oracle_info, false),
-            AccountMeta::new_readonly(authority_info, true),
+            AccountMeta::new(rate_oracle_key, false),
+            AccountMeta::new_readonly(authority_key, true),
         ],
         data: LendingInstruction::PauseRateOracle.pack(),
     }
 }
 
 pub fn add_liquidity_to_market_reserve(
-    manager_info: Pubkey,
-    market_reserve_info: Pubkey,
-    rate_oracle_info: Pubkey,
-    authority_info: Pubkey,
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    rate_oracle_key: Pubkey,
+    authority_key: Pubkey,
     liquidity_config: LiquidityConfig,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(manager_info, false),
-            AccountMeta::new(market_reserve_info, false),
-            AccountMeta::new_readonly(rate_oracle_info, false),
-            AccountMeta::new_readonly(authority_info, true),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new_readonly(rate_oracle_key, false),
+            AccountMeta::new_readonly(authority_key, true),
         ],
         data: LendingInstruction::AddLiquidityToReserve{ liquidity_config }.pack(),
     }
@@ -783,16 +783,16 @@ pub fn add_liquidity_to_market_reserve(
 
 #[allow(clippy::too_many_arguments)]
 pub fn withdraw_fee(
-    manager_info: Pubkey,
-    market_reserve_info: Pubkey,
-    manager_token_account_info: Pubkey,
-    authority_info: Pubkey,
-    receiver_token_account_info: Pubkey,
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    authority_key: Pubkey,
+    receiver_token_account_key: Pubkey,
     amount: u64,
 ) -> Instruction {
     let program_id = id();
-    let (manager_authority_info, _bump_seed) = Pubkey::find_program_address(
-        &[manager_info.as_ref()],
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
         &program_id,
     );
 
@@ -800,12 +800,12 @@ pub fn withdraw_fee(
         program_id,
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(manager_info, false),
-            AccountMeta::new_readonly(manager_authority_info, false),
-            AccountMeta::new(market_reserve_info, false),
-            AccountMeta::new(manager_token_account_info, false),
-            AccountMeta::new_readonly(authority_info, true),
-            AccountMeta::new(receiver_token_account_info, false),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(manager_authority_key, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new(manager_token_account_key, false),
+            AccountMeta::new_readonly(authority_key, true),
+            AccountMeta::new(receiver_token_account_key, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::WithdrawFee{ amount }.pack(),

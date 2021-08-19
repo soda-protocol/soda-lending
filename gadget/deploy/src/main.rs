@@ -43,16 +43,6 @@ const QUOTE_CURRENCY: &[u8; 32] = &[85, 83, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 fn main() {
     let client = RpcClient::new_with_commitment(DEV_NET.into(), CommitmentConfig::default());
 
-    let data = client
-        .get_account_data(&Pubkey::from_str("HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J").unwrap())
-        .unwrap();
-
-    match get_pyth_price(&data) {
-        Ok(price) => println!("price is {}", price),
-        Err(err) => println!("error: {:?}", err),
-    }
-
-
     //// create manager
     // let lamports = client.get_minimum_balance_for_rent_exemption(Manager::LEN).unwrap();
     // let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
@@ -78,31 +68,31 @@ fn main() {
     // }
 
     // create market reserve (no liquidity)
-    // let account_lamports = client.get_minimum_balance_for_rent_exemption(Account::LEN).unwrap();
-    // let reserve_lamports = client.get_minimum_balance_for_rent_exemption(MarketReserve::LEN).unwrap();
-    // let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
-    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    // let transaction = create_market_reserve_without_liquidity(
-    //     authority,
-    //     &Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
-    //     &Pubkey::from_str("2weC6fjXrfaCLQpqEzdgBHpz6yVNvmSN133m7LDuZaDb").unwrap(),
-    //     &Pubkey::from_str("GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b").unwrap(),
-    //     &Pubkey::from_str("6mhUyoQR5CcHN4RJ5PSfcvTjRuWF742ypZeMwptPgFnK").unwrap(),
-    //     CollateralConfig {
-    //         liquidate_fee_rate: 25_000_000_000_000_000, 
-    //         arbitrary_liquidate_rate: 950_000_000_000_000_000, 
-    //         liquidate_limit: 85, 
-    //         effective_value_rate: 70,
-    //         close_factor: 60,
-    //     },
-    //     reserve_lamports,
-    //     account_lamports, 
-    //     block_hash
-    // ).unwrap();
-    // match client.send_and_confirm_transaction(&transaction) {
-    //     Ok(sig) => println!("sig is {:?}", sig),
-    //     Err(err) => println!("error: {:?}", err),
-    // }
+    let account_lamports = client.get_minimum_balance_for_rent_exemption(Account::LEN).unwrap();
+    let reserve_lamports = client.get_minimum_balance_for_rent_exemption(MarketReserve::LEN).unwrap();
+    let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
+    let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    let transaction = create_market_reserve_without_liquidity(
+        authority,
+        Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
+        Pubkey::from_str("2weC6fjXrfaCLQpqEzdgBHpz6yVNvmSN133m7LDuZaDb").unwrap(),
+        Pubkey::from_str("GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b").unwrap(),
+        Pubkey::from_str("6mhUyoQR5CcHN4RJ5PSfcvTjRuWF742ypZeMwptPgFnK").unwrap(),
+        CollateralConfig {
+            liquidation_1_fee_rate: 25_000_000_000_000_000, // 2.5%
+            liquidation_2_repay_rate: 900_000_000_000_000_000,  // 95%
+            borrow_value_ratio: 60, 
+            liquidation_value_ratio: 70,
+            close_factor: 60,
+        },
+        reserve_lamports,
+        account_lamports, 
+        block_hash
+    ).unwrap();
+    match client.send_and_confirm_transaction(&transaction) {
+        Ok(sig) => println!("sig is {:?}", sig),
+        Err(err) => println!("error: {:?}", err),
+    }
 
     // create market reserve (with liquidity)
     // let account_lamports = client.get_minimum_balance_for_rent_exemption(Account::LEN).unwrap();
@@ -111,16 +101,16 @@ fn main() {
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
     // let transaction = create_market_reserve_with_liquidity(
     //     authority,
-    //     &Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
-    //     &Pubkey::from_str("3m1y5h2uv7EQL3KaJZehvAJa4yDNvgc5yAdL9KPMKwvk").unwrap(),
-    //     &Pubkey::from_str("HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J").unwrap(),
-    //     &Pubkey::from_str("9bRWBCW4BHHoLXFLFcLU3FQCDXXLNds1SJBmpeKYFeBZ").unwrap(),
-    //     &Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
+    //     Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
+    //     Pubkey::from_str("3m1y5h2uv7EQL3KaJZehvAJa4yDNvgc5yAdL9KPMKwvk").unwrap(),
+    //     Pubkey::from_str("HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J").unwrap(),
+    //     Pubkey::from_str("9bRWBCW4BHHoLXFLFcLU3FQCDXXLNds1SJBmpeKYFeBZ").unwrap(),
+    //     Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
     //     CollateralConfig {
-    //         liquidate_fee_rate: 25_000_000_000_000_000, 
-    //         arbitrary_liquidate_rate: 950_000_000_000_000_000, 
-    //         liquidate_limit: 85, 
-    //         effective_value_rate: 70,
+    //         liquidation_1_fee_rate: 25_000_000_000_000_000, // 2.5%
+    //         liquidation_2_repay_rate: 950_000_000_000_000_000,  // 95%
+    //         borrow_value_ratio: 70, 
+    //         liquidation_value_ratio: 85,
     //         close_factor: 60,
     //     },
     //     LiquidityConfig {
@@ -299,19 +289,12 @@ fn main() {
     // }
 }
 
-fn get_pyth_price(pyth_price_data: &[u8]) -> Result<u64, ProgramError> {
-    const STALE_AFTER_SLOTS_ELAPSED: u64 = 5;
+// fn get_pyth_price(pyth_price_data: &[u8]) -> Result<u64, ProgramError> {
+//     const STALE_AFTER_SLOTS_ELAPSED: u64 = 5;
 
-    let pyth_price = pyth::load::<pyth::Price>(pyth_price_data)
-        .map_err(|_| ProgramError::InvalidAccountData)?;
+//     let pyth_price = pyth::load::<pyth::Price>(pyth_price_data)
+//         .map_err(|_| ProgramError::InvalidAccountData)?;
 
-    if pyth_price.ptype != pyth::PriceType::Price {
-        println!("Oracle price type {:?} is invalid", pyth_price.ptype);
-        return Err(ProgramError::InvalidAccountData.into());
-    }
-
-    pyth_price.agg.price.try_into().map_err(|_| {
-        println!("Oracle price cannot be negative");
-        ProgramError::InvalidAccountData
-    })
-}
+//     println!("{:?}", pyth_price.ptype);
+//     Ok(0)
+// }
