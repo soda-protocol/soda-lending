@@ -480,24 +480,26 @@ impl UserObligation {
             return Err(LendingError::LiquidationTooMuch.into())
         }
 
-        // calculate repay amount
-        let repay_amount = self.collaterals[index]
-            .liquidation_effective_value(collateral_price)?
-            .try_div(self.collaterals_value.0)?
-            .try_mul(liquidation_ratio)?
-            .try_mul(self.dept_amount)?
-            .try_round_u64()?;
+        return Err(LendingError::LiquidationTooMuch.into());
 
-        // update collaterals
-        self.collaterals[index].amount = self.collaterals[index].amount
-            .checked_sub(amount)
-            .ok_or(LendingError::ObligationCollateralAmountInsufficient)?;
+        // // calculate repay amount
+        // let repay_amount = self.collaterals[index]
+        //     .liquidation_effective_value(collateral_price)?
+        //     .try_div(self.collaterals_value.0)?
+        //     .try_mul(liquidation_ratio)?
+        //     .try_mul(self.dept_amount)?
+        //     .try_round_u64()?;
+
+        // // update collaterals
+        // self.collaterals[index].amount = self.collaterals[index].amount
+        //     .checked_sub(amount)
+        //     .ok_or(LendingError::ObligationCollateralAmountInsufficient)?;
         
-        if self.collaterals[index].amount == 0 {
-            self.collaterals.remove(index);
-        }
+        // if self.collaterals[index].amount == 0 {
+        //     self.collaterals.remove(index);
+        // }
     
-        self.repay(repay_amount)
+        // self.repay(repay_amount)
     }
     ///
     pub fn liquidate_2(
