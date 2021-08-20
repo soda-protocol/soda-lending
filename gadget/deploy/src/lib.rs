@@ -33,8 +33,8 @@ use soda_lending_contract::{
         init_market_reserve_with_liquidity, init_user_obligation,
         init_user_asset, deposit_liquidity, withdraw_liquidity,
         deposit_collateral, update_user_obligation, borrow_liquidity, repay_loan,
-        redeem_collateral, liquidate, feed_rate_oracle, pause_rate_oracle,
-        add_liquidity_to_market_reserve, withdraw_fee,
+        redeem_collateral, redeem_collateral_without_loan, liquidate, feed_rate_oracle,
+        pause_rate_oracle, add_liquidity_to_market_reserve, withdraw_fee,
     },
     pyth::{self, Product},
 };
@@ -524,7 +524,8 @@ pub fn do_redeem_collateral(
     manager_token_account_key: Pubkey,
     liquidity_price_oracle_key: Pubkey,
     rate_oracle_key: Pubkey,
-    colleteral_market_reserve_key: Pubkey,
+    collateral_market_reserve_key: Pubkey,
+    collateral_price_oracle_key: Pubkey,
     price_oracle_keys: Vec<Pubkey>,
     user_obligatiton_key: Pubkey,
     user_token_account_key: Pubkey,
@@ -544,12 +545,45 @@ pub fn do_redeem_collateral(
         redeem_collateral(
             manager_key,
             liquidity_market_reserve_key,
-            colleteral_market_reserve_key,
+            collateral_market_reserve_key,
+            collateral_price_oracle_key,
             manager_token_account_key,
             user_obligatiton_key,
             *user_authority_key,
             user_token_account_key,
-            amount
+            amount,
+        ),
+    ],
+    Some(user_authority_key),
+        &[&user_authority],
+        recent_blockhash,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn do_redeem_collateral_without_loan(
+    user_authority: Keypair,
+    manager_key: Pubkey,
+    liquidity_market_reserve_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    collateral_market_reserve_key: Pubkey,
+    user_obligatiton_key: Pubkey,
+    user_token_account_key: Pubkey,
+    amount: u64,
+    recent_blockhash: Hash,
+) -> Transaction {
+    let user_authority_key = &user_authority.pubkey();
+
+    Transaction::new_signed_with_payer(&[
+        redeem_collateral_without_loan(
+            manager_key,
+            liquidity_market_reserve_key,
+            collateral_market_reserve_key,
+            manager_token_account_key,
+            user_obligatiton_key,
+            *user_authority_key,
+            user_token_account_key,
+            amount,
         ),
     ],
     Some(user_authority_key),

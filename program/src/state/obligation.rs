@@ -367,18 +367,6 @@ impl UserObligation {
         }
     }
     ///
-    pub fn repay_all(&mut self) -> Settle {
-        let settle = Settle {
-            total: self.dept_amount,
-            interest: self.dept_amount - self.borrowed_amount,
-        };
-
-        self.dept_amount = 0;
-        self.borrowed_amount = 0;
-
-        settle
-    }
-    ///
     pub fn deposit(&mut self, index: usize, amount: u64) -> ProgramResult {
         self.collaterals[index].amount = self.collaterals[index].amount
             .checked_add(amount)
@@ -420,14 +408,19 @@ impl UserObligation {
         Ok(())
     }
     ///
-    pub fn redeem_2(&mut self, index: usize) -> Result<u64, ProgramError> {
+    pub fn redeem_2(&mut self, index: usize, amount: u64) -> ProgramResult {
         if self.dept_amount > 0 {
             Err(LendingError::ObligationNotHealthy.into())
         } else {
-            let amount = self.collaterals[index].amount;
-            self.collaterals.remove(index);
+            self.collaterals[index].amount = self.collaterals[index].amount
+                .checked_sub(amount)
+                .ok_or(LendingError::ObligationCollateralAmountInsufficient)?;
 
-            Ok(amount)
+            if self.collaterals[index].amount == 0 {
+                self.collaterals.remove(index);
+            }
+
+            Ok(())
         }
     }
     ///
@@ -437,18 +430,18 @@ impl UserObligation {
             .iter()
             .zip(prices.iter())
             .try_fold((Decimal::zero(), Decimal::zero(), Decimal::zero()),
-                |(acc_1, acc_2, acc_max), (collateral, price)| ->
+                |acc, (collateral, price)| ->
                 Result<(Decimal, Decimal, Decimal), ProgramError> {
                 if collateral.price_oracle == price.price_oracle {
                     let borrow_effective_value = collateral
                         .borrow_effective_value(price.price)?
-                        .try_add(acc_1)?;
+                        .try_add(acc.0)?;
                     let liquidation_effective_value = collateral
                         .liquidation_effective_value(price.price)?
-                        .try_add(acc_2)?;
+                        .try_add(acc.1)?;
                     let liquidation_max_value = collateral
                         .liquidation_max_value(price.price)?
-                        .try_add(acc_max)?;
+                        .try_add(acc.2)?;
 
                     Ok((borrow_effective_value, liquidation_effective_value, liquidation_max_value))
                 } else {

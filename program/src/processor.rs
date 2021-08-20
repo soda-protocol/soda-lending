@@ -89,9 +89,9 @@ pub fn process_instruction(
             msg!("Instruction: Redeem Collateral: {}", amount);
             process_redeem_collateral(program_id, accounts, amount)
         }
-        LendingInstruction::RedeemCollateral2 => {
-            msg!("Instruction: Redeem Collateral 2");
-            process_redeem_collateral_2(program_id, accounts)
+        LendingInstruction::RedeemCollateralWithoutLoan { amount } => {
+            msg!("Instruction: Redeem Collateral Without Loan: {}", amount);
+            process_redeem_collateral_without_loan(program_id, accounts, amount)
         }
         LendingInstruction::Liquidate { is_arbitrary, amount } => {
             msg!("Instruction: Liquidation: amount = {}, is arbitrary = {}", amount, is_arbitrary);
@@ -792,6 +792,11 @@ fn process_repay_loan(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
+    if amount == 0 {
+        msg!("Repay loan amount provided cannot be zero");
+        return Err(LendingError::InvalidAmount.into());
+    }
+
     let account_info_iter = &mut accounts.iter();
     let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
     let market_reserve_info = next_account_info(account_info_iter)?;
@@ -842,11 +847,7 @@ fn process_repay_loan(
 
     // handle obligation
     user_obligation.update_borrow_interest(clock.slot, Rate::from_scaled_val(rate_oracle.borrow_rate))?;
-    let settle = if amount == 0 {
-        user_obligation.repay_all()
-    } else {
-        user_obligation.repay(amount)?
-    };
+    let settle = user_obligation.repay(amount)?;
     user_obligation.last_update.update_slot(clock.slot, true);
     UserObligation::pack(user_obligation, &mut user_obligatiton_info.try_borrow_mut_data()?)?;
     // handle market reserve
@@ -871,7 +872,7 @@ fn process_redeem_collateral(
     amount: u64,
 ) -> ProgramResult {
     if amount == 0 {
-        msg!("Liquidity amount provided cannot be zero");
+        msg!("Collateral amount provided cannot be zero");
         return Err(LendingError::InvalidAmount.into());
     }
 
@@ -975,10 +976,16 @@ fn process_redeem_collateral(
     })
 }
 
-fn process_redeem_collateral_2(
+fn process_redeem_collateral_without_loan(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
+    amount: u64,
 ) -> ProgramResult {
+    if amount == 0 {
+        msg!("Collateral amount provided cannot be zero");
+        return Err(LendingError::InvalidAmount.into());
+    }
+
     let account_info_iter = &mut accounts.iter();
     let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
     let manager_info = next_account_info(account_info_iter)?;
@@ -1050,7 +1057,7 @@ fn process_redeem_collateral_2(
 
     // handle obligation
     let index = user_obligation.find_collateral(&market_reserve.token_info.price_oracle)?;
-    let amount = user_obligation.redeem_2(index)?;
+    user_obligation.redeem_2(index, amount)?;
     user_obligation.last_update.update_slot(clock.slot, true);
     UserObligation::pack(user_obligation, &mut user_obligatiton_info.try_borrow_mut_data()?)?;
     // handle market reserve

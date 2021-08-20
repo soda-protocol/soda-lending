@@ -27,10 +27,6 @@ pub struct CollateralInfo {
     ///
     pub price_oracle: Pubkey,
     ///
-    pub borrow_value_ratio: f64,
-    ///
-    pub liquidation_value_ratio: f64,
-    ///
     pub amount: f64,
     ///
     pub borrow_equivalent_value: f64,
@@ -43,8 +39,6 @@ pub struct CollateralInfo {
 #[derive(Debug, Clone)]
 pub struct UserObligationInfo {
     ///
-    pub version: u8,
-    ///
     pub reserve: Pubkey,
     ///
     pub owner: Pubkey,
@@ -56,6 +50,12 @@ pub struct UserObligationInfo {
     pub dept_amount: f64,
     ///
     pub loan_value: f64,
+    ///
+    pub borrow_equivalent_value: f64,
+    ///
+    pub liquidation_equivalent_value: f64,
+    ///
+    pub max_value: f64,
 }
 
 impl UserObligationInfo {
@@ -88,16 +88,12 @@ impl UserObligationInfo {
                     .ok_or(ProgramError::InvalidAccountData)?;
                 let amount = collateral.amount as f64 / decimals as f64;
 
-                let borrow_value_ratio = collateral.borrow_value_ratio as f64 / 100f64;
-                let liquidation_value_ratio = collateral.liquidation_value_ratio as f64 / 100f64;
                 let max_value = price * amount;
-                let borrow_equivalent_value = max_value * borrow_value_ratio;
-                let liquidation_equivalent_value = max_value * liquidation_value_ratio;
+                let borrow_equivalent_value = max_value * (collateral.borrow_value_ratio as f64 / 100f64);
+                let liquidation_equivalent_value = max_value * (collateral.liquidation_value_ratio as f64 / 100f64);
 
                 Ok(CollateralInfo {
                     price_oracle: collateral.price_oracle,
-                    borrow_value_ratio,
-                    liquidation_value_ratio,
                     amount,
                     borrow_equivalent_value,
                     liquidation_equivalent_value,
@@ -113,27 +109,27 @@ impl UserObligationInfo {
         let dept_amount = obligation.dept_amount as f64 / decimals as f64;
         let price = get_pyth_price(liquidity_price_oracle_data, clock)?;
 
+        let (borrow_equivalent_value, liquidation_equivalent_value, max_value) = collaterals
+            .iter()
+            .fold((0f64, 0f64, 0f64), |acc, collateral|
+                (
+                    acc.0 + collateral.borrow_equivalent_value,
+                    acc.1 + collateral.liquidation_equivalent_value,
+                    acc.2 + collateral.max_value,
+                )
+            );
+
         Ok(Self {
-            version: obligation.version,
             reserve: obligation.reserve,
             owner: obligation.owner,
             collaterals,
             borrowed_amount,
             dept_amount,
             loan_value: dept_amount * price,
+            borrow_equivalent_value,
+            liquidation_equivalent_value,
+            max_value,
         })
-    }
-
-    pub fn get_effective_value(&self) -> (f64, f64, f64) {
-        self.collaterals
-            .iter()
-            .fold((0f64, 0f64, 0f64), |acc, &c|
-                (
-                    acc.0 + c.borrow_equivalent_value,
-                    acc.1 + c.liquidation_equivalent_value,
-                    acc.2 + c.max_value,
-                )
-            )
     }
 }
 

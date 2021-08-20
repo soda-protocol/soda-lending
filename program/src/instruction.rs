@@ -72,7 +72,10 @@ pub enum LendingInstruction {
         amount: u64,      
     },
     /// 13
-    RedeemCollateral2,
+    RedeemCollateralWithoutLoan {
+        ///
+        amount: u64,     
+    },
     /// 14
     Liquidate {
         ///
@@ -149,7 +152,10 @@ impl LendingInstruction {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::RedeemCollateral { amount }
             }
-            13 => Self::RedeemCollateral2,
+            13 => {
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::RedeemCollateralWithoutLoan { amount }
+            }
             14 => {
                 let (is_arbitrary, rest) = Self::unpack_bool(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
@@ -312,7 +318,10 @@ impl LendingInstruction {
                 buf.push(12);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::RedeemCollateral2 => buf.push(13),
+            Self::RedeemCollateralWithoutLoan { amount } => {
+                buf.push(13);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            },
             Self::Liquidate { is_arbitrary, amount } => {
                 buf.push(14);
                 buf.extend_from_slice(&[is_arbitrary as u8][..]);
@@ -660,7 +669,8 @@ pub fn repay_loan(
 pub fn redeem_collateral(
     manager_key: Pubkey,
     liquidity_market_reserve_key: Pubkey,
-    colleteral_market_reserve_key: Pubkey,
+    collateral_market_reserve_key: Pubkey,
+    collateral_price_oracle_key: Pubkey,
     manager_token_account_key: Pubkey,
     user_obligatiton_key: Pubkey,
     user_authority_key: Pubkey,
@@ -680,7 +690,8 @@ pub fn redeem_collateral(
             AccountMeta::new_readonly(manager_key, false),
             AccountMeta::new_readonly(manager_authority_key, false),
             AccountMeta::new_readonly(liquidity_market_reserve_key, false),
-            AccountMeta::new(colleteral_market_reserve_key, false),
+            AccountMeta::new_readonly(collateral_price_oracle_key, false),
+            AccountMeta::new(collateral_market_reserve_key, false),
             AccountMeta::new(manager_token_account_key, false),
             AccountMeta::new(user_obligatiton_key, false),
             AccountMeta::new_readonly(user_authority_key, true),
@@ -688,6 +699,41 @@ pub fn redeem_collateral(
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::RedeemCollateral{ amount }.pack(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn redeem_collateral_without_loan(
+    manager_key: Pubkey,
+    liquidity_market_reserve_key: Pubkey,
+    collateral_market_reserve_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    user_obligatiton_key: Pubkey,
+    user_authority_key: Pubkey,
+    user_token_account_key: Pubkey,
+    amount: u64,
+) -> Instruction {
+    let program_id = id();
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
+        &program_id,
+    );
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(manager_authority_key, false),
+            AccountMeta::new_readonly(liquidity_market_reserve_key, false),
+            AccountMeta::new(collateral_market_reserve_key, false),
+            AccountMeta::new(manager_token_account_key, false),
+            AccountMeta::new(user_obligatiton_key, false),
+            AccountMeta::new_readonly(user_authority_key, true),
+            AccountMeta::new(user_token_account_key, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
+        data: LendingInstruction::RedeemCollateralWithoutLoan{ amount }.pack(),
     }
 }
 
