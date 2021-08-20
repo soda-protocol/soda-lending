@@ -480,25 +480,13 @@ impl UserObligation {
             return Err(LendingError::LiquidationTooMuch.into())
         }
 
-        let repay_amount = self.collaterals[index]
-            .liquidation_effective_value(collateral_price)
-            .map_err(|_| LendingError::DebugError1)?
-            .try_div(self.collaterals_value.1)
-            .map_err(|_| LendingError::DebugError2)?
-            .try_mul(self.dept_amount)
-            .map_err(|_| LendingError::DebugError3)?
-            .try_mul(liquidation_ratio)
-            .map_err(|_| LendingError::DebugError4)?
-            .try_round_u64()
-            .map_err(|_| LendingError::DebugError5)?;
-
         // calculate repay amount
-        // let repay_amount = self.collaterals[index]
-        //     .liquidation_effective_value(collateral_price)?
-        //     .try_div(self.collaterals_value.1)?
-        //     .try_mul(self.dept_amount)?
-        //     .try_mul(liquidation_ratio)?
-        //     .try_round_u64()?;
+        let repay_amount = self.collaterals[index]
+            .liquidation_effective_value(collateral_price)?
+            .try_div(self.collaterals_value.1)?
+            .try_mul(self.dept_amount)?
+            .try_mul(liquidation_ratio)?
+            .try_round_u64()?;
 
         // update collaterals
         self.collaterals[index].amount = self.collaterals[index].amount

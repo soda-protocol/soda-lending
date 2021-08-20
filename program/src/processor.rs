@@ -1200,7 +1200,7 @@ fn process_liquidate(
             liquidity_decimals,
             settle.total,
             Rate::from_scaled_val(collateral_market_reserve.collateral_info.config.liquidation_1_fee_rate),
-        )?;
+        ).map_err(|_| LendingError::DebugError1)?;
 
         (settle, fee)
     };
