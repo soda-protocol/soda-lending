@@ -193,19 +193,19 @@ fn main() {
     // }
 
     // fee rate oracle
-    // let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
-    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    // let transaction = do_feed_rate_oracle(
-    //     authority,
-    //     &Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
-    //     1_000_000_000_000_000,
-    //     1_000_000_000_000_000,
-    //     block_hash,
-    // );
-    // match client.send_and_confirm_transaction(&transaction) {
-    //     Ok(sig) => println!("sig is {:?}", sig),
-    //     Err(err) => println!("error: {:?}", err),
-    // }
+    let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
+    let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    let transaction = do_feed_rate_oracle(
+        authority,
+        &Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
+        0, // 1_000_000_000_000_000
+        0, // 1_000_000_000_000_000
+        block_hash,
+    );
+    match client.send_and_confirm_transaction(&transaction) {
+        Ok(sig) => println!("sig is {:?}", sig),
+        Err(err) => println!("error: {:?}", err),
+    }
 
     // deposit liquidity
     // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
@@ -283,22 +283,22 @@ fn main() {
     // }
 
     // repay loan all
-    let authority = Keypair::from_base58_string(GLOBAL_OWNER);
-    let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    let transaction = do_repay_loan(
-        authority,
-        Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap(),
-        Pubkey::from_str("3sAzDiT2dBjrCPsADnRUPEUi8wquWxNynHDCnnU3M8z1").unwrap(),
-        Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
-        Pubkey::from_str("GZ57zaxfgq1eWvHvGtw1ASsydqGRWLCoqM2TmvYuw1Pw").unwrap(),
-        Pubkey::from_str("GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN").unwrap(),
-        0,
-        block_hash,
-    );
-    match client.send_and_confirm_transaction(&transaction) {
-        Ok(sig) => println!("sig is {:?}", sig),
-        Err(err) => println!("error: {:?}", err),
-    }
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
+    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    // let transaction = do_repay_loan(
+    //     authority,
+    //     Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap(),
+    //     Pubkey::from_str("3sAzDiT2dBjrCPsADnRUPEUi8wquWxNynHDCnnU3M8z1").unwrap(),
+    //     Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
+    //     Pubkey::from_str("GZ57zaxfgq1eWvHvGtw1ASsydqGRWLCoqM2TmvYuw1Pw").unwrap(),
+    //     Pubkey::from_str("GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN").unwrap(),
+    //     0,
+    //     block_hash,
+    // );
+    // match client.send_and_confirm_transaction(&transaction) {
+    //     Ok(sig) => println!("sig is {:?}", sig),
+    //     Err(err) => println!("error: {:?}", err),
+    // }
 
     // redeem collateral
     // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
@@ -341,7 +341,7 @@ fn main() {
     //     Pubkey::from_str("EnpPrZtpsKb2CK6Jyue6tYi4vPmztLXPDKdco3WnRYuS").unwrap(),
     //     0,
     //     false,
-    //     10_000_000,
+    //     100_000_000,
     //     block_hash,
     // );
     // match client.send_and_confirm_transaction(&transaction) {
