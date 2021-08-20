@@ -305,7 +305,6 @@ pub fn calculate_liquidation_fee(
         .try_mul(collateral_amount)?
         .try_div(collateral_decimals)?
         .try_mul(loan_decimals)?
-        .try_div(loan_amount)?
         .try_div(loan_price)?
         .try_round_u64()?;
 
