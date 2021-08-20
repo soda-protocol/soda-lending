@@ -263,15 +263,19 @@ pub enum LendingError {
     PriceOracleNotMatched,
 
 
-
+    ///
     #[error("Debug error 1")]
     DebugError1,
+    /// 
     #[error("Debug error 2")]
     DebugError2,
+    ///
     #[error("Debug error 3")]
     DebugError3,
+    ///
     #[error("Debug error 4")]
     DebugError4,
+    ///
     #[error("Debug error 5")]
     DebugError5,
 }
