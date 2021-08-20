@@ -11,3 +11,4 @@ solana-sdk = "1.7.10"
 solana-client = "1.7.10"
 spl-token = { version = "3.2.0", features = [ "no-entrypoint" ] }
 soda-lending-contract = { path = "../../program", features = [ "no-entrypoint" ] }
+bincode = "1.3.3"

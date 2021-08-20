@@ -72,27 +72,29 @@ pub enum LendingInstruction {
         amount: u64,      
     },
     /// 13
+    RedeemCollateral2,
+    /// 14
     Liquidate {
         ///
         is_arbitrary: bool,
         ///
         amount: u64,   
     },
-    /// 14
+    /// 15
     FeedRateOracle {
         ///
         interest_rate: u64,
         ///
         borrow_rate: u64,
     },
-    /// 15
-    PauseRateOracle,
     /// 16
+    PauseRateOracle,
+    /// 17
     AddLiquidityToReserve {
         ///
         liquidity_config: LiquidityConfig,   
     },
-    /// 17
+    /// 18
     WithdrawFee {
         ///
         amount: u64,
@@ -147,22 +149,23 @@ impl LendingInstruction {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::RedeemCollateral { amount }
             }
-            13 => {
+            13 => Self::RedeemCollateral2,
+            14 => {
                 let (is_arbitrary, rest) = Self::unpack_bool(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::Liquidate { is_arbitrary, amount }
             }
-            14 => {
+            15 => {
                 let (interest_rate, rest) = Self::unpack_u64(rest)?;
                 let (borrow_rate, _rest) = Self::unpack_u64(rest)?;
                 Self::FeedRateOracle { interest_rate, borrow_rate }
             }
-            15 => Self::PauseRateOracle,
-            16 => {
+            16 => Self::PauseRateOracle,
+            17 => {
                 let (liquidity_config, _rest) = Self::unpack_liquidity_config(rest)?;
                 Self::AddLiquidityToReserve { liquidity_config }
             }
-            17 => {
+            18 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::WithdrawFee { amount }
             }
@@ -309,23 +312,24 @@ impl LendingInstruction {
                 buf.push(12);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
+            Self::RedeemCollateral2 => buf.push(13),
             Self::Liquidate { is_arbitrary, amount } => {
-                buf.push(13);
+                buf.push(14);
                 buf.extend_from_slice(&[is_arbitrary as u8][..]);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             Self::FeedRateOracle { interest_rate, borrow_rate } => {
-                buf.push(14);
+                buf.push(15);
                 buf.extend_from_slice(&interest_rate.to_le_bytes());
                 buf.extend_from_slice(&borrow_rate.to_le_bytes());
             }
-            Self::PauseRateOracle => buf.push(15),
+            Self::PauseRateOracle => buf.push(16),
             Self::AddLiquidityToReserve { liquidity_config } => {
-                buf.push(16);
+                buf.push(17);
                 Self::pack_liquidity_config(liquidity_config, &mut buf);
             }
             Self::WithdrawFee { amount } => {
-                buf.push(17);
+                buf.push(18);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
         }

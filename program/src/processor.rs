@@ -78,7 +78,7 @@ pub fn process_instruction(
             process_update_user_obligation(program_id, accounts)
         }
         LendingInstruction::BorrowLiquidity { amount } => {
-            msg!("Instruction: Borrow Collateral: {}", amount);
+            msg!("Instruction: Borrow Liquidity: {}", amount);
             process_borrow_liquidity(program_id, accounts, amount)
         }
         LendingInstruction::RepayLoan { amount } => {
@@ -88,6 +88,10 @@ pub fn process_instruction(
         LendingInstruction::RedeemCollateral { amount } => {
             msg!("Instruction: Redeem Collateral: {}", amount);
             process_redeem_collateral(program_id, accounts, amount)
+        }
+        LendingInstruction::RedeemCollateral2 => {
+            msg!("Instruction: Redeem Collateral 2");
+            process_redeem_collateral_2(program_id, accounts)
         }
         LendingInstruction::Liquidate { is_arbitrary, amount } => {
             msg!("Instruction: Liquidation: amount = {}, is arbitrary = {}", amount, is_arbitrary);
@@ -788,11 +792,6 @@ fn process_repay_loan(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
-        msg!("Loan amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
-
     let account_info_iter = &mut accounts.iter();
     let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
     let market_reserve_info = next_account_info(account_info_iter)?;
@@ -843,18 +842,22 @@ fn process_repay_loan(
 
     // handle obligation
     user_obligation.update_borrow_interest(clock.slot, Rate::from_scaled_val(rate_oracle.borrow_rate))?;
-    let fund = user_obligation.repay(amount)?;
+    let settle = if amount == 0 {
+        user_obligation.repay_all()
+    } else {
+        user_obligation.repay(amount)?
+    };
     user_obligation.last_update.update_slot(clock.slot, true);
     UserObligation::pack(user_obligation, &mut user_obligatiton_info.try_borrow_mut_data()?)?;
     // handle market reserve
-    liquidity_info.liquidity.repay(&fund)?;
+    liquidity_info.liquidity.repay(&settle)?;
     market_reserve.timestamp = clock.slot;
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
     // 6. transfer
     spl_token_transfer(TokenTransferParams {
         source: user_token_account_info.clone(),
         destination: manager_token_account_info.clone(),
-        amount,
+        amount: settle.total,
         authority: user_authority_info.clone(),
         authority_signer_seeds: &[],
         token_program: token_program_id.clone(),
@@ -877,7 +880,8 @@ fn process_redeem_collateral(
     let manager_info = next_account_info(account_info_iter)?;
     let manager_authority_info = next_account_info(account_info_iter)?;
     let liquidity_market_reserve_info = next_account_info(account_info_iter)?;
-    let colleteral_market_reserve_info = next_account_info(account_info_iter)?;
+    let collateral_market_reserve_info = next_account_info(account_info_iter)?;
+    let collateral_price_oracle_info = next_account_info(account_info_iter)?;
     let manager_token_account_info = next_account_info(account_info_iter)?;
     let user_obligatiton_info = next_account_info(account_info_iter)?;
     let user_authority_info = next_account_info(account_info_iter)?;
@@ -911,15 +915,20 @@ fn process_redeem_collateral(
     }
     let decimals = calculate_decimals(market_reserve.token_info.decimal)?;
 
-    if colleteral_market_reserve_info.owner != program_id {
+    if collateral_market_reserve_info.owner != program_id {
         msg!("Collateral market reserve owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
-    let mut market_reserve = MarketReserve::unpack(&colleteral_market_reserve_info.try_borrow_data()?)?;
+    let mut market_reserve = MarketReserve::unpack(&collateral_market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
-        msg!("MarketReserve manager provided is not matched with manager info");
+        msg!("Collateral market reserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
     }
+
+    if collateral_price_oracle_info.key != &market_reserve.token_info.price_oracle {
+        return Err(LendingError::InvalidPriceOracle.into());
+    }
+    let collateral_price = get_pyth_price(collateral_price_oracle_info, clock)?;
 
     if manager_token_account_info.key != &market_reserve.token_info.account {
         return Err(LendingError::InvalidManagerTokenAccount.into()); 
@@ -947,14 +956,107 @@ fn process_redeem_collateral(
 
     // handle obligation
     let index = user_obligation.find_collateral(&market_reserve.token_info.price_oracle)?;
-    user_obligation.redeem(index, amount)?;
+    user_obligation.redeem(index, amount, collateral_price)?;
     user_obligation.validate_borrow(decimals)?;
     user_obligation.last_update.update_slot(clock.slot, true);
     UserObligation::pack(user_obligation, &mut user_obligatiton_info.try_borrow_mut_data()?)?;
     // handle market reserve
     market_reserve.collateral_info.redeem(amount)?;
     market_reserve.timestamp = clock.slot;
-    MarketReserve::pack(market_reserve, &mut colleteral_market_reserve_info.try_borrow_mut_data()?)?;
+    MarketReserve::pack(market_reserve, &mut collateral_market_reserve_info.try_borrow_mut_data()?)?;
+    // transfer
+    spl_token_transfer(TokenTransferParams {
+        source: manager_token_account_info.clone(),
+        destination: user_token_account_info.clone(),
+        amount,
+        authority: manager_authority_info.clone(),
+        authority_signer_seeds,
+        token_program: token_program_id.clone(),
+    })
+}
+
+fn process_redeem_collateral_2(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
+    let manager_info = next_account_info(account_info_iter)?;
+    let manager_authority_info = next_account_info(account_info_iter)?;
+    let liquidity_market_reserve_info = next_account_info(account_info_iter)?;
+    let collateral_market_reserve_info = next_account_info(account_info_iter)?;
+    let manager_token_account_info = next_account_info(account_info_iter)?;
+    let user_obligatiton_info = next_account_info(account_info_iter)?;
+    let user_authority_info = next_account_info(account_info_iter)?;
+    let user_token_account_info = next_account_info(account_info_iter)?;
+    let token_program_id = next_account_info(account_info_iter)?;
+
+    if manager_info.owner != program_id {
+        msg!("Manager ower provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
+    }
+    let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
+    let authority_signer_seeds = &[
+        manager_info.key.as_ref(),
+        &[manager.bump_seed]
+    ];
+    let manager_authority = Pubkey::create_program_address(authority_signer_seeds, program_id)?;
+
+    if manager_authority_info.key != &manager_authority {
+        msg!("Manager authority is not matched with program address derived from manager info");
+        return Err(LendingError::InvalidManagerAuthority.into());
+    }
+
+    if liquidity_market_reserve_info.owner != program_id {
+        msg!("Liquidity market reserve owner provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
+    }
+    let market_reserve = MarketReserve::unpack(&liquidity_market_reserve_info.try_borrow_data()?)?;
+    if &market_reserve.manager != manager_info.key {
+        msg!("Liquidity market reserve manager provided is not matched with manager info");
+        return Err(LendingError::InvalidMarketReserve.into());
+    }
+
+    if collateral_market_reserve_info.owner != program_id {
+        msg!("Collateral market reserve owner provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
+    }
+    let mut market_reserve = MarketReserve::unpack(&collateral_market_reserve_info.try_borrow_data()?)?;
+    if &market_reserve.manager != manager_info.key {
+        msg!("Collateral market reserve manager provided is not matched with manager info");
+        return Err(LendingError::InvalidMarketReserve.into());
+    }
+
+    if manager_token_account_info.key != &market_reserve.token_info.account {
+        return Err(LendingError::InvalidManagerTokenAccount.into()); 
+    }
+
+    if user_obligatiton_info.owner != program_id {
+        msg!("User Obligation owner provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
+    }
+    let mut user_obligation = UserObligation::unpack(&user_obligatiton_info.try_borrow_data()?)?;
+    if &user_obligation.reserve != liquidity_market_reserve_info.key {
+        return Err(LendingError::InvalidUserObligation.into());
+    }
+
+    if user_authority_info.key != &user_obligation.owner {
+        return Err(LendingError::InvalidUserAuthority.into());
+    }
+    if !user_authority_info.is_signer {
+        msg!("authority is not a signer");
+        return Err(LendingError::InvalidSigner.into());
+    }
+
+    // handle obligation
+    let index = user_obligation.find_collateral(&market_reserve.token_info.price_oracle)?;
+    let amount = user_obligation.redeem_2(index)?;
+    user_obligation.last_update.update_slot(clock.slot, true);
+    UserObligation::pack(user_obligation, &mut user_obligatiton_info.try_borrow_mut_data()?)?;
+    // handle market reserve
+    market_reserve.collateral_info.redeem(amount)?;
+    market_reserve.timestamp = clock.slot;
+    MarketReserve::pack(market_reserve, &mut collateral_market_reserve_info.try_borrow_mut_data()?)?;
     // transfer
     spl_token_transfer(TokenTransferParams {
         source: manager_token_account_info.clone(),

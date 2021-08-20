@@ -642,6 +642,7 @@ dependencies = [
 name = "deploy"
 version = "0.1.0"
 dependencies = [
+ "bincode",
  "soda-lending-contract",
  "solana-client",
  "solana-sdk",

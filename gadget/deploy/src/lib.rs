@@ -1,3 +1,6 @@
+#![allow(missing_docs)]
+pub mod types;
+
 use std::{str::FromStr, time::Duration, error::Error, thread};
 
 use solana_client::{
@@ -21,7 +24,8 @@ use spl_token::{
 };
 use soda_lending_contract::{
     math::WAD,
-    state::{Manager, MarketReserve, RateOracle, UserAsset, UserObligation, 
+    state::{
+        Manager, MarketReserve, RateOracle, UserAsset, UserObligation, 
         CollateralConfig, LiquidityConfig
     },
     instruction::{
@@ -45,6 +49,7 @@ pub fn create_token(
     account: &Keypair,
     mint_lamports: u64,
     acnt_lamports: u64,
+    decimals: u8,
     amount: u64,
     recent_blockhash: Hash,
 ) -> Result<Transaction, ProgramError> {
@@ -73,7 +78,7 @@ pub fn create_token(
                 mint_pubkey,
                 authority_pubkey,
                 None,
-                9,
+                decimals,
             )?,
             initialize_account(
                 &program_id,
@@ -97,8 +102,8 @@ pub fn create_token(
 }
 
 fn create_lending_manager(
-    manager: &Keypair,
-    authority: &Keypair,
+    manager: Keypair,
+    authority: Keypair,
     lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
@@ -122,14 +127,14 @@ fn create_lending_manager(
         )
     ],
     Some(authority_key),
-        &[manager, authority],
+        &[&manager, &authority],
         recent_blockhash,
     )
 }
 
 fn create_rate_oracle(
-    rate_oracle: &Keypair,
-    authority: &Keypair,
+    rate_oracle: Keypair,
+    authority: Keypair,
     lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
@@ -150,14 +155,14 @@ fn create_rate_oracle(
         )
     ],
     Some(authority_key),
-        &[rate_oracle, authority],
+        &[&rate_oracle, &authority],
         recent_blockhash,
     )
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_market_reserve_without_liquidity(
-    authority: &Keypair,
+    authority: Keypair,
     manager_key: Pubkey,
     pyth_product_key: Pubkey,
     pyth_price_key: Pubkey,
@@ -167,8 +172,8 @@ pub fn create_market_reserve_without_liquidity(
     account_lamports: u64,
     recent_blockhash: Hash,
 ) -> Result<Transaction, ProgramError> {
-    let market_reserve = &Keypair::new();
-    let token_account = &Keypair::new();
+    let market_reserve = Keypair::new();
+    let token_account = Keypair::new();
     let market_reserve_key = &market_reserve.pubkey();
     let token_account_key = &token_account.pubkey();
 
@@ -214,14 +219,14 @@ pub fn create_market_reserve_without_liquidity(
         )
     ],
     Some(authority_key),
-        &[market_reserve, token_account, authority],
+        &[&market_reserve, &token_account, &authority],
         recent_blockhash,
     ))
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_market_reserve_with_liquidity(
-    authority: &Keypair,
+    authority: Keypair,
     manager_key: Pubkey,
     pyth_product_key: Pubkey,
     pyth_price_key: Pubkey,
@@ -233,8 +238,8 @@ pub fn create_market_reserve_with_liquidity(
     account_lamports: u64,
     recent_blockhash: Hash,
 ) -> Result<Transaction, ProgramError> {
-    let market_reserve = &Keypair::new();
-    let token_account = &Keypair::new();
+    let market_reserve = Keypair::new();
+    let token_account = Keypair::new();
     let market_reserve_key = &market_reserve.pubkey();
     let token_account_key = &token_account.pubkey();
 
@@ -282,18 +287,18 @@ pub fn create_market_reserve_with_liquidity(
         )
     ],
     Some(authority_pubkey),
-        &[market_reserve, token_account, authority],
+        &[&market_reserve, &token_account, &authority],
         recent_blockhash,
     ))
 }
 
 pub fn create_user_obligation(
-    authority: &Keypair,
+    authority: Keypair,
     market_reserve_key: Pubkey,
     lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
-    let obligation = &Keypair::new();
+    let obligation = Keypair::new();
     let obligation_key = &obligation.pubkey();
     let authority_pubkey = &authority.pubkey();
 
@@ -314,18 +319,18 @@ pub fn create_user_obligation(
         ),
     ],
     Some(authority_pubkey),
-        &[obligation, authority],
+        &[&obligation, &authority],
         recent_blockhash,
     )
 }
 
 pub fn create_user_asset(
-    authority: &Keypair,
+    authority: Keypair,
     market_reserve_key: Pubkey,
     lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
-    let asset = &Keypair::new();
+    let asset = Keypair::new();
     let asset_key = &asset.pubkey();
     let authority_pubkey = &authority.pubkey();
 
@@ -346,14 +351,14 @@ pub fn create_user_asset(
         ),
     ],
     Some(authority_pubkey),
-        &[asset, authority],
+        &[&asset, &authority],
         recent_blockhash,
     )
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn do_deposit_liquidity(
-    user_authority: &Keypair,
+    user_authority: Keypair,
     market_reserve_key: Pubkey,
     manager_token_account_key: Pubkey,
     rate_oracle_key: Pubkey,
@@ -376,14 +381,14 @@ pub fn do_deposit_liquidity(
         ),
     ],
     Some(user_authority_key),
-        &[user_authority],
+        &[&user_authority],
         recent_blockhash,
     )
 }
 
 #[allow(clippy::too_many_arguments)]
 pub fn do_withdraw_liquidity(
-    user_authority: &Keypair,
+    user_authority: Keypair,
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
     manager_token_account_key: Pubkey,
@@ -408,7 +413,7 @@ pub fn do_withdraw_liquidity(
         ),
     ],
     Some(user_authority_key),
-        &[user_authority],
+        &[&user_authority],
         recent_blockhash,
     )
 }

@@ -1,21 +1,23 @@
-use std::{convert::TryInto, error::Error, str::FromStr, thread, time::Duration};
+use std::{collections::HashMap, convert::TryInto, error::Error, str::FromStr, thread, time::Duration};
 
 use deploy::*;
+use crate::{
+    do_borrow_liquidity,
+    do_deposit_collateral,
+    do_deposit_liquidity,
+    do_feed_rate_oracle,
+    do_liquidate,
+    do_redeem_collateral,
+    do_repay_loan,
+    do_withdraw_liquidity,
+    types::{UserObligationInfo, get_pyth_price},
+};
 use solana_client::{
     blockhash_query::BlockhashQuery, 
     rpc_client::RpcClient, 
     rpc_request::TokenAccountsFilter,
 };
-use solana_sdk::{
-    commitment_config::CommitmentConfig, 
-    hash::Hash, instruction::Instruction, 
-    program_error::ProgramError, 
-    program_pack::Pack, 
-    pubkey::Pubkey, 
-    signer::{Signer, keypair::Keypair}, 
-    system_instruction::create_account, 
-    transaction::Transaction
-};
+use solana_sdk::{clock::Clock, commitment_config::CommitmentConfig, hash::Hash, instruction::Instruction, program_error::ProgramError, program_pack::Pack, pubkey::Pubkey, signer::{Signer, keypair::Keypair}, system_instruction::create_account, sysvar::{Sysvar, SysvarId}, transaction::Transaction};
 use spl_token::{
     instruction::{initialize_mint, initialize_account, mint_to},
     state::{Mint, Account},
@@ -35,6 +37,7 @@ use soda_lending_contract::{
     },
     pyth::{self, Product},
 };
+use bincode;
 
 const DEV_NET: &str = "http://65.21.40.30";
 const GLOBAL_OWNER: &str = "vG2VqMokQyY82xKda116qAmvMQm4ymoKEV92UtxNVmu4tKDt4X33ELY4rdCfiR1NxJnbek39m5X9rLJnxASNbmQ";
@@ -42,6 +45,32 @@ const QUOTE_CURRENCY: &[u8; 32] = &[85, 83, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
 fn main() {
     let client = RpcClient::new_with_commitment(DEV_NET.into(), CommitmentConfig::default());
+
+    let clock_data = client.get_account_data(&Clock::id()).unwrap();
+    let market_reserve_data = client.get_account_data(&Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap()).unwrap();
+    let obligation_data = client.get_account_data(&Pubkey::from_str("GZ57zaxfgq1eWvHvGtw1ASsydqGRWLCoqM2TmvYuw1Pw").unwrap()).unwrap();
+    let rate_oracle_data = client.get_account_data(&Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap()).unwrap();
+    let liquidity_price_oracle_data = client.get_account_data(&Pubkey::from_str("HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J").unwrap()).unwrap();
+    
+    let collateral_price_oracle_key = Pubkey::from_str("GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b").unwrap();
+    let collateral_price_oracle_data = client.get_account_data(&collateral_price_oracle_key).unwrap();
+    let mut collaterals_price_oracle_map = HashMap::<Pubkey, Vec<u8>>::new();
+    collaterals_price_oracle_map.insert(collateral_price_oracle_key, collateral_price_oracle_data);
+
+    match UserObligationInfo::from_raw_data(
+        &clock_data,
+        &market_reserve_data,
+        &obligation_data,
+        &rate_oracle_data,
+        &liquidity_price_oracle_data,
+        &collaterals_price_oracle_map
+    ) {
+        Ok(obligation) => {
+            let value = obligation.get_effective_value();
+            println!("{:?}, loan value: {}, dept: {}, borrowed: {}", value, obligation.loan_value, obligation.dept_amount, obligation.borrowed_amount);
+        }
+        Err(e) => println!("{:?}", e),
+    }
 
     //// create manager
     // let lamports = client.get_minimum_balance_for_rent_exemption(Manager::LEN).unwrap();
@@ -68,31 +97,31 @@ fn main() {
     // }
 
     // create market reserve (no liquidity)
-    let account_lamports = client.get_minimum_balance_for_rent_exemption(Account::LEN).unwrap();
-    let reserve_lamports = client.get_minimum_balance_for_rent_exemption(MarketReserve::LEN).unwrap();
-    let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
-    let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    let transaction = create_market_reserve_without_liquidity(
-        authority,
-        Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
-        Pubkey::from_str("2weC6fjXrfaCLQpqEzdgBHpz6yVNvmSN133m7LDuZaDb").unwrap(),
-        Pubkey::from_str("GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b").unwrap(),
-        Pubkey::from_str("6mhUyoQR5CcHN4RJ5PSfcvTjRuWF742ypZeMwptPgFnK").unwrap(),
-        CollateralConfig {
-            liquidation_1_fee_rate: 25_000_000_000_000_000, // 2.5%
-            liquidation_2_repay_rate: 900_000_000_000_000_000,  // 95%
-            borrow_value_ratio: 60, 
-            liquidation_value_ratio: 70,
-            close_factor: 60,
-        },
-        reserve_lamports,
-        account_lamports, 
-        block_hash
-    ).unwrap();
-    match client.send_and_confirm_transaction(&transaction) {
-        Ok(sig) => println!("sig is {:?}", sig),
-        Err(err) => println!("error: {:?}", err),
-    }
+    // let account_lamports = client.get_minimum_balance_for_rent_exemption(Account::LEN).unwrap();
+    // let reserve_lamports = client.get_minimum_balance_for_rent_exemption(MarketReserve::LEN).unwrap();
+    // let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
+    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    // let transaction = create_market_reserve_without_liquidity(
+    //     authority,
+    //     Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
+    //     Pubkey::from_str("2weC6fjXrfaCLQpqEzdgBHpz6yVNvmSN133m7LDuZaDb").unwrap(),
+    //     Pubkey::from_str("GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b").unwrap(),
+    //     Pubkey::from_str("6mhUyoQR5CcHN4RJ5PSfcvTjRuWF742ypZeMwptPgFnK").unwrap(),
+    //     CollateralConfig {
+    //         liquidation_1_fee_rate: 25_000_000_000_000_000, // 2.5%
+    //         liquidation_2_repay_rate: 900_000_000_000_000_000,  // 95%
+    //         borrow_value_ratio: 60, 
+    //         liquidation_value_ratio: 70,
+    //         close_factor: 60,
+    //     },
+    //     reserve_lamports,
+    //     account_lamports, 
+    //     block_hash
+    // ).unwrap();
+    // match client.send_and_confirm_transaction(&transaction) {
+    //     Ok(sig) => println!("sig is {:?}", sig),
+    //     Err(err) => println!("error: {:?}", err),
+    // }
 
     // create market reserve (with liquidity)
     // let account_lamports = client.get_minimum_balance_for_rent_exemption(Account::LEN).unwrap();
@@ -132,7 +161,7 @@ fn main() {
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
     // let transaction = create_user_obligation(
     //     authority,
-    //     &Pubkey::from_str("BL1GswxJmUvNwoxWy77B7gdL9744YJqm4oGFjj94fNxk").unwrap(),
+    //     Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap(),
     //     lamports, 
     //     block_hash
     // );
@@ -143,11 +172,11 @@ fn main() {
 
     // create user asset
     // let lamports = client.get_minimum_balance_for_rent_exemption(UserAsset::LEN).unwrap();
-    // let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
     // let transaction = create_user_asset(
     //     authority,
-    //     &Pubkey::from_str("BL1GswxJmUvNwoxWy77B7gdL9744YJqm4oGFjj94fNxk").unwrap(),
+    //     Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap(),
     //     lamports, 
     //     block_hash
     // );
@@ -172,16 +201,16 @@ fn main() {
     // }
 
     // deposit liquidity
-    // let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
     // let transaction = do_deposit_liquidity(
     //     authority,
-    //     &Pubkey::from_str("BL1GswxJmUvNwoxWy77B7gdL9744YJqm4oGFjj94fNxk").unwrap(),
-    //     &Pubkey::from_str("7zFv7xf1iczcEdDAKyDu5qBeVDs688pRy6izbkpejmEk").unwrap(),
-    //     &Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
-    //     &Pubkey::from_str("CpE7sLcgUorqqgHdmsKerTPW1yWRaLPfQj9pWj7YojHG").unwrap(),
-    //     &Pubkey::from_str("GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN").unwrap(),
-    //     10_000_000_000_000,
+    //     Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap(),
+    //     Pubkey::from_str("3sAzDiT2dBjrCPsADnRUPEUi8wquWxNynHDCnnU3M8z1").unwrap(),
+    //     Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
+    //     Pubkey::from_str("Csvk8Wp3AxVaVQqDQgP6KLVMCLEvuypEKtPD6xhAvV8L").unwrap(),
+    //     Pubkey::from_str("GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN").unwrap(),
+    //     1_000_000_000_000_000,
     //     block_hash,
     // );
     // match client.send_and_confirm_transaction(&transaction) {
@@ -190,16 +219,16 @@ fn main() {
     // }
 
     // withdraw liquidity
-    // let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
     // let transaction = do_withdraw_liquidity(
     //     authority,
-    //     &Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
-    //     &Pubkey::from_str("BL1GswxJmUvNwoxWy77B7gdL9744YJqm4oGFjj94fNxk").unwrap(),
-    //     &Pubkey::from_str("7zFv7xf1iczcEdDAKyDu5qBeVDs688pRy6izbkpejmEk").unwrap(),
-    //     &Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
-    //     &Pubkey::from_str("CpE7sLcgUorqqgHdmsKerTPW1yWRaLPfQj9pWj7YojHG").unwrap(),
-    //     &Pubkey::from_str("GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN").unwrap(),
+    //     Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
+    //     Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap(),
+    //     Pubkey::from_str("3sAzDiT2dBjrCPsADnRUPEUi8wquWxNynHDCnnU3M8z1").unwrap(),
+    //     Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
+    //     Pubkey::from_str("Csvk8Wp3AxVaVQqDQgP6KLVMCLEvuypEKtPD6xhAvV8L").unwrap(),
+    //     Pubkey::from_str("GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN").unwrap(),
     //     1_000_000_000_000,
     //     block_hash,
     // );
@@ -209,15 +238,15 @@ fn main() {
     // }
 
     // deposit collateral
-    // let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
     // let transaction = do_deposit_collateral(
     //     authority,
-    //     &Pubkey::from_str("7qZBgT8AKpiiCBGzmN5Z1KuqNfk7xtaDSJxnskYRv2A2").unwrap(),
-    //     &Pubkey::from_str("743oo4CaCA6AQXE6e29VA1EQiqPupo2wD4kHcvdKzj5o").unwrap(),
-    //     &Pubkey::from_str("HqDgtCXwyyaARnURGWeBAC2ZfNATivPKr5YkYZeFRcQm").unwrap(),
-    //     &Pubkey::from_str("EnpPrZtpsKb2CK6Jyue6tYi4vPmztLXPDKdco3WnRYuS").unwrap(),
-    //     500_000_000_000,
+    //     Pubkey::from_str("6MRdknnThzPSz1vkfMAYWnepnAF5wGitRTNrJ6rrQe1s").unwrap(),
+    //     Pubkey::from_str("3vtj3VomHHAoqHKtJQL1ymEP6GQmzXHb9TD1LRkBoxFq").unwrap(),
+    //     Pubkey::from_str("GZ57zaxfgq1eWvHvGtw1ASsydqGRWLCoqM2TmvYuw1Pw").unwrap(),
+    //     Pubkey::from_str("EnpPrZtpsKb2CK6Jyue6tYi4vPmztLXPDKdco3WnRYuS").unwrap(),
+    //     10000_000_000_000,
     //     block_hash,
     // );
     // match client.send_and_confirm_transaction(&transaction) {
@@ -231,20 +260,55 @@ fn main() {
     // let transaction = do_borrow_liquidity(
     //     authority,
     //     Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
-    //     Pubkey::from_str("BL1GswxJmUvNwoxWy77B7gdL9744YJqm4oGFjj94fNxk").unwrap(),
-    //     Pubkey::from_str("7zFv7xf1iczcEdDAKyDu5qBeVDs688pRy6izbkpejmEk").unwrap(),
+    //     Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap(),
+    //     Pubkey::from_str("3sAzDiT2dBjrCPsADnRUPEUi8wquWxNynHDCnnU3M8z1").unwrap(),
     //     Pubkey::from_str("HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J").unwrap(),
     //     Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
-    //     Pubkey::from_str("HqDgtCXwyyaARnURGWeBAC2ZfNATivPKr5YkYZeFRcQm").unwrap(),
-    //     Pubkey::from_str("GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN").unwrap(),
     //     vec![Pubkey::from_str("GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b").unwrap()],
-    //     1_000_000,
+    //     Pubkey::from_str("GZ57zaxfgq1eWvHvGtw1ASsydqGRWLCoqM2TmvYuw1Pw").unwrap(),
+    //     Pubkey::from_str("GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN").unwrap(),
+    //     20_000_000_000,
     //     block_hash,
     // );
     // match client.send_and_confirm_transaction(&transaction) {
     //     Ok(sig) => println!("sig is {:?}", sig),
     //     Err(err) => println!("error: {:?}", err),
     // }
+
+    // redeem collateral
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
+    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    // let transaction = do_redeem_collateral(
+    //     authority,
+    //     Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
+    //     Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap(),
+    //     Pubkey::from_str("3vtj3VomHHAoqHKtJQL1ymEP6GQmzXHb9TD1LRkBoxFq").unwrap(),
+    //     Pubkey::from_str("HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J").unwrap(),
+    //     Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
+    //     Pubkey::from_str("6MRdknnThzPSz1vkfMAYWnepnAF5wGitRTNrJ6rrQe1s").unwrap(),
+    //     vec![Pubkey::from_str("GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b").unwrap()],
+    //     Pubkey::from_str("GZ57zaxfgq1eWvHvGtw1ASsydqGRWLCoqM2TmvYuw1Pw").unwrap(),
+    //     Pubkey::from_str("EnpPrZtpsKb2CK6Jyue6tYi4vPmztLXPDKdco3WnRYuS").unwrap(),
+    //     9_000_000_000_000,
+    //     block_hash,
+    // );
+    // match client.send_and_confirm_transaction(&transaction) {
+    //     Ok(sig) => println!("sig is {:?}", sig),
+    //     Err(err) => println!("error: {:?}", err),
+    // }
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -288,13 +352,3 @@ fn main() {
     //     Err(err) => println!("error: {:?}", err),
     // }
 }
-
-// fn get_pyth_price(pyth_price_data: &[u8]) -> Result<u64, ProgramError> {
-//     const STALE_AFTER_SLOTS_ELAPSED: u64 = 5;
-
-//     let pyth_price = pyth::load::<pyth::Price>(pyth_price_data)
-//         .map_err(|_| ProgramError::InvalidAccountData)?;
-
-//     println!("{:?}", pyth_price.ptype);
-//     Ok(0)
-// }

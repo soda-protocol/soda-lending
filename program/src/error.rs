@@ -258,6 +258,9 @@ pub enum LendingError {
     ///
     #[error("Liquidation too much")]
     LiquidationTooMuch,
+    ///
+    #[error("Price oracle not matched")]
+    PriceOracleNotMatched,
 }
 
 impl From<LendingError> for ProgramError {
