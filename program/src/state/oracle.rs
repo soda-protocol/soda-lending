@@ -25,10 +25,11 @@ pub struct RateOracle {
 
 impl RateOracle {
     pub fn feed(&mut self, interest_rate: u64, borrow_rate: u64, slot: Slot) {
+        // let unit_secs = DEFAULT_TICKS_PER_SECOND * unit_secs / DEFAULT_TICKS_PER_SLOT;
+        self.status = true;
+        self.timestamp = slot;
         self.interest_rate = interest_rate;
         self.borrow_rate = borrow_rate;
-        self.timestamp = slot;
-        self.status = true;
     }
 
     pub fn check_valid(&self, slot: Slot) -> ProgramResult {

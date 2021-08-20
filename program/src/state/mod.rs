@@ -22,7 +22,7 @@ use crate::{
 };
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use solana_program::{
-    clock::{Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, SECONDS_PER_DAY},
+    clock::Slot,
     msg,
     program_error::ProgramError,
     program_option::COption,
@@ -36,9 +36,6 @@ pub const PROGRAM_VERSION: u8 = 1;
 /// Accounts are created with data zeroed out, so uninitialized state instances
 /// will have the version set to 0.
 pub const UNINITIALIZED_VERSION: u8 = 0;
-
-/// Number of slots per year
-pub const SLOTS_PER_YEAR: u64 = DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY * 365 / DEFAULT_TICKS_PER_SLOT;
 
 ///
 pub const COPTION_LEN: usize = 4;
@@ -271,7 +268,6 @@ pub fn calculate_decimals(decimal: u8) -> Result<u64, ProgramError> {
 pub fn calculate_borrow_interest(base: u64, rate: Rate, elapsed: Slot) -> Result<u64, ProgramError> {
     Decimal::from(base)
         .try_mul(elapsed)?
-        .try_div(SLOTS_PER_YEAR)?
         .try_mul(rate)?
         .try_ceil_u64()
 }
@@ -279,7 +275,6 @@ pub fn calculate_borrow_interest(base: u64, rate: Rate, elapsed: Slot) -> Result
 #[inline(always)]
 pub fn calculate_compound_sum(base: u64, rate: Rate, elapsed: Slot) -> Result<u64, ProgramError> {
     let compounded_interest_rate = rate
-        .try_div(SLOTS_PER_YEAR)?
         .try_add(Rate::one())?
         .try_pow(elapsed)?;
     

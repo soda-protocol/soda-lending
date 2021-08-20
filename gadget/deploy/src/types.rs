@@ -27,7 +27,7 @@ pub struct CollateralInfo {
     ///
     pub price_oracle: Pubkey,
     ///
-    pub amount: f64,
+    pub amount: u64,
     ///
     pub borrow_equivalent_value: f64,
     ///
@@ -45,9 +45,9 @@ pub struct UserObligationInfo {
     ///
     pub collaterals: Vec<CollateralInfo>,
     /// 
-    pub borrowed_amount: f64,
+    pub borrowed_amount: u64,
     ///
-    pub dept_amount: f64,
+    pub dept_amount: u64,
     ///
     pub loan_value: f64,
     ///
@@ -86,15 +86,14 @@ impl UserObligationInfo {
                 let decimals = 10u64
                     .checked_pow(collateral.decimal as u32)
                     .ok_or(ProgramError::InvalidAccountData)?;
-                let amount = collateral.amount as f64 / decimals as f64;
 
-                let max_value = price * amount;
+                let max_value = price * (collateral.amount as f64 / decimals as f64);
                 let borrow_equivalent_value = max_value * (collateral.borrow_value_ratio as f64 / 100f64);
                 let liquidation_equivalent_value = max_value * (collateral.liquidation_value_ratio as f64 / 100f64);
 
                 Ok(CollateralInfo {
                     price_oracle: collateral.price_oracle,
-                    amount,
+                    amount: collateral.amount,
                     borrow_equivalent_value,
                     liquidation_equivalent_value,
                     max_value,
@@ -105,8 +104,6 @@ impl UserObligationInfo {
         let decimals = 10u64
             .checked_pow(market_reserve.token_info.decimal as u32)
             .ok_or(ProgramError::InvalidAccountData)?;
-        let borrowed_amount = obligation.borrowed_amount as f64 / decimals as f64;
-        let dept_amount = obligation.dept_amount as f64 / decimals as f64;
         let price = get_pyth_price(liquidity_price_oracle_data, clock)?;
 
         let (borrow_equivalent_value, liquidation_equivalent_value, max_value) = collaterals
@@ -123,9 +120,9 @@ impl UserObligationInfo {
             reserve: obligation.reserve,
             owner: obligation.owner,
             collaterals,
-            borrowed_amount,
-            dept_amount,
-            loan_value: dept_amount * price,
+            borrowed_amount: obligation.borrowed_amount,
+            dept_amount: obligation.dept_amount,
+            loan_value: (obligation.dept_amount as f64 / decimals as f64) * price,
             borrow_equivalent_value,
             liquidation_equivalent_value,
             max_value,

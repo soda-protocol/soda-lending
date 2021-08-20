@@ -117,6 +117,18 @@ impl fmt::Display for Rate {
     }
 }
 
+// impl From<u128> for Rate {
+//     fn from(scaled_val: u128) -> Self {
+//         Self(U128::from(scaled_val))
+//     }
+// }
+
+// impl From<u64> for Rate {
+//     fn from(scaled_val: u64) -> Self {
+//         Self(U128::from(scaled_val))
+//     }
+// }
+
 impl TryFrom<Decimal> for Rate {
     type Error = ProgramError;
     fn try_from(decimal: Decimal) -> Result<Self, Self::Error> {

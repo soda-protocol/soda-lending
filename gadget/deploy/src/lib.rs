@@ -521,17 +521,18 @@ pub fn do_redeem_collateral(
     user_authority: Keypair,
     manager_key: Pubkey,
     liquidity_market_reserve_key: Pubkey,
-    manager_token_account_key: Pubkey,
     liquidity_price_oracle_key: Pubkey,
     rate_oracle_key: Pubkey,
     collateral_market_reserve_key: Pubkey,
-    collateral_price_oracle_key: Pubkey,
+    manager_token_account_key: Pubkey,
     price_oracle_keys: Vec<Pubkey>,
     user_obligatiton_key: Pubkey,
     user_token_account_key: Pubkey,
+    collateral_oracle_index: usize,
     amount: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
+    let collateral_price_oracle_key = price_oracle_keys[collateral_oracle_index].clone();
     let user_authority_key = &user_authority.pubkey();
 
     Transaction::new_signed_with_payer(&[
@@ -565,8 +566,8 @@ pub fn do_redeem_collateral_without_loan(
     user_authority: Keypair,
     manager_key: Pubkey,
     liquidity_market_reserve_key: Pubkey,
-    manager_token_account_key: Pubkey,
     collateral_market_reserve_key: Pubkey,
+    manager_token_account_key: Pubkey,
     user_obligatiton_key: Pubkey,
     user_token_account_key: Pubkey,
     amount: u64,
@@ -603,10 +604,10 @@ pub fn do_liquidate(
     collateral_market_reserve_key: Pubkey,
     manager_collateral_token_account_key: Pubkey,
     price_oracle_keys: Vec<Pubkey>,
-    collateral_oracle_index: usize,
     user_obligatiton_key: Pubkey,
     liquidator_liquidity_account_key: Pubkey,
     liquidator_collateral_account_key: Pubkey,
+    collateral_oracle_index: usize,
     is_arbitrary: bool,
     amount: u64,
     recent_blockhash: Hash,
