@@ -367,6 +367,18 @@ impl UserObligation {
         }
     }
     ///
+    pub fn repay_all(&mut self) -> Settle {
+        let settle = Settle {
+            total: self.dept_amount,
+            interest: self.dept_amount - self.borrowed_amount,
+        };
+
+        self.dept_amount = 0;
+        self.borrowed_amount = 0;
+
+        settle
+    }
+    ///
     pub fn deposit(&mut self, index: usize, amount: u64) -> ProgramResult {
         self.collaterals[index].amount = self.collaterals[index].amount
             .checked_add(amount)

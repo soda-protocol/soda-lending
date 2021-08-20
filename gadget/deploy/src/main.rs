@@ -66,7 +66,8 @@ fn main() {
         &collaterals_price_oracle_map
     ) {
         Ok(obligation) => {
-            println!("borrow equivalent: {}, liquidation equivalent: {}, max: {}, loan: {}, dept amount: {}, borrowed amount: {}",
+            println!("borrow equivalent value: {}, liquidation equivalent value: {}, max value: {}, loan value: {},
+                dept amount: {}, borrowed amount: {}",
                 obligation.borrow_equivalent_value,
                 obligation.liquidation_equivalent_value,
                 obligation.max_value,

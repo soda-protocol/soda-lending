@@ -792,11 +792,6 @@ fn process_repay_loan(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
-        msg!("Repay loan amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
-
     let account_info_iter = &mut accounts.iter();
     let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
     let market_reserve_info = next_account_info(account_info_iter)?;
@@ -847,7 +842,11 @@ fn process_repay_loan(
 
     // handle obligation
     user_obligation.update_borrow_interest(clock.slot, Rate::from_scaled_val(rate_oracle.borrow_rate))?;
-    let settle = user_obligation.repay(amount)?;
+    let settle = if amount == 0 {
+        user_obligation.repay_all()
+    } else {
+        user_obligation.repay(amount)?
+    };
     user_obligation.last_update.update_slot(clock.slot, true);
     UserObligation::pack(user_obligation, &mut user_obligatiton_info.try_borrow_mut_data()?)?;
     // handle market reserve
