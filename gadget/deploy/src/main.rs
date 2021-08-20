@@ -281,7 +281,7 @@ fn main() {
     //     Err(err) => println!("error: {:?}", err),
     // }
 
-    // repay loan all
+    // repay loan
     // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
     // let transaction = do_repay_loan(
@@ -291,7 +291,7 @@ fn main() {
     //     Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
     //     Pubkey::from_str("GZ57zaxfgq1eWvHvGtw1ASsydqGRWLCoqM2TmvYuw1Pw").unwrap(),
     //     Pubkey::from_str("GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN").unwrap(),
-    //     0,
+    //     426700000,
     //     block_hash,
     // );
     // match client.send_and_confirm_transaction(&transaction) {
