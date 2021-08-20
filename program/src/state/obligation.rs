@@ -509,24 +509,26 @@ impl UserObligation {
             .checked_pow(self.collaterals[index].decimal as u32)
             .ok_or(LendingError::MathOverflow)?;
 
-        let repay_amount = collateral_price
-            .try_mul(amount)?
-            .try_div(decimals)?
-            .try_mul(loan_decimals)?
-            .try_div(self.loan_market_price)?
-            .try_mul(repay_ratio)?
-            .try_round_u64()?;
+        Err(LendingError::LiquidationTooMuch.into())
+
+        // let repay_amount = collateral_price
+        //     .try_mul(amount)?
+        //     .try_div(decimals)?
+        //     .try_mul(loan_decimals)?
+        //     .try_div(self.loan_market_price)?
+        //     .try_mul(repay_ratio)?
+        //     .try_round_u64()?;
         
-        // update collaterals
-        self.collaterals[index].amount = self.collaterals[index].amount
-            .checked_sub(amount)
-            .ok_or(LendingError::ObligationCollateralAmountInsufficient)?;
+        // // update collaterals
+        // self.collaterals[index].amount = self.collaterals[index].amount
+        //     .checked_sub(amount)
+        //     .ok_or(LendingError::ObligationCollateralAmountInsufficient)?;
 
-        if self.collaterals[index].amount == 0 {
-            self.collaterals.remove(index);
-        }
+        // if self.collaterals[index].amount == 0 {
+        //     self.collaterals.remove(index);
+        // }
 
-        self.repay(repay_amount)
+        // self.repay(repay_amount)
     }
 }
 
