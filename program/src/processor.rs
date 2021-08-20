@@ -1208,12 +1208,12 @@ fn process_liquidate(
     UserObligation::pack(user_obligation, &mut user_obligatiton_info.try_borrow_mut_data()?)?;
 
     // handle liquidity market reserve
-    liquidity_info.liquidity.liquidate(&settle, fee)?;
+    liquidity_info.liquidity.liquidate(&settle, fee).map_err(|_| LendingError::DebugError2)?;
     liquidity_market_reserve.timestamp = clock.slot;
     MarketReserve::pack(liquidity_market_reserve, &mut liquidity_market_reserve_info.try_borrow_mut_data()?)?;
 
     // handle collateral market reserve
-    collateral_market_reserve.collateral_info.redeem(amount)?;
+    collateral_market_reserve.collateral_info.redeem(amount).map_err(|_| LendingError::DebugError3)?;
     collateral_market_reserve.timestamp = clock.slot;
     MarketReserve::pack(collateral_market_reserve, &mut colleteral_market_reserve_info.try_borrow_mut_data()?)?;
 
