@@ -55,13 +55,14 @@ pub fn process_instruction(
             msg!("Instruction: Update Market Reserves");
             process_update_market_reserves(program_id, accounts)
         }
-        LendingInstruction::ExchangeLiquidityToCollateral { amount } => {
-            msg!("Instruction: Exchange Liquidity To Collateral");
-            process_exchange(program_id, accounts, amount, false)
-        }
-        LendingInstruction::ExchangeCollateralToLiquidity { amount } => {
-            msg!("Instruction: Exchange Collateral To Liquidity");
-            process_exchange(program_id, accounts, amount, true)
+        LendingInstruction::Exchange { from_collateral, amount } => {
+            let instruction = if from_collateral {
+                "collateral to liquidity"
+            } else {
+                "liquidity to collateral"
+            };
+            msg!("Instruction: Exchange from {}, amount = {}", instruction, amount);
+            process_exchange(program_id, accounts, amount, from_collateral)
         }
         LendingInstruction::InitUserObligation => {
             msg!("Instruction: Init User Obligation");
@@ -71,13 +72,10 @@ pub fn process_instruction(
             msg!("Instruction: Update User Obligation");
             process_update_user_obligation(program_id, accounts)
         }
-        LendingInstruction::BindFriend => {
-            msg!("Instruction: Bind Friend");
-            process_bind_or_unbind_friend(program_id, accounts, true)
-        }
-        LendingInstruction::UnbindFriend => {
-            msg!("Instruction: Unbind Friend");
-            process_bind_or_unbind_friend(program_id, accounts, false)
+        LendingInstruction::BindOrUnbindFriend { is_bind } => {
+            let instruction = if is_bind { "Bind" } else { "Unbind" };
+            msg!("Instruction: {} Friend", instruction);
+            process_bind_or_unbind_friend(program_id, accounts, is_bind)
         }
         LendingInstruction::DepositCollateral { amount } => {
             msg!("Instruction: Deposit Collateral: {}", amount);
@@ -136,14 +134,10 @@ pub fn process_instruction(
             process_withdraw_fee(program_id, accounts, amount)
         }
         #[cfg(feature = "case-injection")]
-        LendingInstruction::InjectUnhealthy => {
-            msg!("Instruction(Test): Inject Unhealthy");
-            process_inject_case(program_id, accounts, false)
-        }
-        #[cfg(feature = "case-injection")]
-        LendingInstruction::InjectLiquidition => {
-            msg!("Instruction(Test): Inject Liquidation");
-            process_inject_case(program_id, accounts, true)
+        LendingInstruction::InjectCase { is_liquidation } => {
+            let instruction = if is_liquidation { "Liquidation" } else { "Unhealthy" };
+            msg!("Instruction(Test): Inject {}", instruction);
+            process_inject_case(program_id, accounts, is_liquidation)
         }
     }
 }
