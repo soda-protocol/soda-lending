@@ -1,16 +1,10 @@
 #![allow(missing_docs)]
 pub mod types;
 
-use std::{str::FromStr, time::Duration, error::Error, thread};
+use std::str::FromStr;
 
-use solana_client::{
-    blockhash_query::BlockhashQuery, 
-    rpc_client::RpcClient, 
-    rpc_request::TokenAccountsFilter,
-};
 use solana_sdk::{
-    commitment_config::CommitmentConfig, 
-    hash::Hash, instruction::Instruction, 
+    hash::Hash,
     program_error::ProgramError, 
     program_pack::Pack, 
     pubkey::Pubkey, 
@@ -24,11 +18,12 @@ use spl_token::{
 };
 use soda_lending_contract::{
     instruction::{
-        bind_or_unbind_friend, borrow_liquidity, deposit_collateral, exchange,
+        bind_friend, borrow_liquidity, deposit_collateral, exchange,
         feed_rate_oracle, init_manager, init_market_reserve, init_rate_oracle,
         init_user_obligation, liquidate, pause_rate_oracle, redeem_collateral,
         redeem_collateral_without_loan, repay_loan, replace_collateral,
-        update_market_reserves, update_user_obligation, withdraw_fee
+        unbind_friend, update_market_reserves, update_user_obligation, withdraw_fee,
+        inject_case,
     },
     math::WAD, pyth::{self, Product},
     state::{CollateralConfig, LiquidityConfig, Manager,
@@ -96,7 +91,7 @@ pub fn create_token(
     ))
 }
 
-fn create_lending_manager(
+fn create_manager(
     manager: Keypair,
     authority: Keypair,
     lamports: u64,
@@ -309,12 +304,11 @@ pub fn create_user_obligation(
     )
 }
 
-pub fn do_bind_or_unbind_friend(
+pub fn do_bind_friend(
     user_authority: Keypair,
     friend_authority: Keypair,
     user_obligation_key: Pubkey,
     friend_obligation_key: Pubkey,
-    is_bind: bool,
     lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
@@ -322,12 +316,52 @@ pub fn do_bind_or_unbind_friend(
     let friend_authority_key = &friend_authority.pubkey();
 
     Transaction::new_signed_with_payer(&[
-        bind_or_unbind_friend(
+        bind_friend(
             user_obligation_key,
             friend_obligation_key,
             *user_authority_key,
             *friend_authority_key,
-            is_bind
+        ),
+    ],
+    Some(user_authority_key),
+        &[&user_authority, &friend_authority],
+        recent_blockhash,
+    )
+}
+
+pub fn do_unbind_friend(
+    user_authority: Keypair,
+    friend_authority: Keypair,
+    user_updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    friend_updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    user_obligation_key: Pubkey,
+    friend_obligation_key: Pubkey,
+    lamports: u64,
+    recent_blockhash: Hash,
+) -> Transaction {
+    let user_authority_key = &user_authority.pubkey();
+    let friend_authority_key = &friend_authority.pubkey();
+
+    let user_market_reserves = user_updating_keys
+        .iter()
+        .map(|reserve| reserve.0)
+        .collect::<Vec<_>>();
+
+    let friend_market_reserves = friend_updating_keys
+        .iter()
+        .map(|reserve| reserve.0)
+        .collect::<Vec<_>>();
+
+    Transaction::new_signed_with_payer(&[
+        update_market_reserves(user_updating_keys),
+        update_user_obligation(user_obligation_key, user_market_reserves),
+        update_market_reserves(friend_updating_keys),
+        update_user_obligation(friend_obligation_key, friend_market_reserves),
+        unbind_friend(
+            user_obligation_key,
+            friend_obligation_key,
+            *user_authority_key,
+            *friend_authority_key,
         ),
     ],
     Some(user_authority_key),
@@ -373,7 +407,6 @@ pub fn do_redeem_collateral(
     manager_key: Pubkey,
     sotoken_mint_key: Pubkey,
     user_obligation_key: Pubkey,
-    user_obligation_2_key: Option<Pubkey>,
     user_sotoken_account_key: Pubkey,
     amount: u64,
     recent_blockhash: Hash,
@@ -396,7 +429,60 @@ pub fn do_redeem_collateral(
             *market_reserve_key,
             sotoken_mint_key,
             user_obligation_key,
-            user_obligation_2_key,
+            None,
+            *user_authority_key,
+            user_sotoken_account_key,
+            amount,
+        ),
+    ],
+    Some(user_authority_key),
+        &[&user_authority],
+        recent_blockhash,
+    );
+
+    Ok(transaction)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn do_redeem_collateral_with_friend(
+    user_authority: Keypair,
+    user_updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    friend_updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    redeem_index: usize,
+    manager_key: Pubkey,
+    sotoken_mint_key: Pubkey,
+    user_obligation_key: Pubkey,
+    friend_obligation_key: Pubkey,
+    user_sotoken_account_key: Pubkey,
+    amount: u64,
+    recent_blockhash: Hash,
+) -> Result<Transaction, ProgramError> {
+    let user_authority_key = &user_authority.pubkey();    
+    let user_market_reserves = user_updating_keys
+        .iter()
+        .map(|reserve| reserve.0)
+        .collect::<Vec<_>>();
+
+    let friend_market_reserves = friend_updating_keys
+        .iter()
+        .map(|reserve| reserve.0)
+        .collect::<Vec<_>>();
+
+    let market_reserve_key = user_market_reserves
+        .get(redeem_index)
+        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+
+    let transaction = Transaction::new_signed_with_payer(&[
+        update_market_reserves(user_updating_keys),
+        update_user_obligation(user_obligation_key, user_market_reserves),
+        update_market_reserves(friend_updating_keys),
+        update_user_obligation(friend_obligation_key, friend_market_reserves),
+        redeem_collateral(
+            manager_key,
+            *market_reserve_key,
+            sotoken_mint_key,
+            user_obligation_key,
+            Some(friend_obligation_key),
             *user_authority_key,
             user_sotoken_account_key,
             amount,
@@ -417,7 +503,7 @@ pub fn do_redeem_collateral_without_loan(
     market_reserve_key: Pubkey,
     sotoken_mint_key: Pubkey,
     user_obligation_key: Pubkey,
-    user_obligation_2_key: Option<Pubkey>,
+    friend_obligation_key: Option<Pubkey>,
     user_authority_key: Pubkey,
     user_sotoken_account_key: Pubkey,
     amount: u64,
@@ -431,7 +517,7 @@ pub fn do_redeem_collateral_without_loan(
             market_reserve_key,
             sotoken_mint_key,
             user_obligation_key,
-            user_obligation_2_key,
+            friend_obligation_key,
             *user_authority_key,
             user_sotoken_account_key,
             amount,
@@ -453,7 +539,6 @@ pub fn do_replace_collateral(
     out_sotoken_mint_key: Pubkey,
     in_sotoken_mint_key: Pubkey,
     user_obligation_key: Pubkey,
-    user_obligation_2_key: Option<Pubkey>,
     user_out_sotoken_account_key: Pubkey,
     user_in_sotoken_account_key: Pubkey,
     out_amount: u64,
@@ -484,7 +569,72 @@ pub fn do_replace_collateral(
             *in_market_reserve_key,
             in_sotoken_mint_key,
             user_obligation_key,
-            user_obligation_2_key,
+            None,
+            *user_authority_key,
+            user_out_sotoken_account_key,
+            user_in_sotoken_account_key,
+            out_amount,
+            in_amount
+        ),
+    ],
+    Some(user_authority_key),
+        &[&user_authority],
+        recent_blockhash,
+    );
+
+    Ok(transaction)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn do_replace_collateral_with_friend(
+    user_authority: Keypair,
+    user_updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    friend_updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    replace_out_index: usize,
+    replace_in_index: usize,
+    manager_key: Pubkey,
+    out_sotoken_mint_key: Pubkey,
+    in_sotoken_mint_key: Pubkey,
+    user_obligation_key: Pubkey,
+    friend_obligation_key: Pubkey,
+    user_out_sotoken_account_key: Pubkey,
+    user_in_sotoken_account_key: Pubkey,
+    out_amount: u64,
+    in_amount: u64,
+    recent_blockhash: Hash,
+) -> Result<Transaction, ProgramError> {
+    let user_authority_key = &user_authority.pubkey();    
+    let user_market_reserves = user_updating_keys
+        .iter()
+        .map(|reserve| reserve.0)
+        .collect::<Vec<_>>();
+
+    let friend_market_reserves = friend_updating_keys
+        .iter()
+        .map(|reserve| reserve.0)
+        .collect::<Vec<_>>();
+
+    let out_market_reserve_key = user_market_reserves
+        .get(replace_out_index)
+        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+
+    let in_market_reserve_key = user_market_reserves
+        .get(replace_in_index)
+        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+
+    let transaction = Transaction::new_signed_with_payer(&[
+        update_market_reserves(user_updating_keys),
+        update_user_obligation(user_obligation_key, user_market_reserves),
+        update_market_reserves(friend_updating_keys),
+        update_user_obligation(friend_obligation_key, friend_market_reserves),
+        replace_collateral(
+            manager_key,
+            *out_market_reserve_key,
+            out_sotoken_mint_key,
+            *in_market_reserve_key,
+            in_sotoken_mint_key,
+            user_obligation_key,
+            Some(friend_obligation_key),
             *user_authority_key,
             user_out_sotoken_account_key,
             user_in_sotoken_account_key,
@@ -508,7 +658,6 @@ pub fn do_borrow_liquidity(
     manager_key: Pubkey,
     manager_token_account_key: Pubkey,
     user_obligation_key: Pubkey,
-    user_obligation_2_key: Option<Pubkey>,
     user_token_account_key: Pubkey,
     amount: u64,
     recent_blockhash: Hash,
@@ -531,7 +680,60 @@ pub fn do_borrow_liquidity(
             *market_reserve_key,
             manager_token_account_key,
             user_obligation_key,
-            user_obligation_2_key,
+            None,
+            *user_authority_key,
+            user_token_account_key,
+            amount,
+        ),
+    ],
+    Some(user_authority_key),
+        &[&user_authority],
+        recent_blockhash,
+    );
+
+    Ok(transaction)
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn do_borrow_liquidity_with_friend(
+    user_authority: Keypair,
+    user_updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    friend_updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    borrow_index: usize,
+    manager_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    user_obligation_key: Pubkey,
+    friend_obligation_key: Pubkey,
+    user_token_account_key: Pubkey,
+    amount: u64,
+    recent_blockhash: Hash,
+) -> Result<Transaction, ProgramError> {
+    let user_authority_key = &user_authority.pubkey();    
+    let user_market_reserves = user_updating_keys
+        .iter()
+        .map(|reserve| reserve.0)
+        .collect::<Vec<_>>();
+
+    let friend_market_reserves = friend_updating_keys
+        .iter()
+        .map(|reserve| reserve.0)
+        .collect::<Vec<_>>();
+
+    let market_reserve_key = user_market_reserves
+        .get(borrow_index)
+        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+
+    let transaction = Transaction::new_signed_with_payer(&[
+        update_market_reserves(user_updating_keys),
+        update_user_obligation(user_obligation_key, user_market_reserves),
+        update_market_reserves(friend_updating_keys),
+        update_user_obligation(friend_obligation_key, friend_market_reserves),
+        borrow_liquidity(
+            manager_key,
+            *market_reserve_key,
+            manager_token_account_key,
+            user_obligation_key,
+            Some(friend_obligation_key),
             *user_authority_key,
             user_token_account_key,
             amount,
@@ -578,73 +780,136 @@ pub fn do_repay_loan(
 #[allow(clippy::too_many_arguments)]
 pub fn do_liquidate(
     liquidator_authority: Keypair,
+    updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    collateral_index: usize,
+    loan_index: usize,
     manager_key: Pubkey,
-    liquidity_market_reserve_key: Pubkey,
-    manager_liquidity_token_account_key: Pubkey,
-    liquidity_price_oracle_key: Pubkey,
-    rate_oracle_key: Pubkey,
-    collateral_market_reserve_key: Pubkey,
-    manager_collateral_token_account_key: Pubkey,
-    price_oracle_keys: Vec<Pubkey>,
-    user_obligatiton_key: Pubkey,
-    liquidator_liquidity_account_key: Pubkey,
-    liquidator_collateral_account_key: Pubkey,
-    collateral_oracle_index: usize,
-    is_arbitrary: bool,
+    manager_token_account_key: Pubkey,
+    sotoken_mint_key: Pubkey,
+    user_obligation_key: Pubkey,
+    liquidator_token_account_key: Pubkey,
+    liquidator_sotoken_account_key: Pubkey,
     amount: u64,
     recent_blockhash: Hash,
-) -> Transaction {
-    let collateral_price_oracle_key = price_oracle_keys[collateral_oracle_index].clone();
-    let liquidator_authority_key = &liquidator_authority.pubkey();
+) -> Result<Transaction, ProgramError> {
+    let liquidator_authority_key = &liquidator_authority.pubkey();    
+    let market_reserves = updating_keys
+        .iter()
+        .map(|reserve| reserve.0)
+        .collect::<Vec<_>>();
 
-    Transaction::new_signed_with_payer(&[
-        update_user_obligation(
-            liquidity_market_reserve_key,
-            liquidity_price_oracle_key,
-            rate_oracle_key,
-            user_obligatiton_key,
-            price_oracle_keys,
-        ),
+    let collateral_market_reserve_key = market_reserves
+        .get(collateral_index)
+        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+
+    let loan_market_reserve_key = market_reserves
+        .get(loan_index)
+        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+
+    let transaction = Transaction::new_signed_with_payer(&[
+        update_market_reserves(updating_keys),
+        update_user_obligation(user_obligation_key, market_reserves),
         liquidate(
             manager_key,
-            liquidity_market_reserve_key,
-            manager_liquidity_token_account_key,
-            collateral_market_reserve_key,
-            collateral_price_oracle_key,
-            manager_collateral_token_account_key,
-            user_obligatiton_key,
+            *collateral_market_reserve_key,
+            sotoken_mint_key,
+            *loan_market_reserve_key,
+            manager_token_account_key,
+            user_obligation_key,
+            None,
             *liquidator_authority_key,
-            liquidator_liquidity_account_key,
-            liquidator_collateral_account_key,
-            is_arbitrary,
+            liquidator_token_account_key,
+            liquidator_sotoken_account_key,
             amount,
         ),
     ],
     Some(liquidator_authority_key),
         &[&liquidator_authority],
         recent_blockhash,
-    )
+    );
+
+    Ok(transaction)
 }
 
-pub fn do_feed_rate_oracle(
-    authority: &Keypair,
-    rate_oracle_key: &Pubkey,
-    interest_rate: u64,
-    borrow_rate: u64,
+#[allow(clippy::too_many_arguments)]
+pub fn do_liquidate_with_friend(
+    liquidator_authority: Keypair,
+    user_updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    friend_updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    collateral_index: usize,
+    loan_index: usize,
+    manager_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    sotoken_mint_key: Pubkey,
+    user_obligation_key: Pubkey,
+    friend_obligation_key: Pubkey,
+    liquidator_token_account_key: Pubkey,
+    liquidator_sotoken_account_key: Pubkey,
+    amount: u64,
+    recent_blockhash: Hash,
+) -> Result<Transaction, ProgramError> {
+    let liquidator_authority_key = &liquidator_authority.pubkey();    
+    let user_market_reserves = user_updating_keys
+        .iter()
+        .map(|reserve| reserve.0)
+        .collect::<Vec<_>>();
+
+    let friend_market_reserves = friend_updating_keys
+        .iter()
+        .map(|reserve| reserve.0)
+        .collect::<Vec<_>>();
+
+    let collateral_market_reserve_key = user_market_reserves
+        .get(collateral_index)
+        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+
+    let loan_market_reserve_key = user_market_reserves
+        .get(loan_index)
+        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+
+    let transaction = Transaction::new_signed_with_payer(&[
+        update_market_reserves(user_updating_keys),
+        update_user_obligation(user_obligation_key, user_market_reserves),
+        update_market_reserves(friend_updating_keys),
+        update_user_obligation(friend_obligation_key, friend_market_reserves),
+        liquidate(
+            manager_key,
+            *collateral_market_reserve_key,
+            sotoken_mint_key,
+            *loan_market_reserve_key,
+            manager_token_account_key,
+            user_obligation_key,
+            Some(friend_obligation_key),
+            *liquidator_authority_key,
+            liquidator_token_account_key,
+            liquidator_sotoken_account_key,
+            amount,
+        ),
+    ],
+    Some(liquidator_authority_key),
+        &[&liquidator_authority],
+        recent_blockhash,
+    );
+
+    Ok(transaction)
+}
+
+pub fn do_inject_case(
+    authority: Keypair,
+    user_obligation_key: Pubkey,
+    is_liquidation: bool,
     recent_blockhash: Hash,
 ) -> Transaction {
     let authority_key = &authority.pubkey();
 
     Transaction::new_signed_with_payer(&[
-        feed_rate_oracle(
-            *rate_oracle_key,
-            *authority_key,
-            interest_rate,
-            borrow_rate,
+        inject_case(
+            user_obligation_key,
+            is_liquidation
         ),
     ],
     Some(authority_key),
-        &[authority],
+        &[&authority],
         recent_blockhash,
     )
 }

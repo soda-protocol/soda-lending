@@ -39,9 +39,9 @@ pub fn process_instruction(
             msg!("Instruction: Init Lending Manager");
             process_init_manager(program_id, accounts, quote_currency)
         }
-        LendingInstruction::InitRateOracle { asset_index, config } => {
+        LendingInstruction::InitRateOracle { config } => {
             msg!("Instruction: Init Rate Oracle");
-            process_init_rate_oracle(program_id, accounts, asset_index, config)
+            process_init_rate_oracle(program_id, accounts, config)
         }
         LendingInstruction::InitMarketReserve {
             collateral_config,
@@ -103,10 +103,6 @@ pub fn process_instruction(
         LendingInstruction::Liquidate { amount } => {
             msg!("Instruction: Liquidation: amount = {}", amount);
             process_liquidate(program_id, accounts, amount)
-        }
-        LendingInstruction::FeedRateOracle { asset_index } => {
-            msg!("Instruction: Feed Rate Oracle: asset index = {}", asset_index);
-            process_feed_rate_oracle(program_id, accounts, asset_index)
         }
         LendingInstruction::PauseRateOracle => {
             msg!("Instruction: Pause Rate Oracle");
@@ -179,7 +175,6 @@ fn process_init_manager(
 fn process_init_rate_oracle(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    asset_index: u64,
     config: RateOracleConfig,
 ) -> ProgramResult {
     // check config
@@ -206,7 +201,6 @@ fn process_init_rate_oracle(
         owner: *owner_info.key,
         available: true,
         last_slot: clock.slot,
-        asset_index,
         config,
     };
     RateOracle::pack(rate_oracle, &mut rate_oracle_info.try_borrow_mut_data()?)
@@ -876,18 +870,18 @@ fn process_redeem_collateral(
         return Err(LendingError::ObligationStale.into());
     }
 
-    let user_obligation_2 = if let COption::Some(friend) = user_obligation.friend.as_ref() {
+    let friend_obligation = if let COption::Some(friend) = user_obligation.friend.as_ref() {
         // 7
-        let user_obligation_2_info = next_account_info(account_info_iter)?;
-        if user_obligation_2_info.key != friend {
+        let friend_obligation_info = next_account_info(account_info_iter)?;
+        if friend_obligation_info.key != friend {
             return Err(LendingError::UserObligationFriendNotMatched.into());
         }
-        let user_obligation_2 = UserObligation::unpack(&user_obligation_2_info.try_borrow_data()?)?;
-        if user_obligation_2.last_update.is_stale(clock.slot)? {
+        let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
+        if friend_obligation.last_update.is_stale(clock.slot)? {
             return Err(LendingError::ObligationStale.into());
         }
 
-        Some(user_obligation_2)
+        Some(friend_obligation)
     } else {
         None
     };
@@ -907,7 +901,7 @@ fn process_redeem_collateral(
 
     // redeem in obligation
     let index = user_obligation.find_collateral(*market_reserve_info.key)?;
-    let amount = user_obligation.redeem(amount, index, &market_reserve, user_obligation_2)?;
+    let amount = user_obligation.redeem(amount, index, &market_reserve, friend_obligation)?;
     
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
@@ -979,15 +973,15 @@ fn process_redeem_collateral_without_loan(
         return Err(LendingError::InvalidManager.into());
     }
 
-    let user_obligation_2 = if let COption::Some(friend) = user_obligation.friend.as_ref() {
+    let friend_obligation = if let COption::Some(friend) = user_obligation.friend.as_ref() {
         // 6
-        let user_obligation_2_info = next_account_info(account_info_iter)?;
-        if user_obligation_2_info.key != friend {
+        let friend_obligation_info = next_account_info(account_info_iter)?;
+        if friend_obligation_info.key != friend {
             return Err(LendingError::UserObligationFriendNotMatched.into());
         }
-        let user_obligation_2 = UserObligation::unpack(&user_obligation_2_info.try_borrow_data()?)?;
+        let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
 
-        Some(user_obligation_2)
+        Some(friend_obligation)
     } else {
         None
     };
@@ -1007,7 +1001,7 @@ fn process_redeem_collateral_without_loan(
 
     // redeem in obligation
     let index = user_obligation.find_collateral(*market_reserve_info.key)?;
-    let amount = user_obligation.redeem_without_loan(amount, index, user_obligation_2)?;
+    let amount = user_obligation.redeem_without_loan(amount, index, friend_obligation)?;
     
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
@@ -1108,18 +1102,18 @@ fn process_replace_collateral(
         return Err(LendingError::ObligationStale.into());
     }
 
-    let user_obligation_2 = if let COption::Some(friend) = user_obligation.friend.as_ref() {
+    let friend_obligation = if let COption::Some(friend) = user_obligation.friend.as_ref() {
         // 9
-        let user_obligation_2_info = next_account_info(account_info_iter)?;
-        if user_obligation_2_info.key != friend {
+        let friend_obligation_info = next_account_info(account_info_iter)?;
+        if friend_obligation_info.key != friend {
             return Err(LendingError::UserObligationFriendNotMatched.into());
         }
-        let user_obligation_2 = UserObligation::unpack(&user_obligation_2_info.try_borrow_data()?)?;
-        if user_obligation_2.last_update.is_stale(clock.slot)? {
+        let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
+        if friend_obligation.last_update.is_stale(clock.slot)? {
             return Err(LendingError::ObligationStale.into());
         }
 
-        Some(user_obligation_2)
+        Some(friend_obligation)
     } else {
         None
     };
@@ -1149,7 +1143,7 @@ fn process_replace_collateral(
             in_index,
             &out_market_reserve,
             &in_market_reserve,
-            user_obligation_2,
+            friend_obligation,
         )?
     } else {
         user_obligation.new_replace_collateral(
@@ -1159,7 +1153,7 @@ fn process_replace_collateral(
             *in_market_reserve_info.key,
             &out_market_reserve,
             &in_market_reserve,
-            user_obligation_2,
+            friend_obligation,
         )?
     };
 
@@ -1252,18 +1246,18 @@ fn process_borrow_liquidity(
         return Err(LendingError::ObligationStale.into());
     }
     
-    let user_obligation_2 = if let COption::Some(friend) = user_obligation.friend.as_ref() {
+    let friend_obligation = if let COption::Some(friend) = user_obligation.friend.as_ref() {
         // 7
-        let user_obligation_2_info = next_account_info(account_info_iter)?;
-        if user_obligation_2_info.key != friend {
+        let friend_obligation_info = next_account_info(account_info_iter)?;
+        if friend_obligation_info.key != friend {
             return Err(LendingError::UserObligationFriendNotMatched.into());
         }
-        let user_obligation_2 = UserObligation::unpack(&user_obligation_2_info.try_borrow_data()?)?;
-        if user_obligation_2.last_update.is_stale(clock.slot)? {
+        let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
+        if friend_obligation.last_update.is_stale(clock.slot)? {
             return Err(LendingError::ObligationStale.into());
         }
 
-        Some(user_obligation_2)
+        Some(friend_obligation)
     } else {
         None
     };
@@ -1283,9 +1277,9 @@ fn process_borrow_liquidity(
 
     // borrow
     let borrow_with_fee = if let Ok(index) = user_obligation.find_loan(*market_reserve_info.key) {
-        user_obligation.borrow_in(amount, index, &market_reserve, user_obligation_2)?
+        user_obligation.borrow_in(amount, index, &market_reserve, friend_obligation)?
     } else {
-        user_obligation.new_borrow_in(amount, *market_reserve_info.key, &market_reserve, user_obligation_2)?
+        user_obligation.new_borrow_in(amount, *market_reserve_info.key, &market_reserve, friend_obligation)?
     };
     let amount = borrow_with_fee.receiving()?;
     market_reserve.liquidity_info.borrow_out(borrow_with_fee)?;
@@ -1468,18 +1462,18 @@ fn process_liquidate(
         return Err(LendingError::ObligationStale.into());
     }
 
-    let user_obligation_2 = if let COption::Some(friend) = user_obligation.friend.as_ref() {
+    let friend_obligation = if let COption::Some(friend) = user_obligation.friend.as_ref() {
         // 9
-        let user_obligation_2_info = next_account_info(account_info_iter)?;
-        if user_obligation_2_info.key != friend {
+        let friend_obligation_info = next_account_info(account_info_iter)?;
+        if friend_obligation_info.key != friend {
             return Err(LendingError::UserObligationFriendNotMatched.into());
         }
-        let user_obligation_2 = UserObligation::unpack(&user_obligation_2_info.try_borrow_data()?)?;
-        if user_obligation_2.last_update.is_stale(clock.slot)? {
+        let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
+        if friend_obligation.last_update.is_stale(clock.slot)? {
             return Err(LendingError::ObligationStale.into());
         }
 
-        Some(user_obligation_2)
+        Some(friend_obligation)
     } else {
         None
     };
@@ -1501,7 +1495,7 @@ fn process_liquidate(
         loan_index,
         &collateral_market_reserve,
         &loan_market_reserve,
-        user_obligation_2,
+        friend_obligation,
     )?;
     let repay_amount = liquidation_with_fee.need_pay()?;
     loan_market_reserve.liquidity_info.liquidate(liquidation_with_fee)?;
@@ -1529,36 +1523,6 @@ fn process_liquidate(
         authority_signer_seeds,
         token_program: token_program_id.clone(),
     })
-}
-
-// by rate oracle manager
-fn process_feed_rate_oracle(
-    program_id: &Pubkey,
-    accounts: &[AccountInfo],
-    asset_index: u64,
-) -> ProgramResult {
-    let account_info_iter = &mut accounts.iter();
-    // 1
-    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
-    // 2
-    let rate_oracle_info = next_account_info(account_info_iter)?;
-    if rate_oracle_info.owner != program_id {
-        msg!("Rate oracle owner provided is not owned by the lending program");
-        return Err(LendingError::InvalidAccountOwner.into());
-    }
-    let mut rate_oracle = RateOracle::unpack(&rate_oracle_info.try_borrow_data()?)?;
-    // 3
-    let authority_info = next_account_info(account_info_iter)?;
-    if !authority_info.is_signer {
-        msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
-    }
-    if authority_info.key != &rate_oracle.owner {
-        return Err(LendingError::InvalidOracleAuthority.into())
-    }
-
-    rate_oracle.feed_asset_index(clock.slot, asset_index)?;
-    RateOracle::pack(rate_oracle, &mut rate_oracle_info.try_borrow_mut_data()?)
 }
 
 // by rate oracle manager

@@ -24,8 +24,6 @@ pub enum LendingInstruction {
     /// 1
     InitRateOracle {
         ///
-        asset_index: u64,
-        ///
         config: RateOracleConfig,
     },
     /// 2
@@ -92,35 +90,30 @@ pub enum LendingInstruction {
         amount: u64,   
     },
     /// 16
-    FeedRateOracle {
-        ///
-        asset_index: u64,
-    },
-    /// 17
     PauseRateOracle,
-    /// 18
+    /// 17
     UpdateRateOracleConfig{
         ///
         config: RateOracleConfig,
     },
-    /// 19
+    /// 18
     EnableBorrowForMarketReserve,
-    /// 20
+    /// 19
     UpdateMarketReserveCollateralConfig {
         ///
         config: CollateralConfig,
     },
-    /// 21
+    /// 20
     UpdateMarketReserveLiquidityConfig {
         ///
         config: LiquidityConfig,
     },
-    /// 22
+    /// 21
     WithdrawFee {
         ///
         amount: u64,
     },
-    /// 23
+    /// 22
     #[cfg(feature = "case-injection")]
     InjectCase {
         ///
@@ -140,9 +133,8 @@ impl LendingInstruction {
                 Self::InitManager { quote_currency }
             }
             1 => {
-                let (asset_index, rest) = Self::unpack_u64(rest)?;
                 let (config, _rest) = Self::unpack_rate_oracle_config(rest)?;
-                Self::InitRateOracle { asset_index, config }
+                Self::InitRateOracle { config }
             }
             2 => {
                 let (collateral_config, rest) = Self::unpack_collateral_config(rest)?;
@@ -189,30 +181,26 @@ impl LendingInstruction {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::Liquidate { amount }
             }
-            16 => {
-                let (asset_index, _rest) = Self::unpack_u64(rest)?;
-                Self::FeedRateOracle { asset_index }
-            }
-            17 => Self::PauseRateOracle,
-            18 => {
+            16 => Self::PauseRateOracle,
+            17 => {
                 let (config, _rest) = Self::unpack_rate_oracle_config(rest)?;
                 Self::UpdateRateOracleConfig { config } 
             }
-            19 => Self::EnableBorrowForMarketReserve,
-            20 => {
+            18 => Self::EnableBorrowForMarketReserve,
+            19 => {
                 let (config, _rest) = Self::unpack_collateral_config(rest)?;
                 Self::UpdateMarketReserveCollateralConfig { config }
             }
-            21 => {
+            20 => {
                 let (config, _rest) = Self::unpack_liquidity_config(rest)?;
                 Self::UpdateMarketReserveLiquidityConfig { config }
             }
-            22 => {
+            21 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::WithdrawFee { amount }
             }
             #[cfg(feature = "case-injection")]
-            23 => {
+            22 => {
                 let (is_liquidation, _rest) = Self::unpack_bool(rest)?;
                 Self::InjectCase { is_liquidation }
             }
@@ -225,12 +213,11 @@ impl LendingInstruction {
 
     fn unpack_rate_oracle_config(input: &[u8]) -> Result<(RateOracleConfig, &[u8]), ProgramError> {
         let (a, rest) = Self::unpack_u64(input)?;
-        let (b, rest) = Self::unpack_u64(rest)?;
         let (c, rest) = Self::unpack_u64(rest)?;
+        let (l_u, rest) = Self::unpack_u8(rest)?;
         let (k_u, rest) = Self::unpack_u128(rest)?;
-        let (k_i, rest) = Self::unpack_u128(rest)?;
 
-        Ok((RateOracleConfig { a, b, c, k_u, k_i }, rest))
+        Ok((RateOracleConfig { a, c, l_u, k_u }, rest))
     }
 
     fn unpack_collateral_config(input: &[u8]) -> Result<(CollateralConfig, &[u8]), ProgramError> {
@@ -341,9 +328,8 @@ impl LendingInstruction {
                 buf.push(0);
                 buf.extend_from_slice(&quote_currency[..]);
             }
-            Self::InitRateOracle { asset_index, config } => {
+            Self::InitRateOracle { config } => {
                 buf.push(1);
-                buf.extend_from_slice(&asset_index.to_le_bytes());
                 Self::pack_rate_oracle_config(config, &mut buf);
             }
             Self::InitMarketReserve {
@@ -395,31 +381,27 @@ impl LendingInstruction {
                 buf.push(15);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::FeedRateOracle { asset_index } => {
-                buf.push(16);
-                buf.extend_from_slice(&asset_index.to_le_bytes());
-            }
-            Self::PauseRateOracle => buf.push(17),
+            Self::PauseRateOracle => buf.push(16),
             Self::UpdateRateOracleConfig { config } => {
-                buf.push(18);
+                buf.push(17);
                 Self::pack_rate_oracle_config(config, &mut buf);
             }
-            Self::EnableBorrowForMarketReserve => buf.push(19),
+            Self::EnableBorrowForMarketReserve => buf.push(18),
             Self::UpdateMarketReserveCollateralConfig { config } => {
-                buf.push(20);
+                buf.push(19);
                 Self::pack_collateral_config(config, &mut buf);
             }
             Self::UpdateMarketReserveLiquidityConfig { config } => {
-                buf.push(21);
+                buf.push(20);
                 Self::pack_liquidity_config(config, &mut buf);
             }
             Self::WithdrawFee { amount } => {
-                buf.push(22);
+                buf.push(21);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             #[cfg(feature = "case-injection")]
             Self::InjectCase { is_liquidation } => {
-                buf.push(23);
+                buf.push(22);
                 buf.extend_from_slice(&(is_liquidation as u8).to_le_bytes());
             }
         }
@@ -428,10 +410,9 @@ impl LendingInstruction {
 
     fn pack_rate_oracle_config(config: RateOracleConfig, buf: &mut Vec<u8>) {
         buf.extend_from_slice(&config.a.to_le_bytes());
-        buf.extend_from_slice(&config.b.to_le_bytes());
         buf.extend_from_slice(&config.c.to_le_bytes());
+        buf.extend_from_slice(&config.l_u.to_le_bytes());
         buf.extend_from_slice(&config.k_u.to_le_bytes());
-        buf.extend_from_slice(&config.k_i.to_le_bytes());
     }
 
     fn pack_collateral_config(config: CollateralConfig, buf: &mut Vec<u8>) {
@@ -469,7 +450,6 @@ pub fn init_manager(
 pub fn init_rate_oracle(
     rate_oracle_key: Pubkey,
     owner_key: Pubkey,
-    asset_index: u64,
     config: RateOracleConfig,
 ) -> Instruction {
     Instruction {
@@ -480,7 +460,7 @@ pub fn init_rate_oracle(
             AccountMeta::new(rate_oracle_key, false),
             AccountMeta::new_readonly(owner_key, false),
         ],
-        data: LendingInstruction::InitRateOracle { asset_index, config }.pack(),
+        data: LendingInstruction::InitRateOracle { config }.pack(),
     }
 }
 
@@ -699,7 +679,7 @@ pub fn redeem_collateral(
     market_reserve_key: Pubkey,
     sotoken_mint_key: Pubkey,
     user_obligation_key: Pubkey,
-    user_obligation_2_key: Option<Pubkey>,
+    friend_obligation_key: Option<Pubkey>,
     user_authority_key: Pubkey,
     user_sotoken_account_key: Pubkey,
     amount: u64,
@@ -722,8 +702,8 @@ pub fn redeem_collateral(
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
-    if let Some(user_obligation_2_key) = user_obligation_2_key {
-        accounts.insert(6, AccountMeta::new_readonly(user_obligation_2_key, false))
+    if let Some(friend_obligation_key) = friend_obligation_key {
+        accounts.insert(6, AccountMeta::new_readonly(friend_obligation_key, false))
     }
 
     Instruction {
@@ -739,7 +719,7 @@ pub fn redeem_collateral_without_loan(
     market_reserve_key: Pubkey,
     sotoken_mint_key: Pubkey,
     user_obligation_key: Pubkey,
-    user_obligation_2_key: Option<Pubkey>,
+    friend_obligation_key: Option<Pubkey>,
     user_authority_key: Pubkey,
     user_sotoken_account_key: Pubkey,
     amount: u64,
@@ -761,8 +741,8 @@ pub fn redeem_collateral_without_loan(
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
-    if let Some(user_obligation_2_key) = user_obligation_2_key {
-        accounts.insert(5, AccountMeta::new_readonly(user_obligation_2_key, false))
+    if let Some(friend_obligation_key) = friend_obligation_key {
+        accounts.insert(5, AccountMeta::new_readonly(friend_obligation_key, false))
     }
 
     Instruction {
@@ -780,7 +760,7 @@ pub fn replace_collateral(
     in_market_reserve_key: Pubkey,
     in_sotoken_mint_key: Pubkey,
     user_obligation_key: Pubkey,
-    user_obligation_2_key: Option<Pubkey>,
+    friend_obligation_key: Option<Pubkey>,
     user_authority_key: Pubkey,
     user_out_sotoken_account_key: Pubkey,
     user_in_sotoken_account_key: Pubkey,
@@ -808,8 +788,8 @@ pub fn replace_collateral(
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
-    if let Some(user_obligation_2_key) = user_obligation_2_key {
-        accounts.insert(8, AccountMeta::new_readonly(user_obligation_2_key, false))
+    if let Some(friend_obligation_key) = friend_obligation_key {
+        accounts.insert(8, AccountMeta::new_readonly(friend_obligation_key, false))
     }
 
     Instruction {
@@ -825,7 +805,7 @@ pub fn borrow_liquidity(
     market_reserve_key: Pubkey,
     manager_token_account_key: Pubkey,
     user_obligation_key: Pubkey,
-    user_obligation_2_key: Option<Pubkey>,
+    friend_obligation_key: Option<Pubkey>,
     user_authority_key: Pubkey,
     user_token_account_key: Pubkey,
     amount: u64,
@@ -848,8 +828,8 @@ pub fn borrow_liquidity(
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
-    if let Some(user_obligation_2_key) = user_obligation_2_key {
-        accounts.insert(6, AccountMeta::new_readonly(user_obligation_2_key, false))
+    if let Some(friend_obligation_key) = friend_obligation_key {
+        accounts.insert(6, AccountMeta::new_readonly(friend_obligation_key, false))
     }
 
     Instruction {
@@ -893,7 +873,7 @@ pub fn liquidate(
     loan_market_reserve_key: Pubkey,
     manager_token_account_key: Pubkey,
     user_obligation_key: Pubkey,
-    user_obligation_2_key: Option<Pubkey>,
+    friend_obligation_key: Option<Pubkey>,
     liquidator_authority_key: Pubkey,
     liquidator_token_account_key: Pubkey,
     liquidator_sotoken_account_key: Pubkey,
@@ -920,30 +900,14 @@ pub fn liquidate(
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
-    if let Some(user_obligation_2_key) = user_obligation_2_key {
-        accounts.insert(8, AccountMeta::new_readonly(user_obligation_2_key, false))
+    if let Some(friend_obligation_key) = friend_obligation_key {
+        accounts.insert(8, AccountMeta::new_readonly(friend_obligation_key, false))
     }
 
     Instruction {
         program_id,
         accounts,
         data: LendingInstruction::Liquidate{ amount }.pack(),
-    }
-}
-
-pub fn feed_rate_oracle(
-    rate_oracle_key: Pubkey,
-    authority_key: Pubkey,
-    asset_index: u64,
-) -> Instruction {
-    Instruction {
-        program_id: id(),
-        accounts: vec![
-            AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new(rate_oracle_key, false),
-            AccountMeta::new_readonly(authority_key, true),
-        ],
-        data: LendingInstruction::FeedRateOracle{ asset_index }.pack(),
     }
 }
 
