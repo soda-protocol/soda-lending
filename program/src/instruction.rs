@@ -492,32 +492,40 @@ pub fn init_rate_oracle(
 #[allow(clippy::too_many_arguments)]
 pub fn init_market_reserve(
     manager_key: Pubkey,
+    manager_token_account_key: Pubkey,
     market_reserve_key: Pubkey,
     pyth_product_key: Pubkey,
     pyth_price_key: Pubkey,
     rate_oracle_key: Pubkey,
     token_mint_key: Pubkey,
     sotoken_mint_key: Pubkey,
-    token_account_key: Pubkey,
     authority_key: Pubkey,
     collateral_config: CollateralConfig,
     liquidity_config: LiquidityConfig,
     enable_borrow: bool,
 ) -> Instruction {
+    let program_id = id();
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
+        &program_id,
+    );
+
     Instruction {
-        program_id: id(),
+        program_id,
         accounts: vec![
             AccountMeta::new_readonly(sysvar::rent::id(), false),
             AccountMeta::new_readonly(sysvar::clock::id(), false),
             AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(manager_authority_key, false),
+            AccountMeta::new(manager_token_account_key, false),
             AccountMeta::new(market_reserve_key, false),
             AccountMeta::new_readonly(pyth_product_key, false),
             AccountMeta::new_readonly(pyth_price_key, false),
             AccountMeta::new_readonly(rate_oracle_key, false),
             AccountMeta::new_readonly(token_mint_key, false),
-            AccountMeta::new_readonly(sotoken_mint_key, false),
-            AccountMeta::new_readonly(token_account_key, false),
+            AccountMeta::new(sotoken_mint_key, false),
             AccountMeta::new_readonly(authority_key, true),
+            AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::InitMarketReserve{
             collateral_config,

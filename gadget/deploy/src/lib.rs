@@ -22,22 +22,14 @@ use spl_token::{
     instruction::{initialize_mint, initialize_account, mint_to},
     state::{Mint, Account},
 };
-use soda_lending_contract::{
-    math::WAD,
-    state::{
-        Manager, MarketReserve, RateOracle, UserAsset, UserObligation, 
-        CollateralConfig, LiquidityConfig
-    },
-    instruction::{
+use soda_lending_contract::{instruction::{
         init_manager, init_rate_oracle, init_market_reserve_without_liquidity,
         init_market_reserve_with_liquidity, init_user_obligation,
         init_user_asset, deposit_liquidity, withdraw_liquidity,
         deposit_collateral, update_user_obligation, borrow_liquidity, repay_loan,
         redeem_collateral, redeem_collateral_without_loan, liquidate, feed_rate_oracle,
         pause_rate_oracle, add_liquidity_to_market_reserve, withdraw_fee,
-    },
-    pyth::{self, Product},
-};
+    }, math::WAD, pyth::{self, Product}, state::{CollateralConfig, LiquidityConfig, Manager, MarketReserve, RateOracle, RateOracleConfig, UserObligation}};
 
 const PYTH_ID: &str = "gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s";
 const QUOTE_CURRENCY: &[u8; 32] = &[85, 83, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -135,6 +127,8 @@ fn create_lending_manager(
 fn create_rate_oracle(
     rate_oracle: Keypair,
     authority: Keypair,
+    asset_index: u64,
+    config: RateOracleConfig,
     lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
@@ -152,6 +146,8 @@ fn create_rate_oracle(
         init_rate_oracle(
             *rate_oracle_key,
             *authority_key,
+            asset_index,
+            config,
         )
     ],
     Some(authority_key),
@@ -161,23 +157,30 @@ fn create_rate_oracle(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn create_market_reserve_without_liquidity(
+pub fn create_market_reserve(
     authority: Keypair,
     manager_key: Pubkey,
     pyth_product_key: Pubkey,
     pyth_price_key: Pubkey,
-    mint_pubkey: Pubkey,
-    config: CollateralConfig,
+    rate_oracle_key: Pubkey,
+    token_mint_pubkey: Pubkey,
+    collateral_config: CollateralConfig,
+    liquidity_config: LiquidityConfig,
+    enable_borrow: bool,
     reserve_lamports: u64,
     account_lamports: u64,
     recent_blockhash: Hash,
 ) -> Result<Transaction, ProgramError> {
     let market_reserve = Keypair::new();
     let token_account = Keypair::new();
+    let sotoken_mint = Keypair::new();
     let market_reserve_key = &market_reserve.pubkey();
     let token_account_key = &token_account.pubkey();
+    let sotoken_mint_key = &sotoken_mint.pubkey();
 
-    println!("market reserve key: {:?}, token account key: {:?}", market_reserve_key, token_account_key);
+    println!("market reserve key: {:?}", market_reserve_key);
+    println!("token account key: {:?}", token_account_key);
+    println!("sotoken mint key: {:?}", sotoken_mint_key);
 
     let token_program_id = &spl_token::id();
     let authority_key = &authority.pubkey();
@@ -204,8 +207,11 @@ pub fn create_market_reserve_without_liquidity(
         initialize_account(
             token_program_id,
             token_account_key,
-            &mint_pubkey,
+            &token_mint_pubkey,
             manager_authority_key,
+        )?,
+        initialize_mint(
+            
         )?,
         init_market_reserve_without_liquidity(
             manager_key,

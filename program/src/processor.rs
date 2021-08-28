@@ -25,7 +25,7 @@ use solana_program::{
     pubkey::Pubkey,
     sysvar::{clock::Clock, rent::Rent, Sysvar}
 };
-use spl_token::{check_program_account, state::{Account, Mint}};
+use spl_token::{check_program_account, state::Mint};
 
 /// Processes an instruction
 pub fn process_instruction(
@@ -226,7 +226,8 @@ fn process_init_market_reserve(
 
     let account_info_iter = &mut accounts.iter();
     // 1
-    let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
+    let rent_info = next_account_info(account_info_iter)?;
+    let rent = &Rent::from_account_info(rent_info)?;
     // 2
     let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
     // 3
@@ -236,11 +237,19 @@ fn process_init_market_reserve(
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
-    let manager_authority = &Pubkey::create_program_address(
+    let manager_authority = Pubkey::create_program_address(
         &[manager_info.key.as_ref(), &[manager.bump_seed]],
         program_id
     )?;
     // 4
+    let manager_authority_info = next_account_info(account_info_iter)?;
+    if manager_authority_info.key != &manager_authority {
+        msg!("Manager authority is not matched with program address derived from manager info");
+        return Err(LendingError::InvalidManagerAuthority.into());
+    }
+    // 5
+    let manager_token_account_info = next_account_info(account_info_iter)?;
+    // 6
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
         msg!("MarketReserve owner provided is not owned by the lending program");
@@ -248,7 +257,7 @@ fn process_init_market_reserve(
     }
     assert_rent_exempt(rent, market_reserve_info)?;
     assert_uninitialized::<MarketReserve>(market_reserve_info)?;
-    // 5
+    // 7
     let pyth_product_info = next_account_info(account_info_iter)?;
     if pyth_product_info.owner != &manager.pyth_program_id {
         msg!("Pyth product account provided is not owned by the pyth program");
@@ -274,7 +283,7 @@ fn process_init_market_reserve(
         msg!("Lending market quote currency does not match the oracle quote currency");
         return Err(LendingError::InvalidOracleConfig.into());
     }
-    // 6
+    // 8
     let pyth_price_info = next_account_info(account_info_iter)?;
     if pyth_price_info.owner != &manager.pyth_program_id {
         msg!("Pyth price account provided is not owned by the lending market oracle program");
@@ -289,50 +298,18 @@ fn process_init_market_reserve(
         return Err(LendingError::InvalidOracleConfig.into());
     }
     let market_price = get_pyth_price(pyth_price_info, clock)?;
-    // 7
+    // 9
     let rate_oracle_info = next_account_info(account_info_iter)?;
     if rate_oracle_info.owner != program_id {
         return Err(LendingError::InvalidAccountOwner.into());
     }
     RateOracle::unpack(&rate_oracle_info.try_borrow_data()?)?;
-    // 8
-    let token_mint_info = next_account_info(account_info_iter)?;
-    if token_mint_info.owner != &manager.token_program_id {
-        msg!("Token mint info owner provided is not owned by the token program in manager");
-        return Err(LendingError::InvalidTokenProgram.into()); 
-    }
-    let token_mint = Mint::unpack(&token_mint_info.try_borrow_data()?)?;
-    // 9
-    let sotoken_mint_info = next_account_info(account_info_iter)?;
-    if sotoken_mint_info.owner != &manager.token_program_id {
-        msg!("SoToken mint info owner provided is not owned by the token program in manager");
-        return Err(LendingError::InvalidTokenProgram.into()); 
-    }
-    let sotoken_mint = Mint::unpack(&sotoken_mint_info.try_borrow_data()?)?;
-    if sotoken_mint.mint_authority.as_ref().unwrap() != manager_authority {
-        msg!("SoToken mint owner provided is matched with manager_authority");
-        return Err(LendingError::InvalidSoTokenMint.into());
-    }
-    if sotoken_mint.decimals != token_mint.decimals {
-        msg!("SoToken mint owner provided is matched with manager_authority");
-        return Err(LendingError::InvalidSoTokenMint.into());
-    }
     // 10
-    let token_account_info = next_account_info(account_info_iter)?;
-    if token_account_info.owner != &manager.token_program_id {
-        msg!("Token account info owner provided is not owned by the token program in manager");
-        return Err(LendingError::InvalidTokenProgram.into());
-    }
-    let token_account = Account::unpack(&token_account_info.try_borrow_data()?)?;
-    if &token_account.mint != token_mint_info.key {
-        msg!("Token account mint is not matched with token mint provided");
-        return Err(LendingError::InvalidTokenAccount.into());
-    }
-    if &token_account.owner != manager_authority {
-        msg!("Token account owner is not matched with manager authority");
-        return Err(LendingError::InvalidTokenAccount.into());
-    }
+    let token_mint_info = next_account_info(account_info_iter)?;
+    let token_mint = Mint::unpack(&token_mint_info.try_borrow_data()?)?;
     // 11
+    let sotoken_mint_info = next_account_info(account_info_iter)?;
+    // 12
     let authority_info = next_account_info(account_info_iter)?;
     if authority_info.key != &manager.owner {
         msg!("Only manager owner can create reserve");
@@ -342,6 +319,12 @@ fn process_init_market_reserve(
         msg!("authority is not a signer");
         return Err(LendingError::InvalidSigner.into());
     }
+    // 13
+    let token_program_id = next_account_info(account_info_iter)?;
+    if token_program_id.key != &manager.token_program_id {
+        msg!("token program id provided is not matched with token program id in manager");
+        return Err(LendingError::InvalidTokenProgram.into()); 
+    }
 
     let market_reserve = MarketReserve {
         version: PROGRAM_VERSION,
@@ -349,7 +332,7 @@ fn process_init_market_reserve(
         manager: *manager_info.key,
         market_price,
         token_info: TokenInfo {
-            account: *token_account_info.key,
+            account: *manager_token_account_info.key,
             price_oracle: *pyth_price_info.key,
             decimal: token_mint.decimals,
         },
@@ -368,7 +351,25 @@ fn process_init_market_reserve(
             config: collateral_config,
         },
     };
-    MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)
+    MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
+
+    // init manager token account
+    spl_token_init_account(TokenInitializeAccountParams {
+        account: manager_token_account_info.clone(),
+        mint: token_mint_info.clone(),
+        owner: manager_authority_info.clone(),
+        rent: rent_info.clone(),
+        token_program: token_program_id.clone(),
+    })?;
+
+    // init sotoken mint
+    spl_token_init_mint(TokenInitializeMintParams {
+        mint: sotoken_mint_info.clone(),
+        rent: rent_info.clone(),
+        authority: manager_authority_info.key,
+        decimals: token_mint.decimals,
+        token_program: token_program_id.clone(),
+    })
 }
 
 fn process_update_market_reserves(
@@ -1792,6 +1793,47 @@ fn invoke_optionally_signed(
     }
 }
 
+/// Issue a spl_token `InitializeAccount` instruction.
+#[inline(always)]
+fn spl_token_init_account(params: TokenInitializeAccountParams<'_>) -> ProgramResult {
+    let TokenInitializeAccountParams {
+        account,
+        mint,
+        owner,
+        rent,
+        token_program,
+    } = params;
+    let ix = spl_token::instruction::initialize_account(
+        token_program.key,
+        account.key,
+        mint.key,
+        owner.key,
+    )?;
+    let result = invoke(&ix, &[account, mint, owner, rent, token_program]);
+    result.map_err(|_| LendingError::TokenInitializeAccountFailed.into())
+}
+
+/// Issue a spl_token `InitializeMint` instruction.
+#[inline(always)]
+fn spl_token_init_mint(params: TokenInitializeMintParams<'_, '_>) -> ProgramResult {
+    let TokenInitializeMintParams {
+        mint,
+        rent,
+        authority,
+        token_program,
+        decimals,
+    } = params;
+    let ix = spl_token::instruction::initialize_mint(
+        token_program.key,
+        mint.key,
+        authority,
+        None,
+        decimals,
+    )?;
+    let result = invoke(&ix, &[mint, rent, token_program]);
+    result.map_err(|_| LendingError::TokenInitializeMintFailed.into())
+}
+
 /// Issue a spl_token `Transfer` instruction.
 #[inline(always)]
 fn spl_token_transfer(params: TokenTransferParams<'_, '_>) -> ProgramResult {
@@ -1867,6 +1909,22 @@ fn spl_token_burn(params: TokenBurnParams<'_, '_>) -> ProgramResult {
         authority_signer_seeds,
     );
     result.map_err(|_| LendingError::TokenBurnFailed.into())
+}
+
+struct TokenInitializeMintParams<'a: 'b, 'b> {
+    mint: AccountInfo<'a>,
+    rent: AccountInfo<'a>,
+    authority: &'b Pubkey,
+    decimals: u8,
+    token_program: AccountInfo<'a>,
+}
+
+struct TokenInitializeAccountParams<'a> {
+    account: AccountInfo<'a>,
+    mint: AccountInfo<'a>,
+    owner: AccountInfo<'a>,
+    rent: AccountInfo<'a>,
+    token_program: AccountInfo<'a>,
 }
 
 struct TokenTransferParams<'a: 'b, 'b> {
