@@ -51,77 +51,76 @@ pub enum LendingInstruction {
     /// 6
     UpdateUserObligation,
     /// 7
-    BindOrUnbindFriend {
-        ///
-        is_bind: bool,
-    },
+    BindFriend,
     /// 8
+    UnbindFriend,
+    /// 9
     DepositCollateral {
         ///
         amount: u64,
     },
-    /// 9
+    /// 10
     RedeemCollateral {
         ///
         amount: u64,
     },
-    /// 10
+    /// 11
     RedeemCollateralWithoutLoan {
         ///
         amount: u64,
     },
-    /// 11
+    /// 12
     ReplaceCollateral {
         ///
         out_amount: u64,
         ///
         in_amount: u64,
     },
-    /// 12
+    /// 13
     BorrowLiquidity {
         ///
         amount: u64,
     },
-    /// 13
+    /// 14
     RepayLoan {
         ///
         amount: u64,
     },
-    /// 14
+    /// 15
     Liquidate {
         ///
         amount: u64,   
     },
-    /// 15
+    /// 16
     FeedRateOracle {
         ///
         asset_index: u64,
     },
-    /// 16
-    PauseRateOracle,
     /// 17
+    PauseRateOracle,
+    /// 18
     UpdateRateOracleConfig{
         ///
         config: RateOracleConfig,
     },
-    /// 18
-    EnableBorrowForMarketReserve,
     /// 19
+    EnableBorrowForMarketReserve,
+    /// 20
     UpdateMarketReserveCollateralConfig {
         ///
         config: CollateralConfig,
     },
-    /// 20
+    /// 21
     UpdateMarketReserveLiquidityConfig {
         ///
         config: LiquidityConfig,
     },
-    /// 21
+    /// 22
     WithdrawFee {
         ///
         amount: u64,
     },
-    /// 22
+    /// 23
     #[cfg(feature = "case-injection")]
     InjectCase {
         ///
@@ -159,63 +158,61 @@ impl LendingInstruction {
             }
             5 => Self::InitUserObligation,
             6 => Self::UpdateUserObligation,
-            7 => {
-                let (is_bind, _rest) = Self::unpack_bool(rest)?;
-                Self::BindOrUnbindFriend { is_bind }
-            }
-            8 => {
+            7 => Self::BindFriend,
+            8 => Self::UnbindFriend,
+            9 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::DepositCollateral { amount }
             }
-            9 => {
+            10 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::RedeemCollateral { amount }
             }
-            10 => {
+            11 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::RedeemCollateralWithoutLoan { amount }
             }
-            11 => {
+            12 => {
                 let (out_amount, rest) = Self::unpack_u64(rest)?;
                 let (in_amount, _rest) = Self::unpack_u64(rest)?;
                 Self::ReplaceCollateral { out_amount, in_amount }
             }
-            12 => {
+            13 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::BorrowLiquidity { amount }
             }
-            13 => {
+            14 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::RepayLoan { amount }
             }
-            14 => {
+            15 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::Liquidate { amount }
             }
-            15 => {
+            16 => {
                 let (asset_index, _rest) = Self::unpack_u64(rest)?;
                 Self::FeedRateOracle { asset_index }
             }
-            16 => Self::PauseRateOracle,
-            17 => {
+            17 => Self::PauseRateOracle,
+            18 => {
                 let (config, _rest) = Self::unpack_rate_oracle_config(rest)?;
                 Self::UpdateRateOracleConfig { config } 
             }
-            18 => Self::EnableBorrowForMarketReserve,
-            19 => {
+            19 => Self::EnableBorrowForMarketReserve,
+            20 => {
                 let (config, _rest) = Self::unpack_collateral_config(rest)?;
                 Self::UpdateMarketReserveCollateralConfig { config }
             }
-            20 => {
+            21 => {
                 let (config, _rest) = Self::unpack_liquidity_config(rest)?;
                 Self::UpdateMarketReserveLiquidityConfig { config }
             }
-            21 => {
+            22 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::WithdrawFee { amount }
             }
             #[cfg(feature = "case-injection")]
-            22 => {
+            23 => {
                 let (is_liquidation, _rest) = Self::unpack_bool(rest)?;
                 Self::InjectCase { is_liquidation }
             }
@@ -367,64 +364,62 @@ impl LendingInstruction {
             }
             Self::InitUserObligation => buf.push(5),
             Self::UpdateUserObligation => buf.push(6),
-            Self::BindOrUnbindFriend { is_bind } => {
-                buf.push(7);
-                buf.extend_from_slice(&(is_bind as u8).to_le_bytes());
-            }
+            Self::BindFriend => buf.push(7),
+            Self::UnbindFriend => buf.push(8),
             Self::DepositCollateral { amount } => {
-                buf.push(8);
-                buf.extend_from_slice(&amount.to_le_bytes());
-            }
-            Self::RedeemCollateral { amount } => {
                 buf.push(9);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::RedeemCollateralWithoutLoan { amount } => {
+            Self::RedeemCollateral { amount } => {
                 buf.push(10);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::ReplaceCollateral { out_amount, in_amount } => {
+            Self::RedeemCollateralWithoutLoan { amount } => {
                 buf.push(11);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::ReplaceCollateral { out_amount, in_amount } => {
+                buf.push(12);
                 buf.extend_from_slice(&out_amount.to_le_bytes());
                 buf.extend_from_slice(&in_amount.to_le_bytes());
             }
             Self::BorrowLiquidity { amount } => {
-                buf.push(12);
-                buf.extend_from_slice(&amount.to_le_bytes());
-            }
-            Self::RepayLoan { amount } => {
                 buf.push(13);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::Liquidate { amount } => {
+            Self::RepayLoan { amount } => {
                 buf.push(14);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::FeedRateOracle { asset_index } => {
+            Self::Liquidate { amount } => {
                 buf.push(15);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::FeedRateOracle { asset_index } => {
+                buf.push(16);
                 buf.extend_from_slice(&asset_index.to_le_bytes());
             }
-            Self::PauseRateOracle => buf.push(16),
+            Self::PauseRateOracle => buf.push(17),
             Self::UpdateRateOracleConfig { config } => {
-                buf.push(17);
+                buf.push(18);
                 Self::pack_rate_oracle_config(config, &mut buf);
             }
-            Self::EnableBorrowForMarketReserve => buf.push(18),
+            Self::EnableBorrowForMarketReserve => buf.push(19),
             Self::UpdateMarketReserveCollateralConfig { config } => {
-                buf.push(19);
+                buf.push(20);
                 Self::pack_collateral_config(config, &mut buf);
             }
             Self::UpdateMarketReserveLiquidityConfig { config } => {
-                buf.push(20);
+                buf.push(21);
                 Self::pack_liquidity_config(config, &mut buf);
             }
             Self::WithdrawFee { amount } => {
-                buf.push(21);
+                buf.push(22);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             #[cfg(feature = "case-injection")]
             Self::InjectCase { is_liquidation } => {
-                buf.push(22);
+                buf.push(23);
                 buf.extend_from_slice(&(is_liquidation as u8).to_le_bytes());
             }
         }
@@ -543,9 +538,9 @@ pub fn update_market_reserves(
     accounts.extend(
         updating_keys
             .into_iter()
-            .map(|(market_reserve, pyth_price_key, rate_oracle_key)|
+            .map(|(market_reserve_key, pyth_price_key, rate_oracle_key)|
                 vec![
-                    AccountMeta::new(market_reserve, false),
+                    AccountMeta::new(market_reserve_key, false),
                     AccountMeta::new_readonly(pyth_price_key, false),
                     AccountMeta::new_readonly(rate_oracle_key, false),
                 ]
@@ -563,7 +558,6 @@ pub fn update_market_reserves(
 #[allow(clippy::too_many_arguments)]
 pub fn exchange(
     manager_key: Pubkey,
-    manager_authority_key: Pubkey,
     market_reserve_key: Pubkey,
     sotoken_mint_key: Pubkey,
     manager_token_account_key: Pubkey,
@@ -574,8 +568,14 @@ pub fn exchange(
     from_collateral: bool,
     amount: u64,
 ) -> Instruction {
+    let program_id = id();
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
+        &program_id,
+    );
+
     Instruction {
-        program_id: id(),
+        program_id,
         accounts: vec![
             AccountMeta::new_readonly(sysvar::clock::id(), false),
             AccountMeta::new_readonly(manager_key, false),
@@ -633,22 +633,40 @@ pub fn update_user_obligation(
     }
 }
 
-pub fn bind_or_unbind_friend(
+pub fn bind_friend(
     user_obligation_key: Pubkey,
-    friend_obligation_info: Pubkey,
+    friend_obligation_key: Pubkey,
     user_authority_key: Pubkey,
     friend_authority_key: Pubkey,
-    is_bind: bool,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
             AccountMeta::new(user_obligation_key, false),
-            AccountMeta::new(friend_obligation_info, false),
+            AccountMeta::new(friend_obligation_key, false),
             AccountMeta::new_readonly(user_authority_key, true),
             AccountMeta::new_readonly(friend_authority_key, true),
         ],
-        data: LendingInstruction::BindOrUnbindFriend { is_bind }.pack(),
+        data: LendingInstruction::BindFriend.pack(),
+    }
+}
+
+pub fn unbind_friend(
+    user_obligation_key: Pubkey,
+    friend_obligation_key: Pubkey,
+    user_authority_key: Pubkey,
+    friend_authority_key: Pubkey,
+) -> Instruction {
+    Instruction {
+        program_id: id(),
+        accounts: vec![
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new(user_obligation_key, false),
+            AccountMeta::new(friend_obligation_key, false),
+            AccountMeta::new_readonly(user_authority_key, true),
+            AccountMeta::new_readonly(friend_authority_key, true),
+        ],
+        data: LendingInstruction::BindFriend.pack(),
     }
 }
 
@@ -656,7 +674,7 @@ pub fn bind_or_unbind_friend(
 pub fn deposit_collateral(
     market_reserve_key: Pubkey,
     sotoken_mint_key: Pubkey,
-    user_obligatiton_key: Pubkey,
+    user_obligation_key: Pubkey,
     user_authority_key: Pubkey,
     user_sotoken_account_key: Pubkey,
     amount: u64,
@@ -666,7 +684,7 @@ pub fn deposit_collateral(
         accounts: vec![
             AccountMeta::new_readonly(market_reserve_key, false),
             AccountMeta::new(sotoken_mint_key, false),
-            AccountMeta::new(user_obligatiton_key, false),
+            AccountMeta::new(user_obligation_key, false),
             AccountMeta::new_readonly(user_authority_key, true),
             AccountMeta::new(user_sotoken_account_key, false),
             AccountMeta::new_readonly(spl_token::id(), false),
@@ -680,8 +698,8 @@ pub fn redeem_collateral(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
     sotoken_mint_key: Pubkey,
-    user_obligatiton_key: Pubkey,
-    user_obligatiton_2_key: Option<Pubkey>,
+    user_obligation_key: Pubkey,
+    user_obligation_2_key: Option<Pubkey>,
     user_authority_key: Pubkey,
     user_sotoken_account_key: Pubkey,
     amount: u64,
@@ -698,14 +716,14 @@ pub fn redeem_collateral(
         AccountMeta::new_readonly(manager_authority_key, false),
         AccountMeta::new_readonly(market_reserve_key, false),
         AccountMeta::new(sotoken_mint_key, false),
-        AccountMeta::new(user_obligatiton_key, false),
+        AccountMeta::new(user_obligation_key, false),
         AccountMeta::new_readonly(user_authority_key, true),
         AccountMeta::new(user_sotoken_account_key, false),
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
-    if let Some(user_obligatiton_2_key) = user_obligatiton_2_key {
-        accounts.insert(6, AccountMeta::new_readonly(user_obligatiton_2_key, false))
+    if let Some(user_obligation_2_key) = user_obligation_2_key {
+        accounts.insert(6, AccountMeta::new_readonly(user_obligation_2_key, false))
     }
 
     Instruction {
@@ -720,8 +738,8 @@ pub fn redeem_collateral_without_loan(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
     sotoken_mint_key: Pubkey,
-    user_obligatiton_key: Pubkey,
-    user_obligatiton_2_key: Option<Pubkey>,
+    user_obligation_key: Pubkey,
+    user_obligation_2_key: Option<Pubkey>,
     user_authority_key: Pubkey,
     user_sotoken_account_key: Pubkey,
     amount: u64,
@@ -737,14 +755,14 @@ pub fn redeem_collateral_without_loan(
         AccountMeta::new_readonly(manager_authority_key, false),
         AccountMeta::new_readonly(market_reserve_key, false),
         AccountMeta::new(sotoken_mint_key, false),
-        AccountMeta::new(user_obligatiton_key, false),
+        AccountMeta::new(user_obligation_key, false),
         AccountMeta::new_readonly(user_authority_key, true),
         AccountMeta::new(user_sotoken_account_key, false),
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
-    if let Some(user_obligatiton_2_key) = user_obligatiton_2_key {
-        accounts.insert(5, AccountMeta::new_readonly(user_obligatiton_2_key, false))
+    if let Some(user_obligation_2_key) = user_obligation_2_key {
+        accounts.insert(5, AccountMeta::new_readonly(user_obligation_2_key, false))
     }
 
     Instruction {
@@ -761,8 +779,8 @@ pub fn replace_collateral(
     out_sotoken_mint_key: Pubkey,
     in_market_reserve_key: Pubkey,
     in_sotoken_mint_key: Pubkey,
-    user_obligatiton_key: Pubkey,
-    user_obligatiton_2_key: Option<Pubkey>,
+    user_obligation_key: Pubkey,
+    user_obligation_2_key: Option<Pubkey>,
     user_authority_key: Pubkey,
     user_out_sotoken_account_key: Pubkey,
     user_in_sotoken_account_key: Pubkey,
@@ -783,15 +801,15 @@ pub fn replace_collateral(
         AccountMeta::new(out_sotoken_mint_key, false),
         AccountMeta::new_readonly(in_market_reserve_key, false),
         AccountMeta::new(in_sotoken_mint_key, false),
-        AccountMeta::new(user_obligatiton_key, false),
+        AccountMeta::new(user_obligation_key, false),
         AccountMeta::new_readonly(user_authority_key, true),
         AccountMeta::new(user_out_sotoken_account_key, false),
         AccountMeta::new(user_in_sotoken_account_key, false),
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
-    if let Some(user_obligatiton_2_key) = user_obligatiton_2_key {
-        accounts.insert(8, AccountMeta::new_readonly(user_obligatiton_2_key, false))
+    if let Some(user_obligation_2_key) = user_obligation_2_key {
+        accounts.insert(8, AccountMeta::new_readonly(user_obligation_2_key, false))
     }
 
     Instruction {
@@ -806,9 +824,9 @@ pub fn borrow_liquidity(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
     manager_token_account_key: Pubkey,
-    user_obligatiton_key: Pubkey,
+    user_obligation_key: Pubkey,
+    user_obligation_2_key: Option<Pubkey>,
     user_authority_key: Pubkey,
-    user_obligatiton_2_key: Option<Pubkey>,
     user_token_account_key: Pubkey,
     amount: u64,
 ) -> Instruction {
@@ -824,14 +842,14 @@ pub fn borrow_liquidity(
         AccountMeta::new_readonly(manager_authority_key, false),
         AccountMeta::new(market_reserve_key, false),
         AccountMeta::new(manager_token_account_key, false),
-        AccountMeta::new(user_obligatiton_key, false),
+        AccountMeta::new(user_obligation_key, false),
         AccountMeta::new_readonly(user_authority_key, true),
         AccountMeta::new(user_token_account_key, false),
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
-    if let Some(user_obligatiton_2_key) = user_obligatiton_2_key {
-        accounts.insert(6, AccountMeta::new_readonly(user_obligatiton_2_key, false))
+    if let Some(user_obligation_2_key) = user_obligation_2_key {
+        accounts.insert(6, AccountMeta::new_readonly(user_obligation_2_key, false))
     }
 
     Instruction {
@@ -846,7 +864,7 @@ pub fn repay_loan(
     market_reserve_key: Pubkey,
     manager_token_account_key: Pubkey,
     rate_oracle_key: Pubkey,
-    user_obligatiton_key: Pubkey,
+    user_obligation_key: Pubkey,
     user_authority_key: Pubkey,
     user_token_account_key: Pubkey,
     amount: u64,
@@ -858,7 +876,7 @@ pub fn repay_loan(
             AccountMeta::new(market_reserve_key, false),
             AccountMeta::new(manager_token_account_key, false),
             AccountMeta::new_readonly(rate_oracle_key, false),
-            AccountMeta::new(user_obligatiton_key, false),
+            AccountMeta::new(user_obligation_key, false),
             AccountMeta::new_readonly(user_authority_key, true),
             AccountMeta::new(user_token_account_key, false),
             AccountMeta::new_readonly(spl_token::id(), false),
@@ -874,8 +892,8 @@ pub fn liquidate(
     sotoken_mint_key: Pubkey,
     loan_market_reserve_key: Pubkey,
     manager_token_account_key: Pubkey,
-    user_obligatiton_key: Pubkey,
-    user_obligatiton_2_key: Option<Pubkey>,
+    user_obligation_key: Pubkey,
+    user_obligation_2_key: Option<Pubkey>,
     liquidator_authority_key: Pubkey,
     liquidator_token_account_key: Pubkey,
     liquidator_sotoken_account_key: Pubkey,
@@ -895,15 +913,15 @@ pub fn liquidate(
         AccountMeta::new(sotoken_mint_key, false),
         AccountMeta::new(loan_market_reserve_key, false),
         AccountMeta::new(manager_token_account_key, false),
-        AccountMeta::new(user_obligatiton_key, false),
+        AccountMeta::new(user_obligation_key, false),
         AccountMeta::new_readonly(liquidator_authority_key, true),
         AccountMeta::new(liquidator_token_account_key, false),
         AccountMeta::new(liquidator_sotoken_account_key, false),
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
-    if let Some(user_obligatiton_2_key) = user_obligatiton_2_key {
-        accounts.insert(8, AccountMeta::new_readonly(user_obligatiton_2_key, false))
+    if let Some(user_obligation_2_key) = user_obligation_2_key {
+        accounts.insert(8, AccountMeta::new_readonly(user_obligation_2_key, false))
     }
 
     Instruction {
@@ -1040,12 +1058,12 @@ pub fn withdraw_fee(
 
 #[cfg(feature = "case-injection")]
 pub fn inject_case(
-    user_obligatiton_key: Pubkey,
+    user_obligation_key: Pubkey,
     is_liquidation: bool,
 ) -> Instruction {
     Instruction {
         program_id: id(),
-        accounts: vec![AccountMeta::new(user_obligatiton_key, false)],
+        accounts: vec![AccountMeta::new(user_obligation_key, false)],
         data: LendingInstruction::InjectCase{ is_liquidation }.pack(),
     }
 }

@@ -56,11 +56,7 @@ pub fn process_instruction(
             process_update_market_reserves(program_id, accounts)
         }
         LendingInstruction::Exchange { from_collateral, amount } => {
-            let instruction = if from_collateral {
-                "collateral to liquidity"
-            } else {
-                "liquidity to collateral"
-            };
+            let instruction = if from_collateral { "collateral to liquidity" } else { "liquidity to collateral" };
             msg!("Instruction: Exchange from {}, amount = {}", instruction, amount);
             process_exchange(program_id, accounts, amount, from_collateral)
         }
@@ -72,10 +68,13 @@ pub fn process_instruction(
             msg!("Instruction: Update User Obligation");
             process_update_user_obligation(program_id, accounts)
         }
-        LendingInstruction::BindOrUnbindFriend { is_bind } => {
-            let instruction = if is_bind { "Bind" } else { "Unbind" };
-            msg!("Instruction: {} Friend", instruction);
-            process_bind_or_unbind_friend(program_id, accounts, is_bind)
+        LendingInstruction::BindFriend => {
+            msg!("Instruction: Bind Friend");
+            process_bind_friend(program_id, accounts)
+        }
+        LendingInstruction::UnbindFriend => {
+            msg!("Instruction: Unbind Friend");
+            process_unbind_friend(program_id, accounts)
         }
         LendingInstruction::DepositCollateral { amount } => {
             msg!("Instruction: Deposit Collateral: {}", amount);
@@ -638,10 +637,9 @@ fn process_update_user_obligation(
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
 }
 
-fn process_bind_or_unbind_friend(
+fn process_bind_friend(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    is_bind: bool,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -681,15 +679,67 @@ fn process_bind_or_unbind_friend(
         return Err(LendingError::InvalidSigner.into());
     }
 
-    if is_bind {
-        // bind
-        user_obligation.bind_friend(*friend_obligation_info.key)?;
-        friend_obligation.bind_friend(*user_obligation_info.key)?;
-    } else {
-        // unbind
-        user_obligation.unbind_friend()?;
-        friend_obligation.unbind_friend()?;
+    user_obligation.bind_friend(*friend_obligation_info.key)?;
+    friend_obligation.bind_friend(*user_obligation_info.key)?;
+
+    // pack
+    UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
+    UserObligation::pack(friend_obligation, &mut friend_obligation_info.try_borrow_mut_data()?)
+}
+
+// must after update obligation
+fn process_unbind_friend(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    // 1
+    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
+    // 2
+    let user_obligation_info = next_account_info(account_info_iter)?;
+    if user_obligation_info.owner != program_id {
+        msg!("User Obligation owner provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
     }
+    let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
+    if user_obligation.last_update.is_stale(clock.slot)? {
+        return Err(LendingError::ObligationStale.into());
+    }
+    // 3
+    let friend_obligation_info = next_account_info(account_info_iter)?;
+    if friend_obligation_info.owner != program_id {
+        msg!("Friend Obligation owner provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
+    }
+    let mut friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
+    if friend_obligation.last_update.is_stale(clock.slot)? {
+        return Err(LendingError::ObligationStale.into());
+    }
+    if user_obligation.manager != friend_obligation.manager {
+        return Err(LendingError::UserObligationFriendNotMatched.into());
+    }
+    // 4
+    let user_authority_info = next_account_info(account_info_iter)?;
+    if user_authority_info.key != &user_obligation.owner {
+        return Err(LendingError::InvalidUserAuthority.into());
+    }
+    if !user_authority_info.is_signer {
+        msg!("authority is not a signer");
+        return Err(LendingError::InvalidSigner.into());
+    }
+    // 5
+    let friend_authority_info = next_account_info(account_info_iter)?;
+    if friend_authority_info.key != &friend_obligation.owner {
+        return Err(LendingError::InvalidUserAuthority.into());
+    }
+    if !friend_authority_info.is_signer {
+        msg!("authority is not a signer");
+        return Err(LendingError::InvalidSigner.into());
+    }
+
+    // unbind
+    user_obligation.unbind_friend()?;
+    friend_obligation.unbind_friend()?;
 
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
@@ -973,6 +1023,7 @@ fn process_redeem_collateral_without_loan(
     })
 }
 
+// must after update obligation
 fn process_replace_collateral(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -1333,6 +1384,7 @@ fn process_repay_loan(
     })
 }
 
+// must after update obligation
 fn process_liquidate(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
