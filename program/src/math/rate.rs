@@ -72,6 +72,11 @@ impl Rate {
         Self(U128::from(scaled_val))
     }
 
+    ///
+    pub fn from_raw_val(raw_val: u128) -> Self {
+        Self(U128::from(raw_val))
+    }
+
     /// Round scaled decimal to u64
     pub fn try_round_u64(&self) -> Result<u64, ProgramError> {
         let rounded_val = Self::half_wad()
@@ -116,18 +121,6 @@ impl fmt::Display for Rate {
         f.write_str(&scaled_val)
     }
 }
-
-// impl From<u128> for Rate {
-//     fn from(scaled_val: u128) -> Self {
-//         Self(U128::from(scaled_val))
-//     }
-// }
-
-// impl From<u64> for Rate {
-//     fn from(scaled_val: u64) -> Self {
-//         Self(U128::from(scaled_val))
-//     }
-// }
 
 impl TryFrom<Decimal> for Rate {
     type Error = ProgramError;

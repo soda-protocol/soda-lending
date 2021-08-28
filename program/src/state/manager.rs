@@ -33,7 +33,8 @@ impl IsInitialized for Manager {
     }
 }
 
-const MANAGER_LEN: usize = 130;
+const MANAGER_RESERVE_LEN: usize = 128;
+const MANAGER_LEN: usize = 258;
 
 impl Pack for Manager {
     const LEN: usize = MANAGER_LEN;
@@ -48,6 +49,7 @@ impl Pack for Manager {
             quote_currency,
             token_program_id,
             pyth_program_id,
+            _rest,
         ) = mut_array_refs![
             output,
             1,
@@ -55,7 +57,8 @@ impl Pack for Manager {
             PUBKEY_BYTES,
             32,
             PUBKEY_BYTES,
-            PUBKEY_BYTES
+            PUBKEY_BYTES,
+            MANAGER_RESERVE_LEN
         ];
 
         *version = self.version.to_le_bytes();
@@ -76,6 +79,7 @@ impl Pack for Manager {
             quote_currency,
             token_program_id,
             pyth_program_id,
+            _rest,
         ) = array_refs![
             input,
             1,
@@ -83,7 +87,8 @@ impl Pack for Manager {
             PUBKEY_BYTES,
             32,
             PUBKEY_BYTES,
-            PUBKEY_BYTES
+            PUBKEY_BYTES,
+            MANAGER_RESERVE_LEN
         ];
 
         let version = u8::from_le_bytes(*version);

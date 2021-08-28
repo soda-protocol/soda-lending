@@ -86,6 +86,9 @@ pub enum LendingError {
     ///
     #[error("Invalid collateral config")]
     InvalidCollateralConfig,
+    ///
+    #[error("Invalid rate oracle config")]
+    InvalidRateOracleConfig,
     // 10
     /// Invalid amount, must be greater than zero
     #[error("Input amount is invalid")]
@@ -120,6 +123,12 @@ pub enum LendingError {
     #[error("Token burn failed")]
     TokenBurnFailed,
 
+    ///
+    #[error("COption unpack error")]
+    COptionUnpackError,
+    ///
+    #[error("Market reserve liquidity is empty")]
+    MarketReserveLiquidityEmpty,
     // 20
     /// Insufficient liquidity available
     #[error("Insufficient liquidity available")]
@@ -155,6 +164,9 @@ pub enum LendingError {
     ObligationHealthy,
 
     // 30
+    ///
+    #[error("Obligation is already in binding")]
+    ObligationAlreadyBinding,
     /// Obligation state stale
     #[error("Obligation state needs to be refreshed")]
     ObligationStale,
@@ -205,20 +217,29 @@ pub enum LendingError {
     #[error("Obligation collaterals not matched")]
     ObligationCollateralsNotMatched,
     ///
+    #[error("Obligation loans not matched")]
+    ObligationLoansNotMatched,
+    ///
     #[error("Obligation collaterals are not empty")]
     ObligationCollateralsNotEmpty,
     ///
     #[error("Obligation collaterals are not healthy")]
     ObligationNotHealthy,
     ///
+    #[error("Obligation dept amount is not empty")]
+    ObligationDeptNotEmpty,
+    ///
     #[error("Obligation liquidation is not available")]
     ObligationLiquidationNotAvailable,
     ///
-    #[error("Obligation collaterals limit exceeded")]
-    ObligationCollateralsLimitExceed,
+    #[error("Obligation reserve limit exceeded")]
+    ObligationReserveLimitExceed,
     ///
     #[error("Obligation collateral not found")]
     ObligationCollateralNotFound,
+    ///
+    #[error("Obligation loan not found")]
+    ObligationLoanNotFound,
     ///
     #[error("Obligation collateral index exceeded")]
     ObligationCollateralIndexExceed,
@@ -229,20 +250,14 @@ pub enum LendingError {
     #[error("Obligation dept amount insufficient")]
     ObligationRepayTooMuch,
     ///
-    #[error("Market Reserve liquidity does not exist")]
-    MarketReserveLiquidityNotExist,
-    ///
-    #[error("Market Reserve liquidity utilization rate exceeds limit")]
-    MarketReserveLiquidityUtilizationTooLarge,
+    #[error("Market Reserve liquidity borrow disabled")]
+    MarketReserveLiquidityBorrowDisbaled,
     ///
     #[error("Market Reserve liquidity available insufficient")]
     MarketReserveLiquidityAvailableInsufficent,
     ///
     #[error("Market Reserve liquidity fee insufficient")]
     MarketReserveLiquidityFeeInsufficent,
-    ///
-    #[error("Market Reserve collateral insufficient")]
-    MarketReserveCollateralInsufficent,
     ///
     #[error("Market Reserve is stale")]
     MarketReserveStale,
@@ -256,28 +271,20 @@ pub enum LendingError {
     #[error("Rate Oracle is not available")]
     RateOracleNotAvailable,
     ///
+    #[error("Rate Oracle asset index is invalid")]
+    RateOracleInvalidAssetIndex,
+    ///
     #[error("Liquidation too much")]
     LiquidationTooMuch,
     ///
     #[error("Price oracle not matched")]
     PriceOracleNotMatched,
-
-
     ///
-    #[error("Debug error 1")]
-    DebugError1,
-    /// 
-    #[error("Debug error 2")]
-    DebugError2,
+    #[error("Invalid soToken mint info")]
+    InvalidSoTokenMint,
     ///
-    #[error("Debug error 3")]
-    DebugError3,
-    ///
-    #[error("Debug error 4")]
-    DebugError4,
-    ///
-    #[error("Debug error 5")]
-    DebugError5,
+    #[error("User Obligation friend not matched")]
+    UserObligationFriendNotMatched,
 }
 
 impl From<LendingError> for ProgramError {
