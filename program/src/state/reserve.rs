@@ -136,9 +136,14 @@ impl LiquidityInfo {
     }
     ///
     pub fn utilization_rate(&self) -> Result<Rate, ProgramError> {
-        self.borrowed_amount_wads
-            .try_div(self.total_amount()?)?
-            .try_into()
+        let total_amount = self.total_amount()?;
+        if total_amount == Decimal::zero() {
+            Ok(Rate::zero())
+        } else {
+            self.borrowed_amount_wads
+                .try_div(self.total_amount()?)?
+                .try_into()
+        }
     }
     ///
     pub fn deposit(&mut self, amount: u64) -> ProgramResult {
@@ -159,7 +164,7 @@ impl LiquidityInfo {
     ///
     pub fn borrow_out(&mut self, asset: BorrowWithFee) -> ProgramResult {
         if !self.enable_borrow {
-            return Err(LendingError::MarketReserveLiquidityBorrowDisbaled.into());
+            return Err(LendingError::MarketReserveBorrowDisabled.into());
         }
 
         self.available = self.available

@@ -6,7 +6,7 @@ use solana_sdk::program_error::ProgramError;
 #[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
 pub enum SodaError {
     ///
-    #[error("")]
+    #[error("soda: invalid account data")]
     InvalidAccountData,
 }
 

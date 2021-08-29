@@ -48,7 +48,7 @@ pub fn process_instruction(
             liquidity_config,
             enable_borrow,
         } => {
-            msg!("Instruction: Init Market Reserve With Liquidity");
+            msg!("Instruction: Init Market Reserve");
             process_init_market_reserve(program_id, accounts, collateral_config, liquidity_config, enable_borrow)
         }
         LendingInstruction::UpdateMarketReserves => {

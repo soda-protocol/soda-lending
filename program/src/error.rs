@@ -251,7 +251,7 @@ pub enum LendingError {
     ObligationRepayTooMuch,
     ///
     #[error("Market Reserve liquidity borrow disabled")]
-    MarketReserveLiquidityBorrowDisbaled,
+    MarketReserveBorrowDisabled,
     ///
     #[error("Market Reserve liquidity available insufficient")]
     MarketReserveLiquidityAvailableInsufficent,

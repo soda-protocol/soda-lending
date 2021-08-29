@@ -34,7 +34,7 @@ use spl_token::{
     state::{Mint, Account},
 };
 use soda_lending_contract::{
-    math::WAD,
+    math::{WAD, Rate},
     state::{Manager, MarketReserve, RateOracle, UserObligation, 
         CollateralConfig, LiquidityConfig, RateOracleConfig
     },
@@ -47,6 +47,17 @@ const QUOTE_CURRENCY: &[u8; 32] = &[85, 83, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
 
 fn main() {
     let client = RpcClient::new_with_commitment(DEV_NET.into(), CommitmentConfig::default());
+
+    // check utilization rate
+    let rate_oracle_data = client.get_account_data(&Pubkey::from_str("7nHzMWXrse8Mcp3Qc5KSJwG5J16wA75DMNEz7jV6hFpf").unwrap()).unwrap();
+    let clock_data = client.get_account_data(&Clock::id()).unwrap();
+    let clock: &Clock = &bincode::deserialize(&clock_data).unwrap();
+    let rate_oracle = RateOracle::unpack(&rate_oracle_data).unwrap();
+    let borrow_rate = rate_oracle.calculate_borrow_rate(clock.slot, Rate::from_percent(0)).unwrap();
+
+    // check market reserve
+    let market_reserve_data = client.get_account_data(&Pubkey::from_str("3raP2UGyEqgQRpza4m6zwqpy6wumioq3fzaqdy1YYcvm").unwrap()).unwrap();
+    let market_reserve = &MarketReserve::unpack(&market_reserve_data).unwrap();
 
     // let clock_data = client.get_account_data(&Clock::id()).unwrap();
     // let market_reserve_data = client.get_account_data(&Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap()).unwrap();
@@ -81,86 +92,137 @@ fn main() {
     //     Err(e) => println!("{:?}", e),
     // }
 
-    //// create manager
+    // create manager
     // let lamports = client.get_minimum_balance_for_rent_exemption(Manager::LEN).unwrap();
-    // let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
-    // let manager = &Keypair::new();
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
+    // let manager = Keypair::new();
     // println!("manager key: {:?}", manager.pubkey());
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    // let transaction = create_lending_manager(manager, authority, lamports, block_hash);
+    // let transaction = create_manager(manager, authority, lamports, block_hash);
     // match client.send_and_confirm_transaction(&transaction) {
     //     Ok(sig) => println!("sig is {:?}", sig),
     //     Err(err) => println!("error: {:?}", err),
     // }
 
     // create oracle
-    let lamports = client.get_minimum_balance_for_rent_exemption(RateOracle::LEN).unwrap();
-    let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
-    let rate_oracle = &Keypair::new();
-    println!("rate oracle key: {:?}", rate_oracle.pubkey());
-    let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    let transaction = create_rate_oracle(rate_oracle, authority, RateOracleConfig {
-        a: , c: (), l_u: (), k_u: ()
-    }, lamports, block_hash);
-    match client.send_and_confirm_transaction(&transaction) {
-        Ok(sig) => println!("sig is {:?}", sig),
-        Err(err) => println!("error: {:?}", err),
-    }
+    // let lamports = client.get_minimum_balance_for_rent_exemption(RateOracle::LEN).unwrap();
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
+    // let rate_oracle = Keypair::new();
+    // println!("rate oracle key: {:?}", rate_oracle.pubkey());
+    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    // let transaction = create_rate_oracle(rate_oracle, authority, RateOracleConfig {
+    //     a: WAD,
+    //     c: WAD / 10,
+    //     l_u: 80,
+    //     k_u: WAD as u128 * 3,
+    // }, lamports, block_hash);
+    // match client.send_and_confirm_transaction(&transaction) {
+    //     Ok(sig) => println!("sig is {:?}", sig),
+    //     Err(err) => println!("error: {:?}", err),
+    // }
 
-    // create market reserve (no liquidity)
+    // create market reserve (BTC)
     // let account_lamports = client.get_minimum_balance_for_rent_exemption(Account::LEN).unwrap();
     // let reserve_lamports = client.get_minimum_balance_for_rent_exemption(MarketReserve::LEN).unwrap();
-    // let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
+    // let mint_lamports = client.get_minimum_balance_for_rent_exemption(Mint::LEN).unwrap();
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    // let transaction = create_market_reserve_without_liquidity(
+    // let transaction = create_market_reserve(
     //     authority,
-    //     Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
-    //     Pubkey::from_str("2weC6fjXrfaCLQpqEzdgBHpz6yVNvmSN133m7LDuZaDb").unwrap(),
-    //     Pubkey::from_str("GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b").unwrap(),
-    //     Pubkey::from_str("6mhUyoQR5CcHN4RJ5PSfcvTjRuWF742ypZeMwptPgFnK").unwrap(),
+    //     Pubkey::from_str("F93DUk6QDpLBRd6pVQNtXvgrU4mBNMv5d1JaYkHvhcr5").unwrap(),
+    //     Pubkey::from_str("3m1y5h2uv7EQL3KaJZehvAJa4yDNvgc5yAdL9KPMKwvk").unwrap(),
+    //     Pubkey::from_str("HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J").unwrap(),
+    //     Pubkey::from_str("7nHzMWXrse8Mcp3Qc5KSJwG5J16wA75DMNEz7jV6hFpf").unwrap(),
+    //     Pubkey::from_str("9bRWBCW4BHHoLXFLFcLU3FQCDXXLNds1SJBmpeKYFeBZ").unwrap(),
     //     CollateralConfig {
-    //         liquidation_1_fee_rate: 25_000_000_000_000_000, // 2.5%
-    //         liquidation_2_repay_rate: 900_000_000_000_000_000,  // 95%
-    //         borrow_value_ratio: 60, 
-    //         liquidation_value_ratio: 70,
+    //         borrow_value_ratio: 70, 
+    //         liquidation_value_ratio: 85,
     //         close_factor: 60,
     //     },
+    //     LiquidityConfig {
+    //         borrow_fee_rate: 50_000_000_000_000_000, // 5%
+    //         liquidation_fee_rate: 50_000_000_000_000_000, // 5%
+    //         flash_loan_fee_rate: 100_000_000_000_000_000, // 10%
+    //     },
+    //     true,
     //     reserve_lamports,
     //     account_lamports, 
-    //     block_hash
+    //     mint_lamports,
+    //     block_hash,
     // ).unwrap();
     // match client.send_and_confirm_transaction(&transaction) {
     //     Ok(sig) => println!("sig is {:?}", sig),
     //     Err(err) => println!("error: {:?}", err),
     // }
 
-    // create market reserve (with liquidity)
+    // create market reserve (BNB)
     // let account_lamports = client.get_minimum_balance_for_rent_exemption(Account::LEN).unwrap();
     // let reserve_lamports = client.get_minimum_balance_for_rent_exemption(MarketReserve::LEN).unwrap();
-    // let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
+    // let mint_lamports = client.get_minimum_balance_for_rent_exemption(Mint::LEN).unwrap();
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    // let transaction = create_market_reserve_with_liquidity(
+    // let transaction = create_market_reserve(
     //     authority,
-    //     Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
-    //     Pubkey::from_str("3m1y5h2uv7EQL3KaJZehvAJa4yDNvgc5yAdL9KPMKwvk").unwrap(),
-    //     Pubkey::from_str("HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J").unwrap(),
-    //     Pubkey::from_str("9bRWBCW4BHHoLXFLFcLU3FQCDXXLNds1SJBmpeKYFeBZ").unwrap(),
-    //     Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
+    //     Pubkey::from_str("F93DUk6QDpLBRd6pVQNtXvgrU4mBNMv5d1JaYkHvhcr5").unwrap(),
+    //     Pubkey::from_str("2weC6fjXrfaCLQpqEzdgBHpz6yVNvmSN133m7LDuZaDb").unwrap(),
+    //     Pubkey::from_str("GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b").unwrap(),
+    //     Pubkey::from_str("7nHzMWXrse8Mcp3Qc5KSJwG5J16wA75DMNEz7jV6hFpf").unwrap(),
+    //     Pubkey::from_str("6mhUyoQR5CcHN4RJ5PSfcvTjRuWF742ypZeMwptPgFnK").unwrap(),
     //     CollateralConfig {
-    //         liquidation_1_fee_rate: 25_000_000_000_000_000, // 2.5%
-    //         liquidation_2_repay_rate: 950_000_000_000_000_000,  // 95%
-    //         borrow_value_ratio: 70, 
-    //         liquidation_value_ratio: 85,
+    //         borrow_value_ratio: 60, 
+    //         liquidation_value_ratio: 80,
     //         close_factor: 60,
     //     },
     //     LiquidityConfig {
-    //         interest_fee_rate: 50_000_000_000_000_000, // 5%
-    //         max_borrow_utilization_rate: 60, // 60%
+    //         borrow_fee_rate: 50_000_000_000_000_000, // 5%
+    //         liquidation_fee_rate: 50_000_000_000_000_000, // 5%
+    //         flash_loan_fee_rate: 100_000_000_000_000_000, // 10%
     //     },
+    //     false,
     //     reserve_lamports,
     //     account_lamports, 
-    //     block_hash
+    //     mint_lamports,
+    //     block_hash,
     // ).unwrap();
+    // match client.send_and_confirm_transaction(&transaction) {
+    //     Ok(sig) => println!("sig is {:?}", sig),
+    //     Err(err) => println!("error: {:?}", err),
+    // }
+
+    // init sotoken account
+    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    // let lamports = client.get_minimum_balance_for_rent_exemption(Account::LEN).unwrap();
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
+    // let account = Keypair::new();
+    // println!("account is {:?}", &account.pubkey());
+    // let transaction = do_init_token_account(
+    //     authority,
+    //     account,
+    //     Pubkey::from_str("4YPUDRM9LbxemxoAoZDECoigeRuWa1csxAdGHWoztDT9").unwrap(),
+    //     lamports,
+    //     block_hash,
+    // ).unwrap();
+    // match client.send_and_confirm_transaction(&transaction) {
+    //     Ok(sig) => println!("sig is {:?}", sig),
+    //     Err(err) => println!("error: {:?}", err),
+    // }
+
+    // exchange
+    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
+    // let transaction = do_exchange(
+    //     authority,
+    //     Pubkey::from_str("F93DUk6QDpLBRd6pVQNtXvgrU4mBNMv5d1JaYkHvhcr5").unwrap(),
+    //     Pubkey::from_str("3raP2UGyEqgQRpza4m6zwqpy6wumioq3fzaqdy1YYcvm").unwrap(),
+    //     Pubkey::from_str("24Y4Wd6tYBiCgVU4naLAVA8wFSDb9v1hVwdK93x5g7Vw").unwrap(),
+    //     Pubkey::from_str("DgHRo44dn63LJhTC5hheGhM9dERDQrhAn7V7smz5wWrC").unwrap(),
+    //     Pubkey::from_str("7nHzMWXrse8Mcp3Qc5KSJwG5J16wA75DMNEz7jV6hFpf").unwrap(),
+    //     Pubkey::from_str("EnpPrZtpsKb2CK6Jyue6tYi4vPmztLXPDKdco3WnRYuS").unwrap(),
+    //     Pubkey::from_str("3ikRkx3WZkY2puEo89tk2QpN6FSbcrENN4y5bQk2GmwL").unwrap(),
+    //     false,
+    //     1_000_000_000_000,
+    //     block_hash,
+    // );
     // match client.send_and_confirm_transaction(&transaction) {
     //     Ok(sig) => println!("sig is {:?}", sig),
     //     Err(err) => println!("error: {:?}", err),

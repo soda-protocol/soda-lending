@@ -35,7 +35,7 @@ const PYTH_ID: &str = "gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s";
 const QUOTE_CURRENCY: &[u8; 32] = &[85, 83, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
 #[allow(clippy::too_many_arguments)]
-pub fn create_token(
+pub fn create_fake_token(
     mint: &Keypair,
     authority: &Keypair,
     account: &Keypair,
@@ -89,6 +89,38 @@ pub fn create_token(
         ],
         Some(authority_pubkey),
         &[mint, account, authority],
+        recent_blockhash,
+    ))
+}
+
+pub fn do_init_token_account(
+    authority: Keypair,
+    account: Keypair,
+    mint_key: Pubkey,
+    lamports: u64,
+    recent_blockhash: Hash,
+) -> Result<Transaction, ProgramError> {
+    let authority_key = &authority.pubkey();
+    let account_key = &account.pubkey();
+    let program_id = spl_token::id();
+
+    Ok(Transaction::new_signed_with_payer(&[
+            create_account(
+                authority_key,
+                &account_key,
+                lamports,
+                Account::LEN as u64,
+                &program_id,
+            ),
+            initialize_account(
+                &program_id,
+                &account_key,
+                &mint_key,
+                authority_key,
+            )?,
+        ],
+        Some(authority_key),
+        &[&account, &authority],
         recent_blockhash,
     ))
 }
@@ -183,10 +215,6 @@ pub fn create_market_reserve(
 
     let token_program_id = &spl_token::id();
     let authority_key = &authority.pubkey();
-    let (ref manager_authority_key, _bump_seed) = Pubkey::find_program_address(
-        &[manager_key.as_ref()],
-        &soda_lending_contract::id(),
-    );
 
     Ok(Transaction::new_signed_with_payer(&[
         create_account(
@@ -243,7 +271,6 @@ pub fn do_exchange(
     sotoken_mint_key: Pubkey,
     manager_token_account_key: Pubkey,
     rate_oracle_key: Pubkey,
-    user_authority_key: Pubkey,
     user_token_account_key: Pubkey,
     user_sotoken_account_key: Pubkey,
     from_collateral: bool,
@@ -309,7 +336,6 @@ pub fn do_bind_friend(
     friend_authority: Keypair,
     user_obligation_key: Pubkey,
     friend_obligation_key: Pubkey,
-    lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
     let user_authority_key = &user_authority.pubkey();
@@ -336,7 +362,6 @@ pub fn do_unbind_friend(
     friend_updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
     user_obligation_key: Pubkey,
     friend_obligation_key: Pubkey,
-    lamports: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
     let user_authority_key = &user_authority.pubkey();
@@ -376,7 +401,6 @@ pub fn do_deposit_collateral(
     market_reserve_key: Pubkey,
     sotoken_mint_key: Pubkey,
     user_obligatiton_key: Pubkey,
-    user_authority_key: Pubkey,
     user_sotoken_account_key: Pubkey,
     amount: u64,
     recent_blockhash: Hash,
@@ -419,14 +443,15 @@ pub fn do_redeem_collateral(
 
     let market_reserve_key = market_reserves
         .get(redeem_index)
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
 
     let transaction = Transaction::new_signed_with_payer(&[
         update_market_reserves(updating_keys),
         update_user_obligation(user_obligation_key, market_reserves),
         redeem_collateral(
             manager_key,
-            *market_reserve_key,
+            market_reserve_key,
             sotoken_mint_key,
             user_obligation_key,
             None,
@@ -470,7 +495,8 @@ pub fn do_redeem_collateral_with_friend(
 
     let market_reserve_key = user_market_reserves
         .get(redeem_index)
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
 
     let transaction = Transaction::new_signed_with_payer(&[
         update_market_reserves(user_updating_keys),
@@ -479,7 +505,7 @@ pub fn do_redeem_collateral_with_friend(
         update_user_obligation(friend_obligation_key, friend_market_reserves),
         redeem_collateral(
             manager_key,
-            *market_reserve_key,
+            market_reserve_key,
             sotoken_mint_key,
             user_obligation_key,
             Some(friend_obligation_key),
@@ -504,7 +530,6 @@ pub fn do_redeem_collateral_without_loan(
     sotoken_mint_key: Pubkey,
     user_obligation_key: Pubkey,
     friend_obligation_key: Option<Pubkey>,
-    user_authority_key: Pubkey,
     user_sotoken_account_key: Pubkey,
     amount: u64,
     recent_blockhash: Hash,
@@ -553,20 +578,22 @@ pub fn do_replace_collateral(
 
     let out_market_reserve_key = market_reserves
         .get(replace_out_index)
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
 
     let in_market_reserve_key = market_reserves
         .get(replace_in_index)
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
 
     let transaction = Transaction::new_signed_with_payer(&[
         update_market_reserves(updating_keys),
         update_user_obligation(user_obligation_key, market_reserves),
         replace_collateral(
             manager_key,
-            *out_market_reserve_key,
+            out_market_reserve_key,
             out_sotoken_mint_key,
-            *in_market_reserve_key,
+            in_market_reserve_key,
             in_sotoken_mint_key,
             user_obligation_key,
             None,
@@ -616,11 +643,13 @@ pub fn do_replace_collateral_with_friend(
 
     let out_market_reserve_key = user_market_reserves
         .get(replace_out_index)
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
 
     let in_market_reserve_key = user_market_reserves
         .get(replace_in_index)
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
 
     let transaction = Transaction::new_signed_with_payer(&[
         update_market_reserves(user_updating_keys),
@@ -629,9 +658,9 @@ pub fn do_replace_collateral_with_friend(
         update_user_obligation(friend_obligation_key, friend_market_reserves),
         replace_collateral(
             manager_key,
-            *out_market_reserve_key,
+            out_market_reserve_key,
             out_sotoken_mint_key,
-            *in_market_reserve_key,
+            in_market_reserve_key,
             in_sotoken_mint_key,
             user_obligation_key,
             Some(friend_obligation_key),
@@ -670,14 +699,15 @@ pub fn do_borrow_liquidity(
 
     let market_reserve_key = market_reserves
         .get(borrow_index)
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
 
     let transaction = Transaction::new_signed_with_payer(&[
         update_market_reserves(updating_keys),
         update_user_obligation(user_obligation_key, market_reserves),
         borrow_liquidity(
             manager_key,
-            *market_reserve_key,
+            market_reserve_key,
             manager_token_account_key,
             user_obligation_key,
             None,
@@ -721,7 +751,8 @@ pub fn do_borrow_liquidity_with_friend(
 
     let market_reserve_key = user_market_reserves
         .get(borrow_index)
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
 
     let transaction = Transaction::new_signed_with_payer(&[
         update_market_reserves(user_updating_keys),
@@ -730,7 +761,7 @@ pub fn do_borrow_liquidity_with_friend(
         update_user_obligation(friend_obligation_key, friend_market_reserves),
         borrow_liquidity(
             manager_key,
-            *market_reserve_key,
+            market_reserve_key,
             manager_token_account_key,
             user_obligation_key,
             Some(friend_obligation_key),
@@ -800,20 +831,22 @@ pub fn do_liquidate(
 
     let collateral_market_reserve_key = market_reserves
         .get(collateral_index)
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
 
     let loan_market_reserve_key = market_reserves
         .get(loan_index)
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
 
     let transaction = Transaction::new_signed_with_payer(&[
         update_market_reserves(updating_keys),
         update_user_obligation(user_obligation_key, market_reserves),
         liquidate(
             manager_key,
-            *collateral_market_reserve_key,
+            collateral_market_reserve_key,
             sotoken_mint_key,
-            *loan_market_reserve_key,
+            loan_market_reserve_key,
             manager_token_account_key,
             user_obligation_key,
             None,
@@ -861,11 +894,13 @@ pub fn do_liquidate_with_friend(
 
     let collateral_market_reserve_key = user_market_reserves
         .get(collateral_index)
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
 
     let loan_market_reserve_key = user_market_reserves
         .get(loan_index)
-        .ok_or(ProgramError::NotEnoughAccountKeys)?;
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
 
     let transaction = Transaction::new_signed_with_payer(&[
         update_market_reserves(user_updating_keys),
@@ -874,9 +909,9 @@ pub fn do_liquidate_with_friend(
         update_user_obligation(friend_obligation_key, friend_market_reserves),
         liquidate(
             manager_key,
-            *collateral_market_reserve_key,
+            collateral_market_reserve_key,
             sotoken_mint_key,
-            *loan_market_reserve_key,
+            loan_market_reserve_key,
             manager_token_account_key,
             user_obligation_key,
             Some(friend_obligation_key),
