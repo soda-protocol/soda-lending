@@ -6,10 +6,11 @@ use crate::{
     create_rate_oracle,
     create_market_reserve,
     create_user_obligation,
-    do_exchange,
+    do_deposit,
+    do_withdraw,
     do_bind_friend,
     do_unbind_friend,
-    do_deposit_collateral,
+    do_pledge_collateral,
     do_redeem_collateral,
     do_redeem_collateral_with_friend,
     do_redeem_collateral_without_loan,
@@ -20,7 +21,8 @@ use crate::{
     do_repay_loan,
     do_liquidate,
     do_liquidate_with_friend,
-    do_inject_case,
+    do_inject_no_borrow,
+    do_inject_liquidation,
     types::{UserObligationInfo, get_pyth_price},
 };
 use solana_client::{
@@ -86,7 +88,7 @@ fn main() {
         &collaterals_price_oracle_map,
     ) {
         Ok(obligation) => {
-            println!("collaterals borrow value: {}, collaterals liquidation value: {}, collaterals max value: {}, loan value: {}",
+            println!("collaterals borrow value: {}, collaterals liquidation value: {}, collaterals max value: {}, loans value: {}",
                 obligation.collaterals_borrow_value,
                 obligation.collaterals_liquidation_value,
                 obligation.collaterals_max_value,
@@ -95,7 +97,6 @@ fn main() {
         }
         Err(e) => println!("{:?}", e),
     }
-    
 
     // //
     // let rate_data = client.get_account_data(&Pubkey::from_str("7nHzMWXrse8Mcp3Qc5KSJwG5J16wA75DMNEz7jV6hFpf").unwrap()).unwrap();

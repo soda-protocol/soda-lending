@@ -104,10 +104,8 @@ impl UserObligationInfo {
                     .accrue_interest(borrow_rate, clock.slot)
                     .map_err(|_| SodaError::DebugError8)?;
 
-                println!("{}", collateral.amount);
-
                 let collateral_amount = market_reserve
-                    .calculate_collateral_to_liquidity(collateral.amount)
+                    .exchange_collateral_to_liquidity(collateral.amount)
                     .map_err(|_| SodaError::DebugError9)?;
 
                 let decimals = 10u64

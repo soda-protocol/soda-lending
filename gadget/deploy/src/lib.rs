@@ -19,11 +19,11 @@ use spl_token::{
 };
 use soda_lending_contract::{
     instruction::{
-        bind_friend, borrow_liquidity, deposit_collateral, exchange,
+        bind_friend, borrow_liquidity, deposit, withdraw, pledge_collateral,
         init_manager, init_market_reserve, init_rate_oracle, init_user_obligation,
         liquidate, pause_rate_oracle, redeem_collateral, redeem_collateral_without_loan,
         repay_loan, replace_collateral, unbind_friend, update_market_reserves,
-        update_user_obligation, withdraw_fee, inject_case,
+        update_user_obligation, withdraw_fee, inject_no_borrow, inject_liquidation
     },
     math::WAD, pyth::{self, Product},
     state::{CollateralConfig, LiquidityConfig, Manager,
@@ -264,7 +264,7 @@ pub fn create_market_reserve(
     ))
 }
 
-pub fn do_exchange(
+pub fn do_deposit(
     authority: Keypair,
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
@@ -273,14 +273,13 @@ pub fn do_exchange(
     rate_oracle_key: Pubkey,
     user_token_account_key: Pubkey,
     user_sotoken_account_key: Pubkey,
-    from_collateral: bool,
     amount: u64,
     recent_blockhash: Hash,
 ) -> Transaction {
     let authority_key = &authority.pubkey();
 
     Transaction::new_signed_with_payer(&[
-        exchange(
+        deposit(
             manager_key,
             market_reserve_key,
             sotoken_mint_key,
@@ -289,7 +288,39 @@ pub fn do_exchange(
             *authority_key,
             user_token_account_key,
             user_sotoken_account_key,
-            from_collateral,
+            amount,
+        ),
+    ],
+    Some(authority_key),
+        &[&authority],
+        recent_blockhash,
+    )
+}
+
+pub fn do_withdraw(
+    authority: Keypair,
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    sotoken_mint_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    rate_oracle_key: Pubkey,
+    user_token_account_key: Pubkey,
+    user_sotoken_account_key: Pubkey,
+    amount: u64,
+    recent_blockhash: Hash,
+) -> Transaction {
+    let authority_key = &authority.pubkey();
+
+    Transaction::new_signed_with_payer(&[
+        withdraw(
+            manager_key,
+            market_reserve_key,
+            sotoken_mint_key,
+            manager_token_account_key,
+            rate_oracle_key,
+            *authority_key,
+            user_token_account_key,
+            user_sotoken_account_key,
             amount,
         ),
     ],
@@ -396,7 +427,7 @@ pub fn do_unbind_friend(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn do_deposit_collateral(
+pub fn do_pledge_collateral(
     user_authority: Keypair,
     market_reserve_key: Pubkey,
     sotoken_mint_key: Pubkey,
@@ -408,7 +439,7 @@ pub fn do_deposit_collateral(
     let user_authority_key = &user_authority.pubkey();
 
     Transaction::new_signed_with_payer(&[
-        deposit_collateral(
+        pledge_collateral(
             market_reserve_key,
             sotoken_mint_key,
             user_obligatiton_key,
@@ -566,8 +597,7 @@ pub fn do_replace_collateral(
     user_obligation_key: Pubkey,
     user_out_sotoken_account_key: Pubkey,
     user_in_sotoken_account_key: Pubkey,
-    out_amount: u64,
-    in_amount: u64,
+    amount: u64,
     recent_blockhash: Hash,
 ) -> Result<Transaction, ProgramError> {
     let user_authority_key = &user_authority.pubkey();    
@@ -600,8 +630,7 @@ pub fn do_replace_collateral(
             *user_authority_key,
             user_out_sotoken_account_key,
             user_in_sotoken_account_key,
-            out_amount,
-            in_amount
+            amount
         ),
     ],
     Some(user_authority_key),
@@ -626,8 +655,7 @@ pub fn do_replace_collateral_with_friend(
     friend_obligation_key: Pubkey,
     user_out_sotoken_account_key: Pubkey,
     user_in_sotoken_account_key: Pubkey,
-    out_amount: u64,
-    in_amount: u64,
+    amount: u64,
     recent_blockhash: Hash,
 ) -> Result<Transaction, ProgramError> {
     let user_authority_key = &user_authority.pubkey();    
@@ -667,8 +695,7 @@ pub fn do_replace_collateral_with_friend(
             *user_authority_key,
             user_out_sotoken_account_key,
             user_in_sotoken_account_key,
-            out_amount,
-            in_amount
+            amount
         ),
     ],
     Some(user_authority_key),
@@ -929,18 +956,34 @@ pub fn do_liquidate_with_friend(
     Ok(transaction)
 }
 
-pub fn do_inject_case(
+pub fn do_inject_no_borrow(
     authority: Keypair,
     user_obligation_key: Pubkey,
-    is_liquidation: bool,
     recent_blockhash: Hash,
 ) -> Transaction {
     let authority_key = &authority.pubkey();
 
     Transaction::new_signed_with_payer(&[
-        inject_case(
+        inject_no_borrow(
             user_obligation_key,
-            is_liquidation
+        ),
+    ],
+    Some(authority_key),
+        &[&authority],
+        recent_blockhash,
+    )
+}
+
+pub fn do_inject_liquidation(
+    authority: Keypair,
+    user_obligation_key: Pubkey,
+    recent_blockhash: Hash,
+) -> Transaction {
+    let authority_key = &authority.pubkey();
+
+    Transaction::new_signed_with_payer(&[
+        inject_liquidation(
+            user_obligation_key,
         ),
     ],
     Some(authority_key),
