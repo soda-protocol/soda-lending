@@ -145,7 +145,7 @@ impl Loan {
     ///
     pub fn calculate_loan_value(&self, reserve: &MarketReserve) -> Result<Decimal, ProgramError> {
         reserve.market_price
-            .try_mul(self.borrowed_amount_wads)?
+            .try_mul(self.borrowed_amount_wads.try_ceil_u64()?)?
             .try_div(calculate_decimals(reserve.token_info.decimal)?)
     }
 }
@@ -611,11 +611,10 @@ impl UserObligation {
             .try_floor_u64()?;
         let amount = amount.min(max_liquidation_amount);
 
-        let collateral_decimals = calculate_decimals(collateral_reserve.token_info.decimal)?;
         let collateral_amount = collateral_reserve.calculate_collateral_to_liquidity(amount)?;
         let collateral_value = collateral_reserve.market_price
             .try_mul(collateral_amount)?
-            .try_div(collateral_decimals)?;
+            .try_div(calculate_decimals(collateral_reserve.token_info.decimal)?)?;
 
         let liquidation_ratio: Rate = collateral_value
             .try_mul(Rate::from_scaled_val(self.collaterals[collateral_index].liquidation_value_ratio))?
@@ -634,7 +633,7 @@ impl UserObligation {
         self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads
             .try_sub(repay_amount)?;
 
-        let liquidation_res = LiquidationWithFee::new(
+        let liquidation_with_fee = LiquidationWithFee::new(
             collateral_value,
             loan_reserve.market_price,
             repay_amount,
@@ -642,7 +641,7 @@ impl UserObligation {
             Rate::from_scaled_val(loan_reserve.liquidity_info.config.liquidation_fee_rate),
         )?;
 
-        Ok((amount, liquidation_res))
+        Ok((amount, liquidation_with_fee))
     }
 }
 

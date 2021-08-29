@@ -153,7 +153,7 @@ impl BorrowWithFee {
         let fee = Decimal::from(amount)
             .try_div(Rate::one().try_add(rate)?)?
             .try_mul(rate)?
-            .try_round_u64()?;
+            .try_ceil_u64()?;
 
         Ok(Self{ amount, fee })
     }
@@ -187,7 +187,7 @@ impl LiquidationWithFee {
             .try_mul(loan_decimals)?
             .try_div(loan_price)?;
 
-        let repay = loan_amount.try_floor_u64()?;
+        let repay = loan_amount.try_ceil_u64()?;
         if equivalent_amount > loan_amount {
             let fee = equivalent_amount
                 .try_sub(loan_amount)?

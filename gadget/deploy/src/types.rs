@@ -78,39 +78,41 @@ impl UserObligationInfo {
         obligation_data: &[u8],
         market_and_price_map: &HashMap<Pubkey, (Vec<u8>, Vec<u8>, Vec<u8>)>,
     ) -> Result<Self, SodaError> {
-        let clock: &Clock = &bincode::deserialize(&clock_data).map_err(|_| SodaError::InvalidAccountData)?;
+        let clock: &Clock = &bincode::deserialize(&clock_data).map_err(|_| SodaError::DebugError1)?;
 
-        let obligation = UserObligation::unpack(obligation_data).map_err(|_| SodaError::InvalidAccountData)?;
+        let obligation = UserObligation::unpack(obligation_data).map_err(|_| SodaError::DebugError2)?;
     
         let collaterals = obligation.collaterals
             .iter()
             .map(|collateral| {
                 let (market_reserve_data, price_data, rate_oracle_data) = market_and_price_map
                     .get(&collateral.reserve)
-                    .ok_or(SodaError::InvalidAccountData)?;
+                    .ok_or(SodaError::DebugError3)?;
 
                 let mut market_reserve = MarketReserve::unpack(market_reserve_data)
-                    .map_err(|_| SodaError::InvalidAccountData)?;
+                    .map_err(|_| SodaError::DebugError4)?;
                 let price = get_pyth_price(price_data, clock)?;
-                let rate_oracle = RateOracle::unpack(rate_oracle_data).map_err(|_| SodaError::InvalidAccountData)?;
+                let rate_oracle = RateOracle::unpack(rate_oracle_data).map_err(|_| SodaError::DebugError5)?;
                 
                 let utilization_rate = market_reserve.liquidity_info
                     .utilization_rate()
-                    .map_err(|_| SodaError::InvalidAccountData)?;
+                    .map_err(|_| SodaError::DebugError6)?;
                 let borrow_rate = rate_oracle
                     .calculate_borrow_rate(clock.slot, utilization_rate)
-                    .map_err(|_| SodaError::InvalidAccountData)?;
+                    .map_err(|_| SodaError::DebugError7)?;
                 market_reserve  
                     .accrue_interest(borrow_rate, clock.slot)
-                    .map_err(|_| SodaError::InvalidAccountData)?;
+                    .map_err(|_| SodaError::DebugError8)?;
+
+                println!("{}", collateral.amount);
 
                 let collateral_amount = market_reserve
                     .calculate_collateral_to_liquidity(collateral.amount)
-                    .map_err(|_| SodaError::InvalidAccountData)?;
+                    .map_err(|_| SodaError::DebugError9)?;
 
                 let decimals = 10u64
                     .checked_pow(market_reserve.token_info.decimal as u32)
-                    .ok_or(SodaError::InvalidAccountData)?;
+                    .ok_or(SodaError::DebugError10)?;
 
                 let max_value = price * (collateral_amount as f64 / decimals as f64);
                 let borrow_equivalent_value = max_value * (collateral.borrow_value_ratio as f64 / WAD as f64);
@@ -131,34 +133,34 @@ impl UserObligationInfo {
             .map(|loan| {
                 let (market_reserve_data, price_data, rate_oracle_data) = market_and_price_map
                     .get(&loan.reserve)
-                    .ok_or(SodaError::InvalidAccountData)?;
+                    .ok_or(SodaError::DebugError11)?;
 
                     let mut market_reserve = MarketReserve::unpack(market_reserve_data)
-                    .map_err(|_| SodaError::InvalidAccountData)?;
+                    .map_err(|_| SodaError::DebugError1)?;
                 let price = get_pyth_price(price_data, clock)?;
-                let rate_oracle = RateOracle::unpack(rate_oracle_data).map_err(|_| SodaError::InvalidAccountData)?;
+                let rate_oracle = RateOracle::unpack(rate_oracle_data).map_err(|_| SodaError::DebugError2)?;
                 
                 let utilization_rate = market_reserve.liquidity_info
                     .utilization_rate()
-                    .map_err(|_| SodaError::InvalidAccountData)?;
+                    .map_err(|_| SodaError::DebugError3)?;
                 let borrow_rate = rate_oracle
                     .calculate_borrow_rate(clock.slot, utilization_rate)
-                    .map_err(|_| SodaError::InvalidAccountData)?;
+                    .map_err(|_| SodaError::DebugError4)?;
                 market_reserve  
                     .accrue_interest(borrow_rate, clock.slot)
-                    .map_err(|_| SodaError::InvalidAccountData)?;
+                    .map_err(|_| SodaError::DebugError5)?;
 
                 let decimals = 10u64
                     .checked_pow(market_reserve.token_info.decimal as u32)
-                    .ok_or(SodaError::InvalidAccountData)?;
+                    .ok_or(SodaError::DebugError6)?;
 
                 let ref_acc_borrow_rate_wads = u128::try_from(market_reserve.liquidity_info.acc_borrow_rate_wads.0)
-                    .map_err(|_| SodaError::InvalidAccountData)? as f64 / WAD as f64;
+                    .map_err(|_| SodaError::DebugError7)? as f64 / WAD as f64;
 
                 let mut acc_borrow_rate_wads = u128::try_from(loan.acc_borrow_rate_wads.0)
-                    .map_err(|_| SodaError::InvalidAccountData)? as f64 / WAD as f64;
+                    .map_err(|_| SodaError::DebugError8)? as f64 / WAD as f64;
                 let mut borrowed_amount_wads = u128::try_from(loan.borrowed_amount_wads.0)
-                    .map_err(|_| SodaError::InvalidAccountData)? as f64 / WAD as f64;
+                    .map_err(|_| SodaError::DebugError9)? as f64 / WAD as f64;
 
                 if ref_acc_borrow_rate_wads > acc_borrow_rate_wads {
                     let compounded_interest_rate = ref_acc_borrow_rate_wads / acc_borrow_rate_wads;

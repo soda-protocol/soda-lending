@@ -258,10 +258,13 @@ impl MarketReserve {
             Ok(amount)
         } else {
             let total_mint = Decimal::from(self.collateral_info.total_mint);
+            let exchange_rate: Rate = total_mint
+                .try_div(total_amount)?
+                .try_into()?;
+
             total_amount
                 .try_add(Decimal::from(amount))?
-                .try_mul(total_mint)?
-                .try_div(total_amount)?
+                .try_mul(exchange_rate)?
                 .try_sub(total_mint)?
                 .try_floor_u64()
         }
@@ -273,10 +276,13 @@ impl MarketReserve {
             Err(LendingError::MarketReserveLiquidityEmpty.into())
         } else {
             let total_mint = Decimal::from(self.collateral_info.total_mint);
+            let exchange_rate: Rate = total_mint
+                .try_div(total_amount)?
+                .try_into()?;
+
             let left_amount = total_mint
                 .try_sub(Decimal::from(amount))?
-                .try_mul(total_amount)?
-                .try_div(total_mint)?;
+                .try_div(exchange_rate)?;
 
             total_amount
                 .try_sub(left_amount)?
