@@ -93,7 +93,7 @@ pub fn create_token(
     ))
 }
 
-fn create_manager(
+pub fn create_manager(
     manager: Keypair,
     authority: Keypair,
     lamports: u64,
@@ -124,7 +124,7 @@ fn create_manager(
     )
 }
 
-fn create_rate_oracle(
+pub fn create_rate_oracle(
     rate_oracle: Keypair,
     authority: Keypair,
     config: RateOracleConfig,

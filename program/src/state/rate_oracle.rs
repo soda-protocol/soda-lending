@@ -27,7 +27,7 @@ pub struct RateOracleConfig {
 
 impl Param for RateOracleConfig {
     fn is_valid(&self) -> ProgramResult {
-        if self.a < WAD && self.c < WAD && self.l_u < 100 {
+        if self.c < WAD && self.l_u < 100 {
             Ok(())
         } else {
             Err(LendingError::InvalidRateOracleConfig.into())
