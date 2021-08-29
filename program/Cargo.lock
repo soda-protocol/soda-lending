@@ -2348,6 +2348,7 @@ dependencies = [
  "solana-sdk",
  "spl-token",
  "thiserror",
+ "typenum",
  "uint",
 ]
 

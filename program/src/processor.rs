@@ -26,6 +26,7 @@ use solana_program::{
     sysvar::{clock::Clock, rent::Rent, Sysvar}
 };
 use spl_token::{check_program_account, state::Mint};
+use typenum::{Bit, True, False, B0, B1};
 
 /// Processes an instruction
 pub fn process_instruction(
@@ -55,10 +56,13 @@ pub fn process_instruction(
             msg!("Instruction: Update Market Reserves");
             process_update_market_reserves(program_id, accounts)
         }
-        LendingInstruction::Exchange { from_collateral, amount } => {
-            let instruction = if from_collateral { "collateral to liquidity" } else { "liquidity to collateral" };
-            msg!("Instruction: Exchange from {}, amount = {}", instruction, amount);
-            process_exchange(program_id, accounts, amount, from_collateral)
+        LendingInstruction::Deposit { amount } => {
+            msg!("Instruction: Deposit: {}", amount);
+            process_deposit_or_withdraw::<True>(program_id, accounts, amount)
+        }
+        LendingInstruction::Withdraw { amount } => {
+            msg!("Instruction: Withdraw: {}", amount);
+            process_deposit_or_withdraw::<False>(program_id, accounts, amount)
         }
         LendingInstruction::InitUserObligation => {
             msg!("Instruction: Init User Obligation");
@@ -76,9 +80,9 @@ pub fn process_instruction(
             msg!("Instruction: Unbind Friend");
             process_unbind_friend(program_id, accounts)
         }
-        LendingInstruction::DepositCollateral { amount } => {
-            msg!("Instruction: Deposit Collateral: {}", amount);
-            process_deposit_collateral(program_id, accounts, amount)
+        LendingInstruction::PledgeCollateral { amount } => {
+            msg!("Instruction: Pledge Collateral: {}", amount);
+            process_pledge_collateral(program_id, accounts, amount)
         }
         LendingInstruction::RedeemCollateral { amount } => {
             msg!("Instruction: Redeem Collateral: {}", amount);
@@ -88,9 +92,9 @@ pub fn process_instruction(
             msg!("Instruction: Redeem Collateral Without Loan: {}", amount);
             process_redeem_collateral_without_loan(program_id, accounts, amount)
         }
-        LendingInstruction::ReplaceCollateral { out_amount, in_amount } => {
-            msg!("Instruction: Replace Collateral: out amount = {}, in amount = {}", out_amount, in_amount);
-            process_replace_collateral(program_id, accounts, out_amount,in_amount)
+        LendingInstruction::ReplaceCollateral { amount } => {
+            msg!("Instruction: Replace Collateral: amount = {},", amount);
+            process_replace_collateral(program_id, accounts, amount)
         }
         LendingInstruction::BorrowLiquidity { amount } => {
             msg!("Instruction: Borrow Liquidity: {}", amount);
@@ -106,7 +110,7 @@ pub fn process_instruction(
         }
         LendingInstruction::PauseRateOracle => {
             msg!("Instruction: Pause Rate Oracle");
-            process_operate_rate_oracle(program_id, accounts, Pause())
+            process_operate_rate_oracle(program_id, accounts, Pause)
         }
         LendingInstruction::UpdateRateOracleConfig { config } => {
             msg!("Instruction: Updae Rate Oracle Config");
@@ -114,7 +118,7 @@ pub fn process_instruction(
         }
         LendingInstruction::EnableBorrowForMarketReserve => {
             msg!("Instruction: Enable Borrow For Market Reserve");
-            process_operate_market_reserve(program_id, accounts, EnableBorrow())
+            process_operate_market_reserve(program_id, accounts, EnableBorrow)
         }
         LendingInstruction::UpdateMarketReserveCollateralConfig { config } => {
             msg!("Instruction: Update Market Reserve Collateral Config");
@@ -129,10 +133,14 @@ pub fn process_instruction(
             process_withdraw_fee(program_id, accounts, amount)
         }
         #[cfg(feature = "case-injection")]
-        LendingInstruction::InjectCase { is_liquidation } => {
-            let instruction = if is_liquidation { "Liquidation" } else { "Unhealthy" };
-            msg!("Instruction(Test): Inject {}", instruction);
-            process_inject_case(program_id, accounts, is_liquidation)
+        LendingInstruction::InjectNoBorrow => {
+            msg!("Instruction(Test): Inject No Borrow");
+            process_inject_case::<B0>(program_id, accounts)
+        }
+        #[cfg(feature = "case-injection")]
+        LendingInstruction::InjectLiquidation => {
+            msg!("Instruction(Test): Inject Liquidation Reached");
+            process_inject_case::<B1>(program_id, accounts)
         }
     }
 }
@@ -415,11 +423,10 @@ fn process_update_market_reserves(
         })
 }
 
-fn process_exchange(
+fn process_deposit_or_withdraw<B: Bit>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     amount: u64,
-    from_collateral: bool,
 ) -> ProgramResult {
     if amount == 0 {
         msg!("Liquidity amount provided cannot be zero");
@@ -491,31 +498,8 @@ fn process_exchange(
     market_reserve.accrue_interest(borrow_rate, clock.slot)?;
     market_reserve.last_update.update_slot(clock.slot, true);
 
-    if from_collateral {
-        let redeem_amount = market_reserve.exchange_collateral_to_liquidity(amount)?;
-        MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
-    
-        // burn sotoken
-        spl_token_burn(TokenBurnParams {
-            mint: sotoken_mint_info.clone(),
-            source: user_sotoken_account_info.clone(),
-            amount,
-            authority: user_authority_info.clone(),
-            authority_signer_seeds: &[],
-            token_program: token_program_id.clone(),
-        })?;
-    
-        // transfer from manager to user
-        spl_token_transfer(TokenTransferParams {
-            source: manager_token_account_info.clone(),
-            destination: user_token_account_info.clone(),
-            amount: redeem_amount,
-            authority: manager_authority_info.clone(),
-            authority_signer_seeds,
-            token_program: token_program_id.clone(),
-        })
-    } else {
-        let mint_amount = market_reserve.exchange_liquidity_to_collateral(amount)?;
+    if B::BOOL {
+        let mint_amount = market_reserve.deposit(amount)?;
         MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
 
         // transfer from user to manager
@@ -533,6 +517,29 @@ fn process_exchange(
             mint: sotoken_mint_info.clone(),
             destination: user_sotoken_account_info.clone(),
             amount: mint_amount,
+            authority: manager_authority_info.clone(),
+            authority_signer_seeds,
+            token_program: token_program_id.clone(),
+        })
+    } else {
+        let withdraw_amount = market_reserve.withdraw(amount)?;
+        MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
+    
+        // burn sotoken
+        spl_token_burn(TokenBurnParams {
+            mint: sotoken_mint_info.clone(),
+            source: user_sotoken_account_info.clone(),
+            amount,
+            authority: user_authority_info.clone(),
+            authority_signer_seeds: &[],
+            token_program: token_program_id.clone(),
+        })?;
+    
+        // transfer from manager to user
+        spl_token_transfer(TokenTransferParams {
+            source: manager_token_account_info.clone(),
+            destination: user_token_account_info.clone(),
+            amount: withdraw_amount,
             authority: manager_authority_info.clone(),
             authority_signer_seeds,
             token_program: token_program_id.clone(),
@@ -740,7 +747,7 @@ fn process_unbind_friend(
     UserObligation::pack(friend_obligation, &mut friend_obligation_info.try_borrow_mut_data()?)
 }
 
-fn process_deposit_collateral(
+fn process_pledge_collateral(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     amount: u64,
@@ -786,9 +793,9 @@ fn process_deposit_collateral(
 
     // handle obligation
     if let Ok(index) = user_obligation.find_collateral(*market_reserve_info.key) {
-        user_obligation.deposit(amount, index)?;
+        user_obligation.pledge(amount, index)?;
     } else {
-        user_obligation.new_deposit(amount, *market_reserve_info.key, &market_reserve)?;
+        user_obligation.new_pledge(amount, *market_reserve_info.key, &market_reserve)?;
     }
 
     // pack
@@ -1021,10 +1028,9 @@ fn process_redeem_collateral_without_loan(
 fn process_replace_collateral(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    out_amount: u64,
-    in_amount: u64,
+    amount: u64,
 ) -> ProgramResult {
-    if out_amount == 0 || in_amount == 0 {
+    if amount == 0 {
         msg!("Collateral amount provided cannot be zero");
         return Err(LendingError::InvalidAmount.into());
     }
@@ -1137,8 +1143,7 @@ fn process_replace_collateral(
     let out_index = user_obligation.find_collateral(*out_market_reserve_info.key)?;
     let out_amount = if let Ok(in_index) = user_obligation.find_collateral(*in_market_reserve_info.key) {
         user_obligation.replace_collateral(
-            out_amount,
-            in_amount,
+            amount,
             out_index,
             in_index,
             &out_market_reserve,
@@ -1146,9 +1151,8 @@ fn process_replace_collateral(
             friend_obligation,
         )?
     } else {
-        user_obligation.new_replace_collateral(
-            out_amount,
-            in_amount,
+        user_obligation.replace_collateral_for_new(
+            amount,
             out_index,
             *in_market_reserve_info.key,
             &out_market_reserve,
@@ -1174,7 +1178,7 @@ fn process_replace_collateral(
     spl_token_burn(TokenBurnParams {
         mint: in_sotoken_mint_info.clone(),
         source: user_in_sotoken_account_info.clone(),
-        amount: in_amount,
+        amount,
         authority: user_authority_info.clone(),
         authority_signer_seeds: &[],
         token_program: token_program_id.clone(),
@@ -1549,7 +1553,7 @@ fn process_operate_rate_oracle<P: Any + Copy + Param>(
         return Err(LendingError::InvalidOracleAuthority.into())
     }
 
-    rate_oracle.operate_checked(param)?;
+    rate_oracle.operate(param)?;
     RateOracle::pack(rate_oracle, &mut rate_oracle_info.try_borrow_mut_data()?)
 }
 
@@ -1589,7 +1593,7 @@ fn process_operate_market_reserve<P: Any + Copy + Param>(
         return Err(LendingError::InvalidSigner.into());
     }
 
-    market_reserve.operate_checked(param)?;
+    market_reserve.operate(param)?;
     // pack
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)
 }
@@ -1666,10 +1670,9 @@ fn process_withdraw_fee(
 }
 
 #[cfg(feature = "case-injection")]
-fn process_inject_case(
+fn process_inject_case<B: Bit>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    is_liquidation: bool,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -1680,10 +1683,16 @@ fn process_inject_case(
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
 
-    if is_liquidation {
-        user_obligation.loans_value = user_obligation.collaterals_liquidation_value
-    } else {
-        user_obligation.loans_value = user_obligation.collaterals_borrow_value;
+    match B::U8 {
+        B0::U8 => {
+            user_obligation.loans_value = user_obligation.collaterals_borrow_value;
+        }
+        B1::U8 => {
+            user_obligation.loans_value = user_obligation.collaterals_liquidation_value;
+        }
+        _ => {
+            return Err(LendingError::UndefinedCase.into());
+        }
     }
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)

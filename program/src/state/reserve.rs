@@ -102,7 +102,7 @@ impl Param for LiquidityConfig {
 
 ///
 #[derive(Clone, Copy, Debug)]
-pub struct EnableBorrow();
+pub struct EnableBorrow;
 
 impl Param for EnableBorrow {
     fn is_valid(&self) -> ProgramResult {
@@ -230,7 +230,7 @@ pub struct MarketReserve {
 }
 
 impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
-    fn operate(&mut self, param: P) -> ProgramResult {
+    fn operate_unchecked(&mut self, param: P) -> ProgramResult {
         if let Some(_enable) = <dyn Any>::downcast_ref::<EnableBorrow>(&param) {
             self.liquidity_info.enable_borrow = true;
             return Ok(())
@@ -252,7 +252,7 @@ impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
 
 impl MarketReserve {
     ///
-    pub fn calculate_liquidity_to_collateral(&self, amount: u64) -> Result<u64, ProgramError> {
+    pub fn exchange_liquidity_to_collateral(&self, amount: u64) -> Result<u64, ProgramError> {
         let total_amount = self.liquidity_info.total_amount()?;
         if total_amount == Decimal::zero() {
             Ok(amount)
@@ -270,7 +270,7 @@ impl MarketReserve {
         }
     }
     ///
-    pub fn calculate_collateral_to_liquidity(&self, amount: u64) -> Result<u64, ProgramError> {
+    pub fn exchange_collateral_to_liquidity(&self, amount: u64) -> Result<u64, ProgramError> {
         let total_amount = self.liquidity_info.total_amount()?;
         if total_amount == Decimal::zero() {
             Err(LendingError::MarketReserveLiquidityEmpty.into())
@@ -304,16 +304,16 @@ impl MarketReserve {
         Ok(())
     }
     ///
-    pub fn exchange_liquidity_to_collateral(&mut self, amount: u64) -> Result<u64, ProgramError> {
-        let mint_amount = self.calculate_liquidity_to_collateral(amount)?;
+    pub fn deposit(&mut self, amount: u64) -> Result<u64, ProgramError> {
+        let mint_amount = self.exchange_liquidity_to_collateral(amount)?;
         self.collateral_info.mint(mint_amount)?;
         self.liquidity_info.deposit(amount)?;
 
         Ok(mint_amount)
     }
     ///
-    pub fn exchange_collateral_to_liquidity(&mut self, amount: u64) -> Result<u64, ProgramError> {
-        let mint_amount = self.calculate_collateral_to_liquidity(amount)?;
+    pub fn withdraw(&mut self, amount: u64) -> Result<u64, ProgramError> {
+        let mint_amount = self.exchange_collateral_to_liquidity(amount)?;
         self.collateral_info.burn(mint_amount)?;
         self.liquidity_info.withdraw(amount)?;
 

@@ -43,7 +43,7 @@ const COPTION_SOME_TAG: [u8; 4] = [1, 0, 0, 0];
 const COPTION_NONE_TAG: [u8; 4] = [0, 0, 0, 0];
 
 ///
-pub trait Param {
+pub trait Param: Sized {
     ///
     fn is_valid(&self) -> ProgramResult;
 }
@@ -51,12 +51,18 @@ pub trait Param {
 ///
 pub trait Operator<P: Param + Copy> {
     ///
-    fn operate(&mut self, param: P) -> ProgramResult;
+    fn operate_unchecked(&mut self, param: P) -> ProgramResult;
     ///
-    fn operate_checked(&mut self, param: P) -> ProgramResult {
+    fn operate(&mut self, param: P) -> ProgramResult {
         param.is_valid()?;
-        self.operate(param)
+        self.operate_unchecked(param)
     }
+}
+
+///
+pub trait Migrator<O>: Sized {
+    ///
+    fn migrate(old: O) -> Result<Self, ProgramError>;
 }
 
 // Helpers

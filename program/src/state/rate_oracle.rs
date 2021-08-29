@@ -37,7 +37,7 @@ impl Param for RateOracleConfig {
 
 ///
 #[derive(Clone, Copy, Debug)]
-pub struct Pause();
+pub struct Pause;
 
 impl Param for Pause {
     fn is_valid(&self) -> ProgramResult {
@@ -55,7 +55,7 @@ pub struct RateOracle {
 }
 
 impl<P: Any + Param + Copy> Operator<P> for RateOracle {
-    fn operate(&mut self, param: P) -> ProgramResult {
+    fn operate_unchecked(&mut self, param: P) -> ProgramResult {
         if let Some(config) = <dyn Any>::downcast_ref::<RateOracleConfig>(&param) {
             self.config = *config;
             return Ok(());
