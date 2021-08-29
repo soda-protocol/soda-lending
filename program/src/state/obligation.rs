@@ -369,7 +369,7 @@ impl UserObligation {
         self.loans.push(Loan{
             reserve: key,
             acc_borrow_rate_wads: reserve.liquidity_info.acc_borrow_rate_wads,
-            borrowed_amount_wads: reserve.liquidity_info.borrowed_amount_wads 
+            borrowed_amount_wads: Decimal::from(amount),
         });
 
         let value = reserve.market_price

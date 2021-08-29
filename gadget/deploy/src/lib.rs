@@ -1,5 +1,6 @@
 #![allow(missing_docs)]
 pub mod types;
+pub mod error;
 
 use std::str::FromStr;
 
@@ -19,15 +20,16 @@ use spl_token::{
 use soda_lending_contract::{
     instruction::{
         bind_friend, borrow_liquidity, deposit_collateral, exchange,
-        feed_rate_oracle, init_manager, init_market_reserve, init_rate_oracle,
-        init_user_obligation, liquidate, pause_rate_oracle, redeem_collateral,
-        redeem_collateral_without_loan, repay_loan, replace_collateral,
-        unbind_friend, update_market_reserves, update_user_obligation, withdraw_fee,
-        inject_case,
+        init_manager, init_market_reserve, init_rate_oracle, init_user_obligation,
+        liquidate, pause_rate_oracle, redeem_collateral, redeem_collateral_without_loan,
+        repay_loan, replace_collateral, unbind_friend, update_market_reserves,
+        update_user_obligation, withdraw_fee, inject_case,
     },
     math::WAD, pyth::{self, Product},
     state::{CollateralConfig, LiquidityConfig, Manager,
-        MarketReserve, RateOracle, RateOracleConfig, UserObligation}};
+        MarketReserve, RateOracle, RateOracleConfig, UserObligation
+    }
+};
 
 const PYTH_ID: &str = "gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s";
 const QUOTE_CURRENCY: &[u8; 32] = &[85, 83, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
@@ -125,7 +127,6 @@ fn create_manager(
 fn create_rate_oracle(
     rate_oracle: Keypair,
     authority: Keypair,
-    asset_index: u64,
     config: RateOracleConfig,
     lamports: u64,
     recent_blockhash: Hash,
@@ -144,7 +145,6 @@ fn create_rate_oracle(
         init_rate_oracle(
             *rate_oracle_key,
             *authority_key,
-            asset_index,
             config,
         )
     ],

@@ -643,10 +643,13 @@ name = "deploy"
 version = "0.1.0"
 dependencies = [
  "bincode",
+ "num-derive",
+ "num-traits",
  "soda-lending-contract",
  "solana-client",
  "solana-sdk",
  "spl-token",
+ "thiserror",
 ]
 
 [[package]]
