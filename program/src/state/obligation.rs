@@ -685,11 +685,11 @@ impl Pack for UserObligation {
         let loans_offset = collaterals_offset + self.loans.len() * LOAN_LEN;
 
         data_flatten[..collaterals_offset]
-            .chunks_mut(COLLATERAL_LEN)
+            .chunks_exact_mut(COLLATERAL_LEN)
             .zip(self.collaterals.iter())
             .for_each(|(data, collateral)| collateral.pack_into_slice(data));
         data_flatten[collaterals_offset..loans_offset]
-            .chunks_mut(LOAN_LEN)
+            .chunks_exact_mut(LOAN_LEN)
             .zip(self.loans.iter())
             .for_each(|(data, loan)| loan.pack_into_slice(data));
     }
@@ -736,12 +736,12 @@ impl Pack for UserObligation {
         let loans_offset = collaterals_offset + u8::from_le_bytes(*loans_len) as usize * LOAN_LEN;
 
         let collaterals = data_flatten[..collaterals_offset]
-            .chunks(COLLATERAL_LEN)
+            .chunks_exact(COLLATERAL_LEN)
             .map(|data| Collateral::unpack_from_slice(data))
             .collect::<Result<Vec<_>, ProgramError>>()?;
 
         let loans = data_flatten[collaterals_offset..loans_offset]
-            .chunks(LOAN_LEN)
+            .chunks_exact(LOAN_LEN)
             .map(|data| Loan::unpack_from_slice(data))
             .collect::<Result<Vec<_>, ProgramError>>()?;
 
