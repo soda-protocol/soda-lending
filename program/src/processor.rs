@@ -660,6 +660,9 @@ fn process_bind_friend(
     }
     let mut friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
 
+    if user_obligation_info.key == friend_obligation_info.key {
+        return Err(LendingError::UserObligationInvalidFriend.into())
+    }
     if user_obligation.manager != friend_obligation.manager {
         return Err(LendingError::UserObligationFriendNotMatched.into());
     }

@@ -1,6 +1,6 @@
 use solana_sdk::signer::{Signer, keypair::Keypair};
 
-const SODA: &str = "Soda";
+const SODA: &str = "Soda666";
 
 fn main() {
     loop {

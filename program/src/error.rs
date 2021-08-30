@@ -286,6 +286,9 @@ pub enum LendingError {
     #[error("User Obligation friend not matched")]
     UserObligationFriendNotMatched,
     ///
+    #[error("User Obligation friend is invalid")]
+    UserObligationInvalidFriend,
+    ///
     #[cfg(feature = "case-injection")]
     #[error("Undefined case")]
     UndefinedCase,

@@ -40,7 +40,7 @@ pub const PYTH_ID: &str = "gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s";
 pub const QUOTE_CURRENCY: &[u8; 32] = &[85, 83, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 pub const GLOBAL_OWNER: &str = "vG2VqMokQyY82xKda116qAmvMQm4ymoKEV92UtxNVmu4tKDt4X33ELY4rdCfiR1NxJnbek39m5X9rLJnxASNbmQ";
 pub const MANAGER: &str = "F93DUk6QDpLBRd6pVQNtXvgrU4mBNMv5d1JaYkHvhcr5";
-pub const OBLIGATION: &str = "5DJ3bZDmzv1NruAiEeJ3BgWcw568eKBqdHPkP68vGgXH";
+pub const OBLIGATION: &str = "HCpUvBNkiBNqWBTErHM68v6sKrSSC2N1Ur93bViWgaj7";
 pub const RATE_ORACLE: &str = "7nHzMWXrse8Mcp3Qc5KSJwG5J16wA75DMNEz7jV6hFpf";
 
 // BNB
@@ -110,6 +110,16 @@ pub const USDC_MANAGER_TOKEN_ACCOUNT: &str = "68rh6pWuipFPZCna56uHFLDHWTpGRZQ2r4
 pub const USDC_RESERVE: &str = "bSrhY4SaKYSf4BWjQWgWa7oJ2NTMJtU5vCFwEuDfvwZ";
 pub const USDC_LONE_TOKEN_ACCOUNT: &str = "4axY5PF6qUEC1RZ8V5TJ7Dhq6rMMgV2iCPN6yNRUo6QR";
 pub const SOUSDC_LONE_TOKEN_ACCOUNT: &str = "pPed3aVtFQ41ifHZJJLgz667nskzLf2rmfSLjePa9fT";
+
+// USDT
+pub const USDT_MINT: &str = "GR6zSp8opYZh7H2ZFEJBbQYVjY4dkKc19iFoPEhWXTrV";
+pub const SOUSDT_MINT: &str = "7gWWVUx2GNFajgY4tv793kQpCSuFrnaXu1ZK1Arqkbc9";
+pub const USDT_PRODUCT: &str = "C5wDxND9E61RZ1wZhaSTWkoA8udumaHnoQY6BBsiaVpn";
+pub const USDT_PRICE: &str = "38xoQ4oeJCBrcVvca2cGk7iV1dAfrmTR1kmhSCJQ8Jto";
+pub const USDT_MANAGER_TOKEN_ACCOUNT: &str = "22vUHMhYVVnsqiHpADVwm7pw7XjVpzKTnEYGvrFsFnpv";
+pub const USDT_RESERVE: &str = "EpgkMSyzK5BMLAcP3i4UneziJh3e6GDAq8gZhC8Wnmra";
+pub const USDT_LONE_TOKEN_ACCOUNT: &str = "GbGq9v7c96UkjrKDpZFw135jjAX4G1Mv7vJLEGogzPxf";
+pub const SOUSDT_LONE_TOKEN_ACCOUNT: &str = "Dn7xcEPQPoGZZ8NFEpgKcX6av8nbWGHVu3vdQURheudQ";
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_test_token(
@@ -811,8 +821,11 @@ pub fn do_borrow_liquidity(
         .ok_or(ProgramError::NotEnoughAccountKeys)?
         .clone();
 
+    let (updating_keys_1, updating_keys_2) = updating_keys.split_at(updating_keys.len() / 2);
+
     let transaction = Transaction::new_signed_with_payer(&[
-        update_market_reserves(updating_keys),
+        update_market_reserves(updating_keys_1.into()),
+        update_market_reserves(updating_keys_2.into()),
         update_user_obligation(user_obligation_key, market_reserves),
         borrow_liquidity(
             manager_key,
@@ -1074,29 +1087,6 @@ pub fn do_inject_liquidation(
     )
 }
 
-pub fn do_update_market_reserves_and_obligation(
-    authority: Keypair,
-    updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
-    user_obligation_key: Pubkey,
-    recent_blockhash: Hash,
-) -> Transaction {
-    let authority_key = &authority.pubkey(); 
-
-    let market_reserves = updating_keys
-        .iter()
-        .map(|reserve| reserve.0)
-        .collect::<Vec<_>>();
-
-    Transaction::new_signed_with_payer(&[
-            update_market_reserves(updating_keys),
-            update_user_obligation(user_obligation_key, market_reserves),
-        ],
-        Some(authority_key),
-        &[&authority],
-        recent_blockhash,
-    )
-}
-
 pub fn get_market_and_price_map(client: &RpcClient) -> Result<HashMap::<Pubkey, (Vec<u8>, Vec<u8>, Vec<u8>)>, SodaError> {
     let mut collaterals_price_oracle_map = HashMap::new();
     // BNB
@@ -1159,6 +1149,15 @@ pub fn get_market_and_price_map(client: &RpcClient) -> Result<HashMap::<Pubkey, 
         (
             client.get_account_data(&Pubkey::from_str(USDC_RESERVE).unwrap())?,
             client.get_account_data(&Pubkey::from_str(USDC_PRICE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
+        ),
+    );
+    // USDT
+    collaterals_price_oracle_map.insert(
+        Pubkey::from_str(USDT_RESERVE).unwrap(),
+        (
+            client.get_account_data(&Pubkey::from_str(USDT_RESERVE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(USDT_PRICE).unwrap())?,
             client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
         ),
     );
