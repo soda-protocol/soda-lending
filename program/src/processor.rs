@@ -26,7 +26,9 @@ use solana_program::{
     sysvar::{clock::Clock, rent::Rent, Sysvar}
 };
 use spl_token::{check_program_account, state::Mint};
-use typenum::{Bit, True, False, B0, B1};
+use typenum::{Bit, True, False};
+#[cfg(feature = "case-injection")]
+use typenum::{B0, B1};
 
 /// Processes an instruction
 pub fn process_instruction(

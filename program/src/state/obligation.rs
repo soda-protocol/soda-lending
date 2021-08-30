@@ -13,8 +13,7 @@ use solana_program::{
 };
 use std::{convert::TryInto, cmp::Ordering, iter::Iterator};
 
-/// extremely it can be 10 or mode, but wo choose 8 cautiously
-const MAX_OBLIGATION_RESERVES: usize = 8;
+const MAX_OBLIGATION_RESERVES: usize = 10;
 
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -50,7 +49,7 @@ impl Collateral {
 
 impl Sealed for Collateral {}
 
-const COLLATERAL_RESERVE_LEN: usize = 64;
+const COLLATERAL_PADDING_LEN: usize = 64;
 const COLLATERAL_LEN: usize = 128;
 
 impl Pack for Collateral {
@@ -65,7 +64,7 @@ impl Pack for Collateral {
             borrow_value_ratio,
             liquidation_value_ratio,
             close_factor,
-            _rest,
+            _padding,
         ) = mut_array_refs![
             output,
             PUBKEY_BYTES,
@@ -73,7 +72,7 @@ impl Pack for Collateral {
             8,
             8,
             8,
-            COLLATERAL_RESERVE_LEN
+            COLLATERAL_PADDING_LEN
         ];
 
         reserve.copy_from_slice(self.reserve.as_ref());
@@ -92,7 +91,7 @@ impl Pack for Collateral {
             borrow_value_ratio,
             liquidation_value_ratio,
             close_factor,
-            _rest,
+            _padding,
         ) = array_refs![
             input,
             PUBKEY_BYTES,
@@ -100,7 +99,7 @@ impl Pack for Collateral {
             8,
             8,
             8,
-            COLLATERAL_RESERVE_LEN
+            COLLATERAL_PADDING_LEN
         ];
 
         Ok(Self{
@@ -152,7 +151,7 @@ impl Loan {
 
 impl Sealed for Loan {}
 
-const LOAN_RESERVE_LEN: usize = 64;
+const LOAN_PADDING_LEN: usize = 64;
 const LOAN_LEN: usize = 128;
 
 impl Pack for Loan {
@@ -165,13 +164,13 @@ impl Pack for Loan {
             reserve,
             acc_borrow_rate_wads,
             borrowed_amount_wads,
-            _rest,
+            _padding,
         ) = mut_array_refs![
             output,
             PUBKEY_BYTES,
             16,
             16,
-            LOAN_RESERVE_LEN
+            LOAN_PADDING_LEN
         ];
 
         reserve.copy_from_slice(self.reserve.as_ref());
@@ -186,13 +185,13 @@ impl Pack for Loan {
             reserve,
             acc_borrow_rate_wads,
             borrowed_amount_wads,
-            _rest,
+            _padding,
         ) = array_refs![
             input,
             PUBKEY_BYTES,
             16,
             16,
-            LOAN_RESERVE_LEN
+            LOAN_PADDING_LEN
         ];
 
         Ok(Self{
@@ -630,10 +629,10 @@ impl IsInitialized for UserObligation {
     }
 }
 
-// const MAX_RESERVE_LEN: usize = max(COLLATERAL_LEN, LOAN_LEN);
-const MAX_RESERVE_LEN: usize = 128;
-const USER_OBLIGATITION_RESERVE_LEN: usize = 128;
-const USER_OBLIGATITION_LEN: usize = 1312;
+// const MAX_PADDING_LEN: usize = max(COLLATERAL_LEN, LOAN_LEN);
+const MAX_PADDING_LEN: usize = 128;
+const USER_OBLIGATITION_PADDING_LEN: usize = 128;
+const USER_OBLIGATITION_LEN: usize = 1568;
 
 impl Pack for UserObligation {
     const LEN: usize = USER_OBLIGATITION_LEN;
@@ -653,7 +652,7 @@ impl Pack for UserObligation {
             collaterals_len,
             loans_len,
             data_flatten,
-            _rest,
+            _padding,
         ) = mut_array_refs![
             output,
             1,
@@ -666,8 +665,8 @@ impl Pack for UserObligation {
             16,
             1,
             1,
-            MAX_RESERVE_LEN * MAX_OBLIGATION_RESERVES,
-            USER_OBLIGATITION_RESERVE_LEN
+            MAX_PADDING_LEN * MAX_OBLIGATION_RESERVES,
+            USER_OBLIGATITION_PADDING_LEN
         ];
 
         *version = self.version.to_le_bytes();
@@ -709,7 +708,7 @@ impl Pack for UserObligation {
             collaterals_len,
             loans_len,
             data_flatten,
-            _rest,
+            _padding,
         ) = array_refs![
             input,
             1,
@@ -722,8 +721,8 @@ impl Pack for UserObligation {
             16,
             1,
             1,
-            MAX_RESERVE_LEN * MAX_OBLIGATION_RESERVES,
-            USER_OBLIGATITION_RESERVE_LEN
+            MAX_PADDING_LEN * MAX_OBLIGATION_RESERVES,
+            USER_OBLIGATITION_PADDING_LEN
         ];
 
         let version = u8::from_le_bytes(*version);

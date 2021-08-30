@@ -113,7 +113,7 @@ impl IsInitialized for RateOracle {
 }
 
 ///
-const RATE_ORACLE_RESERVE_LEN: usize = 256;
+const RATE_ORACLE_PADDING_LEN: usize = 256;
 const RATE_ORACLE_LEN: usize = 331;
 
 impl Pack for RateOracle {
@@ -131,7 +131,7 @@ impl Pack for RateOracle {
             c,
             l_u,
             k_u,
-            _rest,
+            _padding,
         ) = mut_array_refs![
             output,
             1,
@@ -142,7 +142,7 @@ impl Pack for RateOracle {
             8,
             1,
             16,
-            RATE_ORACLE_RESERVE_LEN
+            RATE_ORACLE_PADDING_LEN
         ];
 
         *version = self.version.to_le_bytes();
@@ -168,7 +168,7 @@ impl Pack for RateOracle {
             c,
             l_u,
             k_u,
-            _rest,
+            _padding,
         ) = array_refs![
             input,
             1,
@@ -179,7 +179,7 @@ impl Pack for RateOracle {
             8,
             1,
             16,
-            RATE_ORACLE_RESERVE_LEN
+            RATE_ORACLE_PADDING_LEN
         ];
 
         let version = u8::from_le_bytes(*version);

@@ -328,7 +328,7 @@ impl IsInitialized for MarketReserve {
     }
 }
 
-const MARKET_RESERVE_RESERVE_LEN: usize = 128;
+const MARKET_RESERVE_PADDING_LEN: usize = 128;
 const MARKET_RESERVE_LEN: usize = 399;
 
 impl Pack for MarketReserve {
@@ -359,7 +359,7 @@ impl Pack for MarketReserve {
             borrow_fee_rate,
             liquidation_fee_rate,
             flash_loan_fee_rate,
-            _rest,
+            _padding,
         ) = mut_array_refs![
             output,
             1,
@@ -383,7 +383,7 @@ impl Pack for MarketReserve {
             8,
             8,
             8,
-            MARKET_RESERVE_RESERVE_LEN
+            MARKET_RESERVE_PADDING_LEN
         ];
 
         *version = self.version.to_le_bytes();
@@ -439,7 +439,7 @@ impl Pack for MarketReserve {
             borrow_fee_rate,
             liquidation_fee_rate,
             flash_loan_fee_rate,
-            _rest,
+            _padding,
         ) = array_refs![
             input,
             1,
@@ -463,7 +463,7 @@ impl Pack for MarketReserve {
             8,
             8,
             8,
-            MARKET_RESERVE_RESERVE_LEN
+            MARKET_RESERVE_PADDING_LEN
         ];
 
         let version = u8::from_le_bytes(*version);
