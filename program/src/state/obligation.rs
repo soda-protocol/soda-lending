@@ -13,7 +13,7 @@ use solana_program::{
 };
 use std::{convert::TryInto, cmp::Ordering, iter::Iterator};
 
-/// 
+/// extremely it can be 10 or mode, but wo choose 8 cautiously
 const MAX_OBLIGATION_RESERVES: usize = 8;
 
 ///

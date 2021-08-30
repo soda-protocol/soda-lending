@@ -101,6 +101,16 @@ pub const LUNA_RESERVE: &str = "CNeHPGmEY58MsiYEBb6AhUj5vFHnsrp2zyaqj1dEeQsZ";
 pub const LUNA_LONE_TOKEN_ACCOUNT: &str = "8gBhewFMmydvurfNV6Fbxrynwr6hfqUAKKC4ytHwrJEE";
 pub const SOLUNA_LONE_TOKEN_ACCOUNT: &str = "BtiNij9vNX9A691egXM1E5M3UftX6iyBDtU6BiU83mm3";
 
+// USDC
+pub const USDC_MINT: &str = "Bj9LaiV7aR1z2263r5fuPjZN1asu3QXHUnGkHUAcZ4e1";
+pub const SOUSDC_MINT: &str = "GQLpsMxhEmdX6kSPioCenW4C5aJiAYqZTnZixDHtePtw";
+pub const USDC_PRODUCT: &str = "6NpdXrQEpmDZ3jZKmM2rhdmkd3H6QAk23j2x8bkXcHKA";
+pub const USDC_PRICE: &str = "5SSkXsEKQepHHAewytPVwdej4epN1nxgLVM84L4KXgy7";
+pub const USDC_MANAGER_TOKEN_ACCOUNT: &str = "68rh6pWuipFPZCna56uHFLDHWTpGRZQ2r4e1uHjRcGFp";
+pub const USDC_RESERVE: &str = "bSrhY4SaKYSf4BWjQWgWa7oJ2NTMJtU5vCFwEuDfvwZ";
+pub const USDC_LONE_TOKEN_ACCOUNT: &str = "4axY5PF6qUEC1RZ8V5TJ7Dhq6rMMgV2iCPN6yNRUo6QR";
+pub const SOUSDC_LONE_TOKEN_ACCOUNT: &str = "pPed3aVtFQ41ifHZJJLgz667nskzLf2rmfSLjePa9fT";
+
 #[allow(clippy::too_many_arguments)]
 pub fn create_test_token(
     mint: Keypair,
@@ -1064,32 +1074,22 @@ pub fn do_inject_liquidation(
     )
 }
 
-pub fn do_update_market_reserves(
+pub fn do_update_market_reserves_and_obligation(
     authority: Keypair,
     updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    user_obligation_key: Pubkey,
     recent_blockhash: Hash,
 ) -> Transaction {
     let authority_key = &authority.pubkey(); 
+
+    let market_reserves = updating_keys
+        .iter()
+        .map(|reserve| reserve.0)
+        .collect::<Vec<_>>();
 
     Transaction::new_signed_with_payer(&[
             update_market_reserves(updating_keys),
-        ],
-        Some(authority_key),
-        &[&authority],
-        recent_blockhash,
-    )
-}
-
-pub fn do_update_obligations(
-    authority: Keypair,
-    user_obligation_key: Pubkey,
-    market_reserve_keys: Vec<Pubkey>,
-    recent_blockhash: Hash,
-) -> Transaction {
-    let authority_key = &authority.pubkey(); 
-    
-    Transaction::new_signed_with_payer(&[
-            update_user_obligation(user_obligation_key, market_reserve_keys),
+            update_user_obligation(user_obligation_key, market_reserves),
         ],
         Some(authority_key),
         &[&authority],
@@ -1150,6 +1150,15 @@ pub fn get_market_and_price_map(client: &RpcClient) -> Result<HashMap::<Pubkey, 
         (
             client.get_account_data(&Pubkey::from_str(SOL_RESERVE).unwrap())?,
             client.get_account_data(&Pubkey::from_str(SOL_PRICE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
+        ),
+    );
+    // USDC
+    collaterals_price_oracle_map.insert(
+        Pubkey::from_str(USDC_RESERVE).unwrap(),
+        (
+            client.get_account_data(&Pubkey::from_str(USDC_RESERVE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(USDC_PRICE).unwrap())?,
             client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
         ),
     );

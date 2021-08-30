@@ -31,7 +31,16 @@ use solana_client::{
     rpc_client::RpcClient, 
     rpc_request::TokenAccountsFilter,
 };
-use solana_sdk::{clock::Clock, commitment_config::CommitmentConfig, hash::Hash, instruction::Instruction, program_error::ProgramError, program_pack::Pack, pubkey::Pubkey, signer::{Signer, keypair::Keypair}, system_instruction::create_account, sysvar::{Sysvar, SysvarId}, transaction::Transaction};
+use solana_sdk::{
+    clock::Clock,
+    commitment_config::CommitmentConfig, 
+    program_pack::Pack,
+    pubkey::Pubkey,
+    signer::{Signer, keypair::Keypair},
+    system_instruction::create_account,
+    sysvar::{Sysvar, SysvarId},
+    transaction::Transaction
+};
 use spl_token::{
     instruction::{initialize_mint, initialize_account, mint_to},
     state::{Mint, Account},
@@ -97,7 +106,7 @@ fn main() {
     // let transaction = do_init_token_account(
     //     authority,
     //     account,
-    //     Pubkey::from_str(SOSOL_MINT).unwrap(),
+    //     Pubkey::from_str(SOUSDC_MINT).unwrap(),
     //     lamports,
     //     block_hash,
     // ).unwrap();
@@ -144,10 +153,10 @@ fn main() {
     // let transaction = create_market_reserve(
     //     authority,
     //     Pubkey::from_str(MANAGER).unwrap(),
-    //     Pubkey::from_str(SOL_PRODUCT).unwrap(),
-    //     Pubkey::from_str(SOL_PRICE).unwrap(),
+    //     Pubkey::from_str(USDC_PRODUCT).unwrap(),
+    //     Pubkey::from_str(USDC_PRICE).unwrap(),
     //     Pubkey::from_str(RATE_ORACLE).unwrap(),
-    //     Pubkey::from_str(SOL_MINT).unwrap(),
+    //     Pubkey::from_str(USDC_MINT).unwrap(),
     //     CollateralConfig {
     //         borrow_value_ratio: 70, 
     //         liquidation_value_ratio: 85,
@@ -169,40 +178,19 @@ fn main() {
     //     Err(err) => println!("error: {:?}", err),
     // }
 
-    // update market reserves
-    let market_reserve_keys = vec![
-        (Pubkey::from_str(BNB_RESERVE).unwrap(), Pubkey::from_str(BNB_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(BTC_RESERVE).unwrap(), Pubkey::from_str(BTC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(SOL_RESERVE).unwrap(), Pubkey::from_str(SOL_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(SRM_RESERVE).unwrap(), Pubkey::from_str(SRM_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(DOGE_RESERVE).unwrap(), Pubkey::from_str(DOGE_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(LUNA_RESERVE).unwrap(), Pubkey::from_str(LUNA_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-    ];
-    let authority = Keypair::from_base58_string(GLOBAL_OWNER);
-    let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    let transaction = do_update_market_reserves(
-        authority,
-        market_reserve_keys,
-        block_hash,
-    );
-    match client.send_and_confirm_transaction(&transaction) {
-        Ok(sig) => println!("sig is {:?}", sig),
-        Err(err) => println!("error: {:?}", err),
-    }
-
     // deposit
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
     // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
     // let transaction = do_deposit(
     //     authority,
     //     Pubkey::from_str(MANAGER).unwrap(),
-    //     Pubkey::from_str(LUNA_RESERVE).unwrap(),
-    //     Pubkey::from_str(SOLUNA_MINT).unwrap(),
-    //     Pubkey::from_str(LUNA_MANAGER_TOKEN_ACCOUNT).unwrap(),
+    //     Pubkey::from_str(USDC_RESERVE).unwrap(),
+    //     Pubkey::from_str(SOUSDC_MINT).unwrap(),
+    //     Pubkey::from_str(USDC_MANAGER_TOKEN_ACCOUNT).unwrap(),
     //     Pubkey::from_str(RATE_ORACLE).unwrap(),
-    //     Pubkey::from_str(LUNA_LONE_TOKEN_ACCOUNT).unwrap(),
-    //     Pubkey::from_str(SOLUNA_LONE_TOKEN_ACCOUNT).unwrap(),
-    //     32_000_000_000_000,
+    //     Pubkey::from_str(USDC_LONE_TOKEN_ACCOUNT).unwrap(),
+    //     Pubkey::from_str(SOUSDC_LONE_TOKEN_ACCOUNT).unwrap(),
+    //     123_258_000_000_000,
     //     block_hash,
     // );
     // match client.send_and_confirm_transaction(&transaction) {
@@ -250,11 +238,11 @@ fn main() {
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
     // let transaction = do_pledge_collateral(
     //     authority,
-    //     Pubkey::from_str(DOGE_RESERVE).unwrap(),
-    //     Pubkey::from_str(SODOGE_MINT).unwrap(),
+    //     Pubkey::from_str(USDC_RESERVE).unwrap(),
+    //     Pubkey::from_str(SOUSDC_MINT).unwrap(),
     //     Pubkey::from_str(OBLIGATION).unwrap(),
-    //     Pubkey::from_str(SODOGE_LONE_TOKEN_ACCOUNT).unwrap(),
-    //     2_333_000_000_000,
+    //     Pubkey::from_str(SOUSDC_LONE_TOKEN_ACCOUNT).unwrap(),
+    //     123_210_000_000_000,
     //     block_hash,
     // );
     // match client.send_and_confirm_transaction(&transaction) {
@@ -263,30 +251,33 @@ fn main() {
     // }
 
     // borrow liquidity
-    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
-    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    // // (market reserve, price, rate oracle)
-    // let updating_keys = vec![
-    //     (Pubkey::from_str(BNB_RESERVE).unwrap(), Pubkey::from_str(BNB_PRICE).unwrap(), Pubkey::from_str(BORROW_RATE).unwrap()),
-
-    // ];
-    // let transaction = do_borrow_liquidity(
-    //     authority,
-    //     Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
-    //     Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap(),
-    //     Pubkey::from_str("3sAzDiT2dBjrCPsADnRUPEUi8wquWxNynHDCnnU3M8z1").unwrap(),
-    //     Pubkey::from_str("HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J").unwrap(),
-    //     Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
-    //     vec![Pubkey::from_str("GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b").unwrap()],
-    //     Pubkey::from_str("GZ57zaxfgq1eWvHvGtw1ASsydqGRWLCoqM2TmvYuw1Pw").unwrap(),
-    //     Pubkey::from_str("GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN").unwrap(),
-    //     1_000_000_000,
-    //     block_hash,
-    // );
-    // match client.send_and_confirm_transaction(&transaction) {
-    //     Ok(sig) => println!("sig is {:?}", sig),
-    //     Err(err) => println!("error: {:?}", err),
-    // }
+    let authority = Keypair::from_base58_string(GLOBAL_OWNER);
+    let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    let updating_keys = vec![
+        (Pubkey::from_str(BNB_RESERVE).unwrap(), Pubkey::from_str(BNB_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(BTC_RESERVE).unwrap(), Pubkey::from_str(BTC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(SRM_RESERVE).unwrap(), Pubkey::from_str(SRM_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(DOGE_RESERVE).unwrap(), Pubkey::from_str(DOGE_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(LUNA_RESERVE).unwrap(), Pubkey::from_str(LUNA_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(SOL_RESERVE).unwrap(), Pubkey::from_str(SOL_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    ];
+    let transaction = do_borrow_liquidity(
+        authority,
+        updating_keys,
+        7,
+        Pubkey::from_str(MANAGER).unwrap(),
+        Pubkey::from_str(USDC_MANAGER_TOKEN_ACCOUNT).unwrap(),
+        Pubkey::from_str(OBLIGATION).unwrap(),
+        Pubkey::from_str(USDC_LONE_TOKEN_ACCOUNT).unwrap(),
+        1_00_000_000_000,
+        block_hash,
+    ).unwrap();
+    match client.send_and_confirm_transaction(&transaction) {
+        Ok(sig) => println!("sig is {:?}", sig),
+        Err(err) => println!("error: {:?}", err),
+    }
 
     // repay loan
     // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
