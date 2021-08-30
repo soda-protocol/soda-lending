@@ -1,39 +1,30 @@
 use num_derive::FromPrimitive;
+use solana_client::client_error::ClientError;
 use thiserror::Error;
 
 use solana_sdk::program_error::ProgramError;
 
-#[derive(Clone, Debug, Eq, Error, FromPrimitive, PartialEq)]
+#[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum SodaError {
     ///
-    #[error("soda: invalid account data")]
-    InvalidAccountData,
-    #[error("soda: debug error 1")]
-    DebugError1,
-    #[error("soda: debug error 2")]
-    DebugError2,
-    #[error("soda: debug error 3")]
-    DebugError3,
-    #[error("soda: debug error 4")]
-    DebugError4,
-    #[error("soda: debug error 5")]
-    DebugError5,
-    #[error("soda: debug error 6")]
-    DebugError6,
-    #[error("soda: debug error 7")]
-    DebugError7,
-    #[error("soda: debug error 8")]
-    DebugError8,
-    #[error("soda: debug error 9")]
-    DebugError9,
-    #[error("soda: debug error 10")]
-    DebugError10,
-    #[error("soda: debug error 11")]
-    DebugError11,
+    #[error("Program error: {0:#x}")]
+    Custom(u64),
+    ///
+    #[error("Other error")]
+    Other,
+    ///
+    #[error("Client error")]
+    Client,
 }
 
-impl From<SodaError> for ProgramError {
-    fn from(e: SodaError) -> Self {
-        ProgramError::Custom(e as u32)
+impl From<ProgramError> for SodaError {
+    fn from(e: ProgramError) -> Self {
+        Self::Custom(u64::from(e))
+    }
+}
+
+impl From<ClientError> for SodaError {
+    fn from(_: ClientError) -> Self {
+        Self::Client
     }
 }

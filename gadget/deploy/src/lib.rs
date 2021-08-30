@@ -2,8 +2,11 @@
 pub mod types;
 pub mod error;
 
-use std::str::FromStr;
+use error::SodaError;
 
+use std::str::FromStr;
+use std::collections::HashMap;
+use solana_client::rpc_client::RpcClient;
 use solana_sdk::{
     hash::Hash,
     program_error::ProgramError, 
@@ -31,14 +34,78 @@ use soda_lending_contract::{
     }
 };
 
-const PYTH_ID: &str = "gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s";
-const QUOTE_CURRENCY: &[u8; 32] = &[85, 83, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+// mutual
+pub const DEV_NET: &str = "http://65.21.40.30";
+pub const PYTH_ID: &str = "gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s";
+pub const QUOTE_CURRENCY: &[u8; 32] = &[85, 83, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+pub const GLOBAL_OWNER: &str = "vG2VqMokQyY82xKda116qAmvMQm4ymoKEV92UtxNVmu4tKDt4X33ELY4rdCfiR1NxJnbek39m5X9rLJnxASNbmQ";
+pub const MANAGER: &str = "F93DUk6QDpLBRd6pVQNtXvgrU4mBNMv5d1JaYkHvhcr5";
+pub const OBLIGATION: &str = "5DJ3bZDmzv1NruAiEeJ3BgWcw568eKBqdHPkP68vGgXH";
+pub const RATE_ORACLE: &str = "7nHzMWXrse8Mcp3Qc5KSJwG5J16wA75DMNEz7jV6hFpf";
+
+// BNB
+pub const BNB_MINT: &str = "6mhUyoQR5CcHN4RJ5PSfcvTjRuWF742ypZeMwptPgFnK";
+pub const SOBNB_MINT: &str = "24Y4Wd6tYBiCgVU4naLAVA8wFSDb9v1hVwdK93x5g7Vw";
+pub const BNB_PRICE: &str = "GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b";
+pub const BNB_MANAGER_TOKEN_ACCOUNT: &str = "DgHRo44dn63LJhTC5hheGhM9dERDQrhAn7V7smz5wWrC";
+pub const BNB_RESERVE: &str = "3raP2UGyEqgQRpza4m6zwqpy6wumioq3fzaqdy1YYcvm";
+pub const BNB_LONE_TOKEN_ACCOUNT: &str = "EnpPrZtpsKb2CK6Jyue6tYi4vPmztLXPDKdco3WnRYuS";
+pub const SOBNB_LONE_TOKEN_ACCOUNT: &str = "3ikRkx3WZkY2puEo89tk2QpN6FSbcrENN4y5bQk2GmwL";
+
+// BTC
+pub const BTC_MINT: &str = "9bRWBCW4BHHoLXFLFcLU3FQCDXXLNds1SJBmpeKYFeBZ";
+pub const SOBTC_MINT: &str = "4YPUDRM9LbxemxoAoZDECoigeRuWa1csxAdGHWoztDT9";
+pub const BTC_PRICE: &str = "HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J";
+pub const BTC_MANAGER_TOKEN_ACCOUNT: &str = "3D3KLLYbnSY9ZxxXRRpLpFwzWTaCahj5YNYFso7FRExu";
+pub const BTC_RESERVE: &str = "73wnWaSncUBgmEp5RFS1ZBLG7Y3SFv45Etnv92UN2WeQ";
+pub const BTC_LONE_TOKEN_ACCOUNT: &str = "GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN";
+pub const SOBTC_LONE_TOKEN_ACCOUNT: &str = "4VnYHEeDi4UpHnKZFjLcZJKXTLzevotkciJY7Vb1JuZz";
+
+// SOL
+pub const SOL_MINT: &str = "2S2BU735fcn9ZSNg1BWvLx8QW4dznH9xS5DQAkcVTvfo";
+pub const SOSOL_MINT: &str = "9bZ5VRbyvXZBY2GAbShh6XpgRBW3s4ZWnRKDuJMi2ZTh";
+pub const SOL_PRODUCT: &str = "3Mnn2fX6rQyUsyELYms1sBJyChWofzSNRoqYzvgMVz5E";
+pub const SOL_PRICE: &str = "J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix";
+pub const SOL_MANAGER_TOKEN_ACCOUNT: &str = "9zQhZL8G2s8Dzm7XYPLfmQYeJWdgCzTaMCdYhr5GhVKQ";
+pub const SOL_RESERVE: &str = "5pEjFswbWGonMzAy2qfrZ4JYGHmrHWkC51hRodeeVERj";
+pub const SOL_LONE_TOKEN_ACCOUNT: &str = "HBUXQFJFxd5eG87F7D9Pm3WjSWtsaqEDwi5HURogZThy";
+pub const SOSOL_LONE_TOKEN_ACCOUNT: &str = "GosjQk7Y9TmbmAMAm5DUkdyPQ7Xadm3ZJgm6Yfpgkgwa";
+
+// SRM
+pub const SRM_MINT: &str = "DHE21jjMoGcdT8gEqjRopRrxxBbEJQpG6v9fK8Vg4xhp";
+pub const SOSRM_MINT: &str = "C97kvEV17bjTvSLFghgHyMAffCKhk6mAsj3rQWst3YJR";
+pub const SRM_PRODUCT: &str = "6MEwdxe4g1NeAF9u6KDG14anJpFsVEa2cvr5H6iriFZ8";
+pub const SRM_PRICE: &str = "992moaMQKs32GKZ9dxi8keyM2bUmbrwBZpK4p2K6X5Vs";
+pub const SRM_MANAGER_TOKEN_ACCOUNT: &str = "8GTK5gzyUJuScEzRCAu5bozfw1ahAFB87Y3pnaGhGaGQ";
+pub const SRM_RESERVE: &str = "3C7MQVmySk5qEA1ANrUPKSSLcuwZyTNUr1bjwFT6J7ae";
+pub const SRM_LONE_TOKEN_ACCOUNT: &str = "AFpruZrhxXVpBwojKuP5qjTAwJCH6R22QQNrba6nG2wN";
+pub const SOSRM_LONE_TOKEN_ACCOUNT: &str = "6LB5hoYxgREFaY5g51tS3UyifjZTcBqG2tqSeYTHzmET";
+
+// DOGE
+pub const DOGE_MINT: &str = "2j89teL9PzbMiHXFwwEFTHa5JE682AhxcjECPivTH8od";
+pub const SODOGE_MINT: &str = "BYGBQETZW7KVwH1U89H5GibRPLfvbgFAQraYt2fWW1Ac";
+pub const DOGE_PRODUCT: &str = "4zvUzWGBxZA9nTgBZWAf1oGYw6nCEYRscdt14umTNWhM";
+pub const DOGE_PRICE: &str = "4L6YhY8VvUgmqG5MvJkUJATtzB2rFqdrJwQCmFLv4Jzy";
+pub const DOGE_MANAGER_TOKEN_ACCOUNT: &str = "HaJtbC1ymm4FsrodTLWUNBXXC7RfSquSeh58zGVHmXZ8";
+pub const DOGE_RESERVE: &str = "43UVEk9mCxBHHtNXCMviK3G9YDX3zwcRHXFACJp5QNjr";
+pub const DOGE_LONE_TOKEN_ACCOUNT: &str = "FME19BXhejvDnwMhwxEkkjpYeTc8J48o1wtzbu29qkMf";
+pub const SODOGE_LONE_TOKEN_ACCOUNT: &str = "GpGFXZWpvtMVssmusQwQdDLZjJj38DuPiBs8udDrMcGD";
+
+// LUNA
+pub const LUNA_MINT: &str = "W8Upru1icsmcrpDtjpmt17xxUW9zBLcVHjwLkWtrZwK";
+pub const SOLUNA_MINT: &str = "AwQDcYjyRf4tNJvAKfEFoEZH7WoEwAYCwcxW81iNpH9G";
+pub const LUNA_PRODUCT: &str = "25tCF4ChvZyNP67xwLuYoAKuoAcSV13xrmP9YTwSPnZY";
+pub const LUNA_PRICE: &str = "8PugCXTAHLM9kfLSQWe2njE5pzAgUdpPk3Nx5zSm7BD3";
+pub const LUNA_MANAGER_TOKEN_ACCOUNT: &str = "D91r9qeLLaaDdqUMea72WzE9UXzcD8NgVZe1eGLxD2p3";
+pub const LUNA_RESERVE: &str = "CNeHPGmEY58MsiYEBb6AhUj5vFHnsrp2zyaqj1dEeQsZ";
+pub const LUNA_LONE_TOKEN_ACCOUNT: &str = "8gBhewFMmydvurfNV6Fbxrynwr6hfqUAKKC4ytHwrJEE";
+pub const SOLUNA_LONE_TOKEN_ACCOUNT: &str = "BtiNij9vNX9A691egXM1E5M3UftX6iyBDtU6BiU83mm3";
 
 #[allow(clippy::too_many_arguments)]
-pub fn create_fake_token(
-    mint: &Keypair,
-    authority: &Keypair,
-    account: &Keypair,
+pub fn create_test_token(
+    mint: Keypair,
+    authority: Keypair,
+    account: Keypair,
     mint_lamports: u64,
     acnt_lamports: u64,
     decimals: u8,
@@ -49,6 +116,9 @@ pub fn create_fake_token(
     let mint_pubkey = &mint.pubkey();
     let account_pubkey = &account.pubkey();
     let authority_pubkey = &authority.pubkey();
+
+    println!("mint: {:?}", mint_pubkey);
+    println!("lone account: {:?}", account_pubkey);
 
     Ok(Transaction::new_signed_with_payer(&[
             create_account(
@@ -88,7 +158,7 @@ pub fn create_fake_token(
             )?,
         ],
         Some(authority_pubkey),
-        &[mint, account, authority],
+        &[&mint, &account, &authority],
         recent_blockhash,
     ))
 }
@@ -103,6 +173,8 @@ pub fn do_init_token_account(
     let authority_key = &authority.pubkey();
     let account_key = &account.pubkey();
     let program_id = spl_token::id();
+
+    println!("account is {:?}", account_key);
 
     Ok(Transaction::new_signed_with_payer(&[
             create_account(
@@ -990,4 +1062,97 @@ pub fn do_inject_liquidation(
         &[&authority],
         recent_blockhash,
     )
+}
+
+pub fn do_update_market_reserves(
+    authority: Keypair,
+    updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    recent_blockhash: Hash,
+) -> Transaction {
+    let authority_key = &authority.pubkey(); 
+
+    Transaction::new_signed_with_payer(&[
+            update_market_reserves(updating_keys),
+        ],
+        Some(authority_key),
+        &[&authority],
+        recent_blockhash,
+    )
+}
+
+pub fn do_update_obligations(
+    authority: Keypair,
+    user_obligation_key: Pubkey,
+    market_reserve_keys: Vec<Pubkey>,
+    recent_blockhash: Hash,
+) -> Transaction {
+    let authority_key = &authority.pubkey(); 
+    
+    Transaction::new_signed_with_payer(&[
+            update_user_obligation(user_obligation_key, market_reserve_keys),
+        ],
+        Some(authority_key),
+        &[&authority],
+        recent_blockhash,
+    )
+}
+
+pub fn get_market_and_price_map(client: &RpcClient) -> Result<HashMap::<Pubkey, (Vec<u8>, Vec<u8>, Vec<u8>)>, SodaError> {
+    let mut collaterals_price_oracle_map = HashMap::new();
+    // BNB
+    collaterals_price_oracle_map.insert(
+        Pubkey::from_str(BNB_RESERVE).unwrap(),
+        (
+            client.get_account_data(&Pubkey::from_str(BNB_RESERVE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(BNB_PRICE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
+        ),
+    );
+    // BTC
+    collaterals_price_oracle_map.insert(
+        Pubkey::from_str(BTC_RESERVE).unwrap(),
+        (
+            client.get_account_data(&Pubkey::from_str(BTC_RESERVE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(BTC_PRICE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
+        ),
+    );
+    // SRM
+    collaterals_price_oracle_map.insert(
+        Pubkey::from_str(SRM_RESERVE).unwrap(),
+        (
+            client.get_account_data(&Pubkey::from_str(SRM_RESERVE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(SRM_PRICE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
+        ),
+    );
+    // DOGE
+    collaterals_price_oracle_map.insert(
+        Pubkey::from_str(DOGE_RESERVE).unwrap(),
+        (
+            client.get_account_data(&Pubkey::from_str(DOGE_RESERVE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(DOGE_PRICE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
+        ),
+    );
+    // LUNA
+    collaterals_price_oracle_map.insert(
+        Pubkey::from_str(LUNA_RESERVE).unwrap(),
+        (
+            client.get_account_data(&Pubkey::from_str(LUNA_RESERVE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(LUNA_PRICE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
+        ),
+    );
+    // SOL
+    collaterals_price_oracle_map.insert(
+        Pubkey::from_str(SOL_RESERVE).unwrap(),
+        (
+            client.get_account_data(&Pubkey::from_str(SOL_RESERVE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(SOL_PRICE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
+        ),
+    );
+
+    Ok(collaterals_price_oracle_map)
 }

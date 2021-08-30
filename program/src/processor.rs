@@ -390,7 +390,7 @@ fn process_update_market_reserves(
             // 3 + i * 3
             let pyth_price_info = &accounts_info[1];
             // 4 + i * 3
-            let rate_oracle_info = &accounts_info[3];
+            let rate_oracle_info = &accounts_info[2];
         
             if market_reserve_info.owner != program_id {
                 msg!("MarketReserve owner provided is not owned by the lending program");
