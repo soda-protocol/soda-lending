@@ -56,23 +56,23 @@ use soda_lending_contract::{
 fn main() {
     let client = RpcClient::new_with_commitment(DEV_NET.into(), CommitmentConfig::default());
 
-    let collaterals_price_oracle_map = get_market_and_price_map(&client).unwrap();
-    let clock_data = client.get_account_data(&Clock::id()).unwrap();
-    match UserObligationInfo::from_raw_data(
-        &clock_data,
-        &client.get_account_data(&Pubkey::from_str(OBLIGATION).unwrap()).unwrap(),
-        &collaterals_price_oracle_map,
-    ) {
-        Ok(obligation) => {
-            println!("collaterals borrow value: {}, collaterals liquidation value: {}, collaterals max value: {}, loans value: {}",
-                obligation.collaterals_borrow_value,
-                obligation.collaterals_liquidation_value,
-                obligation.collaterals_max_value,
-                obligation.loans_value,
-            );
-        }
-        Err(e) => println!("{:?}", e),
-    }
+    // let collaterals_price_oracle_map = get_market_and_price_map(&client).unwrap();
+    // let clock_data = client.get_account_data(&Clock::id()).unwrap();
+    // match UserObligationInfo::from_raw_data(
+    //     &clock_data,
+    //     &client.get_account_data(&Pubkey::from_str(OBLIGATION).unwrap()).unwrap(),
+    //     &collaterals_price_oracle_map,
+    // ) {
+    //     Ok(obligation) => {
+    //         println!("collaterals borrow value: {}, collaterals liquidation value: {}, collaterals max value: {}, loans value: {}",
+    //             obligation.collaterals_borrow_value,
+    //             obligation.collaterals_liquidation_value,
+    //             obligation.collaterals_max_value,
+    //             obligation.loans_value,
+    //         );
+    //     }
+    //     Err(e) => println!("{:?}", e),
+    // }
 
     // create test token
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
@@ -237,11 +237,11 @@ fn main() {
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
     // let transaction = do_pledge_collateral(
     //     authority,
-    //     Pubkey::from_str(USDT_RESERVE).unwrap(),
-    //     Pubkey::from_str(SOUSDT_MINT).unwrap(),
+    //     Pubkey::from_str(SRM_RESERVE).unwrap(),
+    //     Pubkey::from_str(SOSRM_MINT).unwrap(),
     //     Pubkey::from_str(OBLIGATION).unwrap(),
-    //     Pubkey::from_str(SOUSDT_LONE_TOKEN_ACCOUNT).unwrap(),
-    //     5_000_000_000,
+    //     Pubkey::from_str(SOSRM_LONE_TOKEN_ACCOUNT).unwrap(),
+    //     900_000_000_000,
     //     block_hash,
     // );
     // match client.send_and_confirm_transaction(&transaction) {
@@ -256,10 +256,10 @@ fn main() {
     //     (Pubkey::from_str(BNB_RESERVE).unwrap(), Pubkey::from_str(BNB_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(BTC_RESERVE).unwrap(), Pubkey::from_str(BTC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(SOL_RESERVE).unwrap(), Pubkey::from_str(SOL_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-    //     (Pubkey::from_str(SRM_RESERVE).unwrap(), Pubkey::from_str(SRM_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(DOGE_RESERVE).unwrap(), Pubkey::from_str(DOGE_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(LUNA_RESERVE).unwrap(), Pubkey::from_str(LUNA_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(SRM_RESERVE).unwrap(), Pubkey::from_str(SRM_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(USDT_RESERVE).unwrap(), Pubkey::from_str(USDT_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     // ];
     // let transaction = do_borrow_liquidity(
@@ -303,20 +303,20 @@ fn main() {
     //     (Pubkey::from_str(BNB_RESERVE).unwrap(), Pubkey::from_str(BNB_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(BTC_RESERVE).unwrap(), Pubkey::from_str(BTC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(SOL_RESERVE).unwrap(), Pubkey::from_str(SOL_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-    //     (Pubkey::from_str(SRM_RESERVE).unwrap(), Pubkey::from_str(SRM_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(DOGE_RESERVE).unwrap(), Pubkey::from_str(DOGE_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(LUNA_RESERVE).unwrap(), Pubkey::from_str(LUNA_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(SRM_RESERVE).unwrap(), Pubkey::from_str(SRM_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(USDT_RESERVE).unwrap(), Pubkey::from_str(USDT_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     // ];
     // let transaction = do_redeem_collateral(
     //     authority,
     //     updating_keys,
-    //     7,
+    //     6,
     //     Pubkey::from_str(MANAGER).unwrap(),
-    //     Pubkey::from_str(SOUSDT_MINT).unwrap(),
+    //     Pubkey::from_str(SOSRM_MINT).unwrap(),
     //     Pubkey::from_str(OBLIGATION).unwrap(),
-    //     Pubkey::from_str(SOUSDT_LONE_TOKEN_ACCOUNT).unwrap(),
+    //     Pubkey::from_str(SOSRM_LONE_TOKEN_ACCOUNT).unwrap(),
     //     u64::MAX,
     //     block_hash,
     // ).unwrap();

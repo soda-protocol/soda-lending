@@ -7,15 +7,27 @@ use solana_client::{
 };
 use solana_sdk::{
     clock::{Clock, Slot}, 
-    commitment_config::CommitmentConfig, hash::Hash, instruction::Instruction, program_pack::Pack, pubkey::Pubkey, signer::{Signer, keypair::Keypair}, system_instruction::create_account, transaction::Transaction};
+    commitment_config::CommitmentConfig,
+    hash::Hash,
+    instruction::Instruction,
+    program_pack::Pack,
+    pubkey::Pubkey,
+    signer::{Signer, keypair::Keypair},
+    system_instruction::create_account,
+    transaction::Transaction
+};
 use spl_token::{
     instruction::{initialize_mint, initialize_account, mint_to},
     state::{Mint, Account},
 };
-use soda_lending_contract::{math::{Decimal, Rate, TryAdd, TryDiv, TryMul, WAD}, pyth::{self, Product}, state::{
+use soda_lending_contract::{
+    math::{Decimal, Rate, TryAdd, TryDiv, TryMul, WAD},
+    pyth::{self, Product},
+    state::{
         Manager, MarketReserve, RateOracle, UserObligation, 
         CollateralConfig, LiquidityConfig
-    }};
+    },
+};
 use bincode;
 
 use crate::error::SodaError;
