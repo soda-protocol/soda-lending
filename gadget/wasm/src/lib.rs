@@ -1,6 +1,12 @@
+pub mod state;
+pub mod math;
+pub mod error;
+
 use wasm_bindgen::prelude::*;
 use js_sys::Uint8Array;
-use soda_lending_contract::{solana_program::program_pack::Pack, state::MarketReserve};
+
+use crate::state::MarketReserve;
+use crate::state::Pack;
 
 // #[wasm_bindgen]
 // extern "C" {
