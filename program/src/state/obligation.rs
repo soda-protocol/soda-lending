@@ -14,7 +14,7 @@ use solana_program::{
 use std::{convert::TryInto, cmp::Ordering, iter::Iterator, any::Any};
 
 ///
-const MAX_OBLIGATION_RESERVES: usize = 9;
+const MAX_OBLIGATION_RESERVES: usize = 8;
 
 #[derive(Clone, Debug, Copy, Default, PartialEq)]
 pub struct IndexedCollateralConfig {
@@ -679,7 +679,7 @@ impl IsInitialized for UserObligation {
 // const MAX_PADDING_LEN: usize = max(COLLATERAL_LEN, LOAN_LEN);
 const MAX_PADDING_LEN: usize = 128;
 const USER_OBLIGATITION_PADDING_LEN: usize = 128;
-const USER_OBLIGATITION_LEN: usize = 1440;
+const USER_OBLIGATITION_LEN: usize = 1312;
 
 impl Pack for UserObligation {
     const LEN: usize = USER_OBLIGATITION_LEN;

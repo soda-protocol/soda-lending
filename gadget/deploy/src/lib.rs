@@ -40,88 +40,88 @@ pub const PYTH_ID: &str = "gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s";
 pub const QUOTE_CURRENCY: &[u8; 32] = &[85, 83, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 pub const GLOBAL_OWNER: &str = "vG2VqMokQyY82xKda116qAmvMQm4ymoKEV92UtxNVmu4tKDt4X33ELY4rdCfiR1NxJnbek39m5X9rLJnxASNbmQ";
 pub const MANAGER: &str = "F93DUk6QDpLBRd6pVQNtXvgrU4mBNMv5d1JaYkHvhcr5";
-pub const OBLIGATION: &str = "9vPDQLpjwmh9YZkEXq6KUnqN8WHqqTkqAZ38NMjx2tCt";
+pub const OBLIGATION: &str = "HHVdQ8jLwy4PR3Y15LMofYTLW8pyKJYNV8sbhvDtKmE2";
 pub const RATE_ORACLE: &str = "7nHzMWXrse8Mcp3Qc5KSJwG5J16wA75DMNEz7jV6hFpf";
 
 // BNB
 pub const BNB_MINT: &str = "6mhUyoQR5CcHN4RJ5PSfcvTjRuWF742ypZeMwptPgFnK";
-pub const SOBNB_MINT: &str = "24Y4Wd6tYBiCgVU4naLAVA8wFSDb9v1hVwdK93x5g7Vw";
+pub const SOBNB_MINT: &str = "HdU9LEs7bSCyNfsXkR9FBgFypDurbMFeuBMmL7GuhAY5";
 pub const BNB_PRODUCT: &str = "2weC6fjXrfaCLQpqEzdgBHpz6yVNvmSN133m7LDuZaDb";
 pub const BNB_PRICE: &str = "GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b";
-pub const BNB_MANAGER_TOKEN_ACCOUNT: &str = "DgHRo44dn63LJhTC5hheGhM9dERDQrhAn7V7smz5wWrC";
-pub const BNB_RESERVE: &str = "3raP2UGyEqgQRpza4m6zwqpy6wumioq3fzaqdy1YYcvm";
+pub const BNB_MANAGER_TOKEN_ACCOUNT: &str = "ALZZ1JuQRhQ3QnRCuVJtdRT6dMk2X7EJDRSRu9iDyckE";
+pub const BNB_RESERVE: &str = "2FWtaVcFRkgtG4TcaDeKsY1Ug6wnR4ATutDiZwxGBcKh";
 pub const BNB_LONE_TOKEN_ACCOUNT: &str = "EnpPrZtpsKb2CK6Jyue6tYi4vPmztLXPDKdco3WnRYuS";
-pub const SOBNB_LONE_TOKEN_ACCOUNT: &str = "3ikRkx3WZkY2puEo89tk2QpN6FSbcrENN4y5bQk2GmwL";
+pub const SOBNB_LONE_TOKEN_ACCOUNT: &str = "6XPGWHZyC3EDFbLKcrtdjNydCFqtC6RGrCd3aycAq5eD";
 
 // BTC
 pub const BTC_MINT: &str = "9bRWBCW4BHHoLXFLFcLU3FQCDXXLNds1SJBmpeKYFeBZ";
-pub const SOBTC_MINT: &str = "4YPUDRM9LbxemxoAoZDECoigeRuWa1csxAdGHWoztDT9";
+pub const SOBTC_MINT: &str = "7Q5pZY4iiWrvfRK5xkAzdehS6jxduezt26uwXvAxauSc";
 pub const BTC_PRODUCT: &str = "3m1y5h2uv7EQL3KaJZehvAJa4yDNvgc5yAdL9KPMKwvk";
 pub const BTC_PRICE: &str = "HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J";
-pub const BTC_MANAGER_TOKEN_ACCOUNT: &str = "3D3KLLYbnSY9ZxxXRRpLpFwzWTaCahj5YNYFso7FRExu";
-pub const BTC_RESERVE: &str = "73wnWaSncUBgmEp5RFS1ZBLG7Y3SFv45Etnv92UN2WeQ";
+pub const BTC_MANAGER_TOKEN_ACCOUNT: &str = "Gtkhu7KHhzh8p7UxRbaZREPvd21yg55VXwL1UrhCqqo2";
+pub const BTC_RESERVE: &str = "BEVuaBCFtXu6AbezwCHEZbFt9dT5wQWYZmJ7igJfBe8";
 pub const BTC_LONE_TOKEN_ACCOUNT: &str = "GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN";
-pub const SOBTC_LONE_TOKEN_ACCOUNT: &str = "4VnYHEeDi4UpHnKZFjLcZJKXTLzevotkciJY7Vb1JuZz";
+pub const SOBTC_LONE_TOKEN_ACCOUNT: &str = "C7CQHHsYquvQp5dTKDf1nAD2bMCUuz5v8BYMcJjjU8rh";
 
 // SOL
 pub const SOL_MINT: &str = "2S2BU735fcn9ZSNg1BWvLx8QW4dznH9xS5DQAkcVTvfo";
-pub const SOSOL_MINT: &str = "9bZ5VRbyvXZBY2GAbShh6XpgRBW3s4ZWnRKDuJMi2ZTh";
+pub const SOSOL_MINT: &str = "FYXmW1VBo2uNm9MgEzSrxN1Fn9R73848ga55sdfxbRdn";
 pub const SOL_PRODUCT: &str = "3Mnn2fX6rQyUsyELYms1sBJyChWofzSNRoqYzvgMVz5E";
 pub const SOL_PRICE: &str = "J83w4HKfqxwcq3BEMMkPFSppX3gqekLyLJBexebFVkix";
-pub const SOL_MANAGER_TOKEN_ACCOUNT: &str = "9zQhZL8G2s8Dzm7XYPLfmQYeJWdgCzTaMCdYhr5GhVKQ";
-pub const SOL_RESERVE: &str = "5pEjFswbWGonMzAy2qfrZ4JYGHmrHWkC51hRodeeVERj";
+pub const SOL_MANAGER_TOKEN_ACCOUNT: &str = "6FLAc3FHepxg48LBn6STU3uqi1hL7FcSPzDDhimbrifd";
+pub const SOL_RESERVE: &str = "6Ukhvkg9fV85fYpc7QmBgKzLjAduhwksLjcPn9tvcQkL";
 pub const SOL_LONE_TOKEN_ACCOUNT: &str = "HBUXQFJFxd5eG87F7D9Pm3WjSWtsaqEDwi5HURogZThy";
-pub const SOSOL_LONE_TOKEN_ACCOUNT: &str = "GosjQk7Y9TmbmAMAm5DUkdyPQ7Xadm3ZJgm6Yfpgkgwa";
+pub const SOSOL_LONE_TOKEN_ACCOUNT: &str = "A1mbF5qz4f73sRaSNBSJoMpj3W3mCJcY6T9YPJxzQ629";
 
 // SRM
 pub const SRM_MINT: &str = "DHE21jjMoGcdT8gEqjRopRrxxBbEJQpG6v9fK8Vg4xhp";
-pub const SOSRM_MINT: &str = "C97kvEV17bjTvSLFghgHyMAffCKhk6mAsj3rQWst3YJR";
+pub const SOSRM_MINT: &str = "AhTM7Li6L9rcptH2B3BE1eniuPSkMG8ABzVFNNHoETc1";
 pub const SRM_PRODUCT: &str = "6MEwdxe4g1NeAF9u6KDG14anJpFsVEa2cvr5H6iriFZ8";
 pub const SRM_PRICE: &str = "992moaMQKs32GKZ9dxi8keyM2bUmbrwBZpK4p2K6X5Vs";
-pub const SRM_MANAGER_TOKEN_ACCOUNT: &str = "8GTK5gzyUJuScEzRCAu5bozfw1ahAFB87Y3pnaGhGaGQ";
-pub const SRM_RESERVE: &str = "3C7MQVmySk5qEA1ANrUPKSSLcuwZyTNUr1bjwFT6J7ae";
+pub const SRM_MANAGER_TOKEN_ACCOUNT: &str = "6B4zzD9mjBhtab25EpCgbYp9peetnGEqChDwwEbyLQUL";
+pub const SRM_RESERVE: &str = "EW4UpHRHRHAjUWZRoSDinyTwoGuQmtmNoQ6f3NXGoTCb";
 pub const SRM_LONE_TOKEN_ACCOUNT: &str = "AFpruZrhxXVpBwojKuP5qjTAwJCH6R22QQNrba6nG2wN";
-pub const SOSRM_LONE_TOKEN_ACCOUNT: &str = "6LB5hoYxgREFaY5g51tS3UyifjZTcBqG2tqSeYTHzmET";
+pub const SOSRM_LONE_TOKEN_ACCOUNT: &str = "G1HwgNNxR164YzuCxB4Rqn5gq4GsiFSnpCRELL5Jvamy";
 
 // DOGE
 pub const DOGE_MINT: &str = "2j89teL9PzbMiHXFwwEFTHa5JE682AhxcjECPivTH8od";
-pub const SODOGE_MINT: &str = "BYGBQETZW7KVwH1U89H5GibRPLfvbgFAQraYt2fWW1Ac";
+pub const SODOGE_MINT: &str = "Gt4iGQQdaHy7CXXVjJx1CUZDdN5Cza2WrmdnCp6tTLmH";
 pub const DOGE_PRODUCT: &str = "4zvUzWGBxZA9nTgBZWAf1oGYw6nCEYRscdt14umTNWhM";
 pub const DOGE_PRICE: &str = "4L6YhY8VvUgmqG5MvJkUJATtzB2rFqdrJwQCmFLv4Jzy";
-pub const DOGE_MANAGER_TOKEN_ACCOUNT: &str = "HaJtbC1ymm4FsrodTLWUNBXXC7RfSquSeh58zGVHmXZ8";
-pub const DOGE_RESERVE: &str = "43UVEk9mCxBHHtNXCMviK3G9YDX3zwcRHXFACJp5QNjr";
+pub const DOGE_MANAGER_TOKEN_ACCOUNT: &str = "2mK6E3bwXy8cT8Kh1G5eLiyvkVHZYzjcRCBEv3Nizc6S";
+pub const DOGE_RESERVE: &str = "ErwEGLnsHET77pDpy1vcSuLDLiX62JhpNk3u3FapJa8C";
 pub const DOGE_LONE_TOKEN_ACCOUNT: &str = "FME19BXhejvDnwMhwxEkkjpYeTc8J48o1wtzbu29qkMf";
-pub const SODOGE_LONE_TOKEN_ACCOUNT: &str = "GpGFXZWpvtMVssmusQwQdDLZjJj38DuPiBs8udDrMcGD";
+pub const SODOGE_LONE_TOKEN_ACCOUNT: &str = "9ANym77TS7mFarUrMKLzQH5NV4WvFnA6KdoWeDmLmBZr";
 
 // LUNA
 pub const LUNA_MINT: &str = "W8Upru1icsmcrpDtjpmt17xxUW9zBLcVHjwLkWtrZwK";
-pub const SOLUNA_MINT: &str = "AwQDcYjyRf4tNJvAKfEFoEZH7WoEwAYCwcxW81iNpH9G";
+pub const SOLUNA_MINT: &str = "7EYdDvStgb7JfNtyCqjLvjVLdMJ78ifCHN4Xjm2kpdsn";
 pub const LUNA_PRODUCT: &str = "25tCF4ChvZyNP67xwLuYoAKuoAcSV13xrmP9YTwSPnZY";
 pub const LUNA_PRICE: &str = "8PugCXTAHLM9kfLSQWe2njE5pzAgUdpPk3Nx5zSm7BD3";
-pub const LUNA_MANAGER_TOKEN_ACCOUNT: &str = "D91r9qeLLaaDdqUMea72WzE9UXzcD8NgVZe1eGLxD2p3";
-pub const LUNA_RESERVE: &str = "CNeHPGmEY58MsiYEBb6AhUj5vFHnsrp2zyaqj1dEeQsZ";
+pub const LUNA_MANAGER_TOKEN_ACCOUNT: &str = "7dSU8NcEXKLYRQfTt9dktxfnRuwDqNjZsvkSYZgKPVPA";
+pub const LUNA_RESERVE: &str = "4QJbjyErfxDnwCL57W2tb1KFKCQvvBsbiE9nGWwhbuXq";
 pub const LUNA_LONE_TOKEN_ACCOUNT: &str = "8gBhewFMmydvurfNV6Fbxrynwr6hfqUAKKC4ytHwrJEE";
-pub const SOLUNA_LONE_TOKEN_ACCOUNT: &str = "BtiNij9vNX9A691egXM1E5M3UftX6iyBDtU6BiU83mm3";
+pub const SOLUNA_LONE_TOKEN_ACCOUNT: &str = "45BmK4i13f5wzUPWHmmj6Y1APbz4p7zXDdkqAynATCzS";
 
 // USDC
 pub const USDC_MINT: &str = "Bj9LaiV7aR1z2263r5fuPjZN1asu3QXHUnGkHUAcZ4e1";
-pub const SOUSDC_MINT: &str = "GQLpsMxhEmdX6kSPioCenW4C5aJiAYqZTnZixDHtePtw";
+pub const SOUSDC_MINT: &str = "43Jow9Aggdtvo1U8wZaKUcrmfmd9JF4tDthQpEtR89F6";
 pub const USDC_PRODUCT: &str = "6NpdXrQEpmDZ3jZKmM2rhdmkd3H6QAk23j2x8bkXcHKA";
 pub const USDC_PRICE: &str = "5SSkXsEKQepHHAewytPVwdej4epN1nxgLVM84L4KXgy7";
-pub const USDC_MANAGER_TOKEN_ACCOUNT: &str = "68rh6pWuipFPZCna56uHFLDHWTpGRZQ2r4e1uHjRcGFp";
-pub const USDC_RESERVE: &str = "bSrhY4SaKYSf4BWjQWgWa7oJ2NTMJtU5vCFwEuDfvwZ";
+pub const USDC_MANAGER_TOKEN_ACCOUNT: &str = "8Tu2HSL469Zce8GX4k4ChQR6gAzE5YzdJMTDzzaUhHDM";
+pub const USDC_RESERVE: &str = "BgcwTrzMg7gxigBuC2hiGwuxNWVtwpK8dFooS25VpQKE";
 pub const USDC_LONE_TOKEN_ACCOUNT: &str = "4axY5PF6qUEC1RZ8V5TJ7Dhq6rMMgV2iCPN6yNRUo6QR";
-pub const SOUSDC_LONE_TOKEN_ACCOUNT: &str = "pPed3aVtFQ41ifHZJJLgz667nskzLf2rmfSLjePa9fT";
+pub const SOUSDC_LONE_TOKEN_ACCOUNT: &str = "36GDoAhi8oaXXL5ZqRM8r7dod3DUdMJkRwFSm7rA6GJF";
 
 // USDT
 pub const USDT_MINT: &str = "GR6zSp8opYZh7H2ZFEJBbQYVjY4dkKc19iFoPEhWXTrV";
-pub const SOUSDT_MINT: &str = "7gWWVUx2GNFajgY4tv793kQpCSuFrnaXu1ZK1Arqkbc9";
+pub const SOUSDT_MINT: &str = "9o2Y4RghWbLp53uZD97kX2SC8ymdJ5q1WsUEdknZYgaP";
 pub const USDT_PRODUCT: &str = "C5wDxND9E61RZ1wZhaSTWkoA8udumaHnoQY6BBsiaVpn";
 pub const USDT_PRICE: &str = "38xoQ4oeJCBrcVvca2cGk7iV1dAfrmTR1kmhSCJQ8Jto";
-pub const USDT_MANAGER_TOKEN_ACCOUNT: &str = "22vUHMhYVVnsqiHpADVwm7pw7XjVpzKTnEYGvrFsFnpv";
-pub const USDT_RESERVE: &str = "EpgkMSyzK5BMLAcP3i4UneziJh3e6GDAq8gZhC8Wnmra";
+pub const USDT_MANAGER_TOKEN_ACCOUNT: &str = "7adHQf3tkvrqKtjZPjne8wrMHUT56WZQjdVonw8MBupT";
+pub const USDT_RESERVE: &str = "2NzoQEUVY65rLBdBoXjQ6nS589ArcYRja9M1gqt54SWm";
 pub const USDT_LONE_TOKEN_ACCOUNT: &str = "GbGq9v7c96UkjrKDpZFw135jjAX4G1Mv7vJLEGogzPxf";
-pub const SOUSDT_LONE_TOKEN_ACCOUNT: &str = "Dn7xcEPQPoGZZ8NFEpgKcX6av8nbWGHVu3vdQURheudQ";
+pub const SOUSDT_LONE_TOKEN_ACCOUNT: &str = "3dfNkgrNFMxA1zLCfzXeS3KNeMHa26aoBrAoMUgjPn9q";
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_test_token(
@@ -827,8 +827,9 @@ pub fn do_borrow_liquidity(
     let (updating_keys_1, updating_keys_2) = updating_keys.split_at(updating_keys.len() / 2);
 
     let transaction = Transaction::new_signed_with_payer(&[
-        update_market_reserves(updating_keys_1.into()),
-        update_market_reserves(updating_keys_2.into()),
+        // update_market_reserves(updating_keys_1.into()),
+        // update_market_reserves(updating_keys_2.into()),
+        update_market_reserves(updating_keys),
         update_user_obligation(user_obligation_key, market_reserves),
         borrow_liquidity(
             manager_key,
