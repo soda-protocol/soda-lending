@@ -513,15 +513,15 @@ impl UserObligation {
             self.loans
                 .iter()
                 .chain(other.loans.iter())
-                .try_fold(Decimal::one(), |acc, loan| loan.borrowed_amount_wads.try_add(acc))?
+                .try_fold(Decimal::zero(), |acc, loan| loan.borrowed_amount_wads.try_add(acc))?
         } else {
             self.loans
                 .iter()
-                .try_fold(Decimal::one(), |acc, loan| loan.borrowed_amount_wads.try_add(acc))?
+                .try_fold(Decimal::zero(), |acc, loan| loan.borrowed_amount_wads.try_add(acc))?
         };
 
         if loan_amount > Decimal::zero() {
-            Err(LendingError::ObligationDeptNotEmpty.into())
+            Err(LendingError::ObligationLoanNotEmpty.into())
         } else {
             if amount >= self.collaterals[index].amount {
                 let amount = self.collaterals[index].amount;

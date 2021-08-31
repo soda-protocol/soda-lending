@@ -56,23 +56,23 @@ use soda_lending_contract::{
 fn main() {
     let client = RpcClient::new_with_commitment(DEV_NET.into(), CommitmentConfig::default());
 
-    // let collaterals_price_oracle_map = get_market_and_price_map(&client).unwrap();
-    // let clock_data = client.get_account_data(&Clock::id()).unwrap();
-    // match UserObligationInfo::from_raw_data(
-    //     &clock_data,
-    //     &client.get_account_data(&Pubkey::from_str(OBLIGATION).unwrap()).unwrap(),
-    //     &collaterals_price_oracle_map,
-    // ) {
-    //     Ok(obligation) => {
-    //         println!("collaterals borrow value: {}, collaterals liquidation value: {}, collaterals max value: {}, loans value: {}",
-    //             obligation.collaterals_borrow_value,
-    //             obligation.collaterals_liquidation_value,
-    //             obligation.collaterals_max_value,
-    //             obligation.loans_value,
-    //         );
-    //     }
-    //     Err(e) => println!("{:?}", e),
-    // }
+    let collaterals_price_oracle_map = get_market_and_price_map(&client).unwrap();
+    let clock_data = client.get_account_data(&Clock::id()).unwrap();
+    match UserObligationInfo::from_raw_data(
+        &clock_data,
+        &client.get_account_data(&Pubkey::from_str(OBLIGATION).unwrap()).unwrap(),
+        &collaterals_price_oracle_map,
+    ) {
+        Ok(obligation) => {
+            println!("collaterals borrow value: {}, collaterals liquidation value: {}, collaterals max value: {}, loans value: {}",
+                obligation.collaterals_borrow_value,
+                obligation.collaterals_liquidation_value,
+                obligation.collaterals_max_value,
+                obligation.loans_value,
+            );
+        }
+        Err(e) => println!("{:?}", e),
+    }
 
     // create test token
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
@@ -104,7 +104,7 @@ fn main() {
     // let transaction = do_init_token_account(
     //     authority,
     //     account,
-    //     Pubkey::from_str(SOSOL_MINT).unwrap(),
+    //     Pubkey::from_str(SOUSDT_MINT).unwrap(),
     //     lamports,
     //     block_hash,
     // ).unwrap();
@@ -151,10 +151,10 @@ fn main() {
     // let transaction = create_market_reserve(
     //     authority,
     //     Pubkey::from_str(MANAGER).unwrap(),
-    //     Pubkey::from_str(SOL_PRODUCT).unwrap(),
-    //     Pubkey::from_str(SOL_PRICE).unwrap(),
+    //     Pubkey::from_str(USDT_PRODUCT).unwrap(),
+    //     Pubkey::from_str(USDT_PRICE).unwrap(),
     //     Pubkey::from_str(RATE_ORACLE).unwrap(),
-    //     Pubkey::from_str(SOL_MINT).unwrap(),
+    //     Pubkey::from_str(USDT_MINT).unwrap(),
     //     CollateralConfig {
     //         borrow_value_ratio: 80, 
     //         liquidation_value_ratio: 90,
@@ -279,22 +279,22 @@ fn main() {
     // }
 
     // repay loan
-    let authority = Keypair::from_base58_string(GLOBAL_OWNER);
-    let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    let transaction = do_repay_loan(
-        authority,
-        Pubkey::from_str(USDT_RESERVE).unwrap(),
-        Pubkey::from_str(USDT_MANAGER_TOKEN_ACCOUNT).unwrap(),
-        Pubkey::from_str(RATE_ORACLE).unwrap(),
-        Pubkey::from_str(OBLIGATION).unwrap(),
-        Pubkey::from_str(USDT_LONE_TOKEN_ACCOUNT).unwrap(),
-        u64::MAX,
-        block_hash,
-    );
-    match client.send_and_confirm_transaction(&transaction) {
-        Ok(sig) => println!("sig is {:?}", sig),
-        Err(err) => println!("error: {:?}", err),
-    }
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
+    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    // let transaction = do_repay_loan(
+    //     authority,
+    //     Pubkey::from_str(USDT_RESERVE).unwrap(),
+    //     Pubkey::from_str(USDT_MANAGER_TOKEN_ACCOUNT).unwrap(),
+    //     Pubkey::from_str(RATE_ORACLE).unwrap(),
+    //     Pubkey::from_str(OBLIGATION).unwrap(),
+    //     Pubkey::from_str(USDT_LONE_TOKEN_ACCOUNT).unwrap(),
+    //     u64::MAX,
+    //     block_hash,
+    // );
+    // match client.send_and_confirm_transaction(&transaction) {
+    //     Ok(sig) => println!("sig is {:?}", sig),
+    //     Err(err) => println!("error: {:?}", err),
+    // }
 
     // redeem collateral
     // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
@@ -330,13 +330,13 @@ fn main() {
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
     // let transaction = do_redeem_collateral_without_loan(
     //     authority,
-    //     Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
-    //     Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap(),
-    //     Pubkey::from_str("6MRdknnThzPSz1vkfMAYWnepnAF5wGitRTNrJ6rrQe1s").unwrap(),
-    //     Pubkey::from_str("3vtj3VomHHAoqHKtJQL1ymEP6GQmzXHb9TD1LRkBoxFq").unwrap(),
-    //     Pubkey::from_str("GZ57zaxfgq1eWvHvGtw1ASsydqGRWLCoqM2TmvYuw1Pw").unwrap(),
-    //     Pubkey::from_str("EnpPrZtpsKb2CK6Jyue6tYi4vPmztLXPDKdco3WnRYuS").unwrap(),
-    //     100_000_000_000,
+    //     Pubkey::from_str(MANAGER).unwrap(),
+    //     Pubkey::from_str(SRM_RESERVE).unwrap(),
+    //     Pubkey::from_str(SOSRM_MINT).unwrap(),
+    //     Pubkey::from_str(OBLIGATION).unwrap(),
+    //     None,
+    //     Pubkey::from_str(SOSRM_LONE_TOKEN_ACCOUNT).unwrap(),
+    //     u64::MAX,
     //     block_hash,
     // );
     // match client.send_and_confirm_transaction(&transaction) {

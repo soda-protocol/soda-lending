@@ -115,13 +115,13 @@ pub const SOUSDC_LONE_TOKEN_ACCOUNT: &str = "36GDoAhi8oaXXL5ZqRM8r7dod3DUdMJkRwF
 
 // USDT
 pub const USDT_MINT: &str = "GR6zSp8opYZh7H2ZFEJBbQYVjY4dkKc19iFoPEhWXTrV";
-pub const SOUSDT_MINT: &str = "9o2Y4RghWbLp53uZD97kX2SC8ymdJ5q1WsUEdknZYgaP";
+pub const SOUSDT_MINT: &str = "9zW2FwnPQYZopyUU56FghrubibCuDdSuQpFFJUstNmHo";
 pub const USDT_PRODUCT: &str = "C5wDxND9E61RZ1wZhaSTWkoA8udumaHnoQY6BBsiaVpn";
 pub const USDT_PRICE: &str = "38xoQ4oeJCBrcVvca2cGk7iV1dAfrmTR1kmhSCJQ8Jto";
-pub const USDT_MANAGER_TOKEN_ACCOUNT: &str = "7adHQf3tkvrqKtjZPjne8wrMHUT56WZQjdVonw8MBupT";
-pub const USDT_RESERVE: &str = "2NzoQEUVY65rLBdBoXjQ6nS589ArcYRja9M1gqt54SWm";
+pub const USDT_MANAGER_TOKEN_ACCOUNT: &str = "BhjcQqipyrSCzXy8C3dyATewLDskfXfg6kJ7mAXncBkW";
+pub const USDT_RESERVE: &str = "HCd97AsjWwt59xCJP25yk2CtTU9qkxuHL6GShxGEpE3V";
 pub const USDT_LONE_TOKEN_ACCOUNT: &str = "GbGq9v7c96UkjrKDpZFw135jjAX4G1Mv7vJLEGogzPxf";
-pub const SOUSDT_LONE_TOKEN_ACCOUNT: &str = "3dfNkgrNFMxA1zLCfzXeS3KNeMHa26aoBrAoMUgjPn9q";
+pub const SOUSDT_LONE_TOKEN_ACCOUNT: &str = "2kFCDr6V31KWYcKQWwxz7vwdqy4w8cRwZJyNC82fuMQz";
 
 #[allow(clippy::too_many_arguments)]
 pub fn create_test_token(
