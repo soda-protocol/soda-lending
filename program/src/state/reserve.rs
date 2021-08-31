@@ -174,7 +174,7 @@ impl LiquidityInfo {
         Ok(())
     }
     ///
-    pub fn borrow_out(&mut self, asset: BorrowWithFee) -> ProgramResult {
+    pub fn borrow_out(&mut self, asset: BorrowSettle) -> ProgramResult {
         self.available = self.available
             .checked_sub(asset.amount)
             .ok_or(LendingError::MarketReserveLiquidityAvailableInsufficent)?;
@@ -187,23 +187,23 @@ impl LiquidityInfo {
         Ok(())
     }
     ///
-    pub fn repay(&mut self, amount: u64) -> ProgramResult {
+    pub fn repay(&mut self, settle: RepaySettle) -> ProgramResult {
         self.available = self.available
-            .checked_add(amount)
+            .checked_add(settle.amount)
             .ok_or(LendingError::MathOverflow)?;
-        self.borrowed_amount_wads = self.borrowed_amount_wads.try_sub(Decimal::from(amount))?;
+        self.borrowed_amount_wads = self.borrowed_amount_wads.try_sub(settle.amount_decimal)?;
 
         Ok(())
     }
     ///
-    pub fn liquidate(&mut self, asset: LiquidationWithFee) -> ProgramResult {
+    pub fn liquidate(&mut self, settle: LiquidationSettle) -> ProgramResult {
         self.available = self.available
-            .checked_add(asset.repay)
+            .checked_add(settle.repay)
             .ok_or(LendingError::MathOverflow)?;
-        self.borrowed_amount_wads = self.borrowed_amount_wads.try_sub(Decimal::from(asset.repay))?;
+        self.borrowed_amount_wads = self.borrowed_amount_wads.try_sub(settle.repay_decimal)?;
     
         self.fee = self.fee
-            .checked_add(asset.fee)
+            .checked_add(settle.fee)
             .ok_or(LendingError::MathOverflow)?;
         
         Ok(())

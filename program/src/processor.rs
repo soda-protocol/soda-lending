@@ -1288,13 +1288,12 @@ fn process_borrow_liquidity(
     let token_program_id = next_account_info(account_info_iter)?;
 
     // borrow
-    let borrow_with_fee = if let Ok(index) = user_obligation.find_loan(*market_reserve_info.key) {
+    let borrow_settle = if let Ok(index) = user_obligation.find_loan(*market_reserve_info.key) {
         user_obligation.borrow_in(amount, index, &market_reserve, friend_obligation)?
     } else {
         user_obligation.new_borrow_in(amount, *market_reserve_info.key, &market_reserve, friend_obligation)?
     };
-    let amount = borrow_with_fee.receiving()?;
-    market_reserve.liquidity_info.borrow_out(borrow_with_fee)?;
+    market_reserve.liquidity_info.borrow_out(borrow_settle)?;
 
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
@@ -1304,7 +1303,7 @@ fn process_borrow_liquidity(
     spl_token_transfer(TokenTransferParams {
         source: manager_token_account_info.clone(),
         destination: user_token_account_info.clone(),
-        amount,
+        amount: borrow_settle.receiving,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
         token_program: token_program_id.clone(),
@@ -1372,8 +1371,8 @@ fn process_repay_loan(
     user_obligation.loans[index].accrue_interest(&market_reserve)?;
 
     // repay
-    let amount = user_obligation.repay(amount, index)?;
-    market_reserve.liquidity_info.repay(amount)?;
+    let settle = user_obligation.repay(amount, index)?;
+    market_reserve.liquidity_info.repay(settle)?;
 
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
@@ -1383,7 +1382,7 @@ fn process_repay_loan(
     spl_token_transfer(TokenTransferParams {
         source: user_token_account_info.clone(),
         destination: manager_token_account_info.clone(),
-        amount,
+        amount: settle.amount,
         authority: user_authority_info.clone(),
         authority_signer_seeds: &[],
         token_program: token_program_id.clone(),
@@ -1501,7 +1500,7 @@ fn process_liquidate(
     // liquidate
     let collateral_index = user_obligation.find_collateral(*collateral_market_reserve_info.key)?;
     let loan_index = user_obligation.find_loan(*loan_market_reserve_info.key)?;
-    let (amount, liquidation_with_fee) = user_obligation.liquidate(
+    let (amount, liquidation_settle) = user_obligation.liquidate(
         amount,
         collateral_index,
         loan_index,
@@ -1509,8 +1508,7 @@ fn process_liquidate(
         &loan_market_reserve,
         friend_obligation,
     )?;
-    let repay_amount = liquidation_with_fee.need_repay()?;
-    loan_market_reserve.liquidity_info.liquidate(liquidation_with_fee)?;
+    loan_market_reserve.liquidity_info.liquidate(liquidation_settle)?;
 
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
@@ -1520,7 +1518,7 @@ fn process_liquidate(
     spl_token_transfer(TokenTransferParams {
         source: liquidator_token_account_info.clone(),
         destination: manager_token_account_info.clone(),
-        amount: repay_amount,
+        amount: liquidation_settle.repay_with_fee,
         authority: liquidator_authority_info.clone(),
         authority_signer_seeds: &[],
         token_program: token_program_id.clone(),

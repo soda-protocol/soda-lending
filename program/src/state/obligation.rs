@@ -383,7 +383,7 @@ impl UserObligation {
         index: usize,
         reserve: &MarketReserve,
         other: Option<Self>,
-    ) -> Result<BorrowWithFee, ProgramError> {
+    ) -> Result<BorrowSettle, ProgramError> {
         self.loans[index].borrowed_amount_wads = self.loans[index].borrowed_amount_wads
             .try_add(Decimal::from(amount))?;
 
@@ -394,7 +394,7 @@ impl UserObligation {
 
         self.validate_borrow(other)?;
 
-        BorrowWithFee::new(amount, Rate::from_scaled_val(reserve.liquidity_info.config.borrow_fee_rate))
+        BorrowSettle::new(amount, Rate::from_scaled_val(reserve.liquidity_info.config.borrow_fee_rate))
     }
     ///
     // need update obligation before
@@ -404,7 +404,7 @@ impl UserObligation {
         key: Pubkey,
         reserve: &MarketReserve,
         other: Option<Self>,
-    ) -> Result<BorrowWithFee, ProgramError> {
+    ) -> Result<BorrowSettle, ProgramError> {
         if self.collaterals.len() + self.loans.len() >= MAX_OBLIGATION_RESERVES {
             return Err(LendingError::ObligationReserveLimitExceed.into());
         }
@@ -422,7 +422,7 @@ impl UserObligation {
 
         self.validate_borrow(other)?;
 
-        BorrowWithFee::new(amount, Rate::from_scaled_val(reserve.liquidity_info.config.borrow_fee_rate))
+        BorrowSettle::new(amount, Rate::from_scaled_val(reserve.liquidity_info.config.borrow_fee_rate))
     }
     ///
     // need accure reserve and obligation interest before
@@ -430,17 +430,24 @@ impl UserObligation {
         &mut self,
         amount: u64,
         index: usize,
-    ) -> Result<u64, ProgramError> {
+    ) -> Result<RepaySettle, ProgramError> {
         let amount_decimal = Decimal::from(amount);
         if amount_decimal >= self.loans[index].borrowed_amount_wads {
-            let amount = self.loans[index].borrowed_amount_wads.try_ceil_u64()?;
+            let amount_decimal = self.loans[index].borrowed_amount_wads;
+            let amount = amount_decimal.try_ceil_u64()?;
             self.loans.remove(index);
 
-            Ok(amount)
+            Ok(RepaySettle {
+                amount,
+                amount_decimal
+            })
         } else {
             self.loans[index].borrowed_amount_wads = self.loans[index].borrowed_amount_wads.try_sub(amount_decimal)?;
 
-            Ok(amount)
+            Ok(RepaySettle {
+                amount,
+                amount_decimal
+            })
         }
     }
     ///
@@ -610,7 +617,7 @@ impl UserObligation {
         collateral_reserve: &MarketReserve,
         loan_reserve: &MarketReserve,
         other: Option<Self>,
-    ) -> Result<(u64, LiquidationWithFee), ProgramError> {
+    ) -> Result<(u64, LiquidationSettle), ProgramError> {
         let (collaterals_liquidation_value, loans_value) = if let Some(other) = other {
             let collaterals_liquidation_value = self.collaterals_liquidation_value
                 .try_add(other.collaterals_liquidation_value)?;
@@ -657,7 +664,7 @@ impl UserObligation {
         self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads
             .try_sub(repay_amount)?;
 
-        let liquidation_with_fee = LiquidationWithFee::new(
+        let settle = LiquidationSettle::new(
             collateral_value,
             loan_reserve.market_price,
             repay_amount,
@@ -665,7 +672,7 @@ impl UserObligation {
             Rate::from_scaled_val(loan_reserve.liquidity_info.config.liquidation_fee_rate),
         )?;
 
-        Ok((amount, liquidation_with_fee))
+        Ok((amount, settle))
     }
 }
 

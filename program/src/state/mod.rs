@@ -145,15 +145,26 @@ fn calculate_decimals(decimal: u8) -> Result<u64, ProgramError> {
 
 ///
 #[derive(Clone, Copy, Debug)]
-pub struct BorrowWithFee {
+pub struct RepaySettle {
     ///
     pub amount: u64,
+    ///
+    pub amount_decimal: Decimal,
+}
+
+///
+#[derive(Clone, Copy, Debug)]
+pub struct BorrowSettle {
+    ///
+    pub amount: u64,
+    ///
+    pub receiving: u64,
     ///
     pub fee: u64,
 }
 ///
 // fee-exclusive
-impl BorrowWithFee {
+impl BorrowSettle {
     ///
     pub fn new(amount: u64, rate: Rate) -> Result<Self, ProgramError> {
         let fee = Decimal::from(amount)
@@ -161,33 +172,36 @@ impl BorrowWithFee {
             .try_mul(rate)?
             .try_ceil_u64()?;
 
-        Ok(Self{ amount, fee })
-    }
-    ///
-    pub fn receiving(&self) -> Result<u64, ProgramError> {
-        let receiving = self.amount
-            .checked_sub(self.fee)
+        let receiving = amount
+            .checked_sub(fee)
             .ok_or(LendingError::MathOverflow)?;
 
-        if receiving > 0 {
-            Ok(receiving)
-        } else {
-            Err(LendingError::BorrowReceiveTooSmall.into())
+        if receiving == 0 {
+            return Err(LendingError::BorrowReceiveTooSmall.into());
         }
+
+        Ok(Self{
+            amount,
+            receiving,
+            fee,
+        })
     }
 }
 ///
 #[derive(Clone, Copy, Debug)]
-pub struct LiquidationWithFee {
+pub struct LiquidationSettle {
     ///
     pub repay: u64,
+    ///
+    pub repay_decimal: Decimal,
+    ///
+    pub repay_with_fee: u64,
     ///
     pub fee: u64,
 }
 
-impl LiquidationWithFee {
+impl LiquidationSettle {
     ///
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         collateral_value: Decimal,
         loan_price: Decimal,
@@ -200,28 +214,31 @@ impl LiquidationWithFee {
             .try_div(loan_price)?;
 
         let repay = loan_amount.try_ceil_u64()?;
-        if equivalent_amount > loan_amount {
+        let (repay_with_fee, fee) = if equivalent_amount > loan_amount {
             let fee = equivalent_amount
                 .try_sub(loan_amount)?
                 .try_mul(fee_rate)?
                 .try_ceil_u64()?;
 
-            Ok(Self{ repay, fee })
-        } else {
-            Ok(Self{ repay, fee: 0 })
-        }
-    }
-    ///
-    pub fn need_repay(&self) -> Result<u64, ProgramError> {
-        let repay = self.repay
-            .checked_add(self.fee)
-            .ok_or(LendingError::MathOverflow)?;
+            let repay_with_fee = repay
+                .checked_add(fee)
+                .ok_or(LendingError::MathOverflow)?;
 
-        if repay > 0 {
-            Ok(repay)
+            (repay_with_fee, fee)
         } else {
-            Err(LendingError::LiquidationRepayTooSmall.into())
+            (repay, 0)
+        };
+
+        if repay_with_fee == 0 {
+            return Err(LendingError::LiquidationRepayTooSmall.into());
         }
+
+        Ok(Self {
+            repay,
+            repay_decimal: loan_amount,
+            repay_with_fee,
+            fee,
+        })
     }
 }
 
