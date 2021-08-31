@@ -144,6 +144,8 @@ impl UserObligationInfo {
                     (loan.acc_borrow_rate_wads, loan.borrowed_amount_wads)
                 };
 
+                // println!("before: {}, after: {}", loan.borrowed_amount_wads, borrowed_amount_wads);
+
                 let decimals = 10u64
                     .checked_pow(market_reserve.token_info.decimal as u32)
                     .ok_or(SodaError::Other)?;
@@ -173,7 +175,7 @@ impl UserObligationInfo {
 
         let loans_value = loans
             .iter()
-            .try_fold(Decimal::zero(), |acc, loan| acc.try_add(loan.borrowed_amount_wads))?;
+            .try_fold(Decimal::zero(), |acc, loan| acc.try_add(loan.loan_value))?;
 
         Ok(Self {
             manager: obligation.manager,

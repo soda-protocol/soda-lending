@@ -23,7 +23,7 @@ use crate::{
     do_liquidate,
     do_liquidate_with_friend,
     do_inject_no_borrow,
-    do_inject_liquidation,
+    do_liquidate_by_injection,
     types::{UserObligationInfo, get_pyth_price},
 };
 use solana_client::{
@@ -57,7 +57,6 @@ fn main() {
     let client = RpcClient::new_with_commitment(DEV_NET.into(), CommitmentConfig::default());
 
     // let collaterals_price_oracle_map = get_market_and_price_map(&client).unwrap();
-
     // let clock_data = client.get_account_data(&Clock::id()).unwrap();
     // match UserObligationInfo::from_raw_data(
     //     &clock_data,
@@ -65,13 +64,12 @@ fn main() {
     //     &collaterals_price_oracle_map,
     // ) {
     //     Ok(obligation) => {
-    //         println!("{:?}", obligation);
-    //         // println!("collaterals borrow value: {:?}, collaterals liquidation value: {:?}, collaterals max value: {:?}, loans value: {:?}",
-    //         //     obligation.collaterals_borrow_value,
-    //         //     obligation.collaterals_liquidation_value,
-    //         //     obligation.collaterals_max_value,
-    //         //     obligation.loans_value,
-    //         // );
+    //         println!("collaterals borrow value: {}, collaterals liquidation value: {}, collaterals max value: {}, loans value: {}",
+    //             obligation.collaterals_borrow_value,
+    //             obligation.collaterals_liquidation_value,
+    //             obligation.collaterals_max_value,
+    //             obligation.loans_value,
+    //         );
     //     }
     //     Err(e) => println!("{:?}", e),
     // }
@@ -243,7 +241,7 @@ fn main() {
     //     Pubkey::from_str(SOUSDT_MINT).unwrap(),
     //     Pubkey::from_str(OBLIGATION).unwrap(),
     //     Pubkey::from_str(SOUSDT_LONE_TOKEN_ACCOUNT).unwrap(),
-    //     6_000_000_000,
+    //     5_000_000_000,
     //     block_hash,
     // );
     // match client.send_and_confirm_transaction(&transaction) {
@@ -252,46 +250,45 @@ fn main() {
     // }
 
     // borrow liquidity
-    let authority = Keypair::from_base58_string(GLOBAL_OWNER);
-    let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    let updating_keys = vec![
-        (Pubkey::from_str(BNB_RESERVE).unwrap(), Pubkey::from_str(BNB_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(BTC_RESERVE).unwrap(), Pubkey::from_str(BTC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(SOL_RESERVE).unwrap(), Pubkey::from_str(SOL_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(SRM_RESERVE).unwrap(), Pubkey::from_str(SRM_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(DOGE_RESERVE).unwrap(), Pubkey::from_str(DOGE_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(LUNA_RESERVE).unwrap(), Pubkey::from_str(LUNA_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(USDT_RESERVE).unwrap(), Pubkey::from_str(USDT_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-    ];
-    let transaction = do_borrow_liquidity(
-        authority,
-        updating_keys,
-        8,
-        Pubkey::from_str(MANAGER).unwrap(),
-        Pubkey::from_str(USDC_MANAGER_TOKEN_ACCOUNT).unwrap(),
-        Pubkey::from_str(OBLIGATION).unwrap(),
-        Pubkey::from_str(USDC_LONE_TOKEN_ACCOUNT).unwrap(),
-        300_000_000_000,
-        block_hash,
-    ).unwrap();
-    match client.send_and_confirm_transaction(&transaction) {
-        Ok(sig) => println!("sig is {:?}", sig),
-        Err(err) => println!("error: {:?}", err),
-    }
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
+    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    // let updating_keys = vec![
+    //     (Pubkey::from_str(BNB_RESERVE).unwrap(), Pubkey::from_str(BNB_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(BTC_RESERVE).unwrap(), Pubkey::from_str(BTC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(SOL_RESERVE).unwrap(), Pubkey::from_str(SOL_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(SRM_RESERVE).unwrap(), Pubkey::from_str(SRM_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(DOGE_RESERVE).unwrap(), Pubkey::from_str(DOGE_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(LUNA_RESERVE).unwrap(), Pubkey::from_str(LUNA_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(USDT_RESERVE).unwrap(), Pubkey::from_str(USDT_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    // ];
+    // let transaction = do_borrow_liquidity(
+    //     authority,
+    //     updating_keys,
+    //     7,
+    //     Pubkey::from_str(MANAGER).unwrap(),
+    //     Pubkey::from_str(USDT_MANAGER_TOKEN_ACCOUNT).unwrap(),
+    //     Pubkey::from_str(OBLIGATION).unwrap(),
+    //     Pubkey::from_str(USDT_LONE_TOKEN_ACCOUNT).unwrap(),
+    //     130_000_000_000,
+    //     block_hash,
+    // ).unwrap();
+    // match client.send_and_confirm_transaction(&transaction) {
+    //     Ok(sig) => println!("sig is {:?}", sig),
+    //     Err(err) => println!("error: {:?}", err),
+    // }
 
     // repay loan
     // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
     // let transaction = do_repay_loan(
     //     authority,
-    //     Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap(),
-    //     Pubkey::from_str("3sAzDiT2dBjrCPsADnRUPEUi8wquWxNynHDCnnU3M8z1").unwrap(),
-    //     Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
-    //     Pubkey::from_str("GZ57zaxfgq1eWvHvGtw1ASsydqGRWLCoqM2TmvYuw1Pw").unwrap(),
-    //     Pubkey::from_str("GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN").unwrap(),
-    //     0,
+    //     Pubkey::from_str(USDT_RESERVE).unwrap(),
+    //     Pubkey::from_str(USDT_MANAGER_TOKEN_ACCOUNT).unwrap(),
+    //     Pubkey::from_str(RATE_ORACLE).unwrap(),
+    //     Pubkey::from_str(OBLIGATION).unwrap(),
+    //     Pubkey::from_str(USDT_LONE_TOKEN_ACCOUNT).unwrap(),
+    //     100_000_000,
     //     block_hash,
     // );
     // match client.send_and_confirm_transaction(&transaction) {
@@ -303,25 +300,24 @@ fn main() {
     // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
     // let updating_keys = vec![
-    //     (Pubkey::from_str(BTC_RESERVE).unwrap(), Pubkey::from_str(BTC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(BNB_RESERVE).unwrap(), Pubkey::from_str(BNB_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(BTC_RESERVE).unwrap(), Pubkey::from_str(BTC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(SOL_RESERVE).unwrap(), Pubkey::from_str(SOL_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(SRM_RESERVE).unwrap(), Pubkey::from_str(SRM_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(DOGE_RESERVE).unwrap(), Pubkey::from_str(DOGE_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(LUNA_RESERVE).unwrap(), Pubkey::from_str(LUNA_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-    //     (Pubkey::from_str(SOL_RESERVE).unwrap(), Pubkey::from_str(SOL_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     //     (Pubkey::from_str(USDT_RESERVE).unwrap(), Pubkey::from_str(USDT_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-    //     (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
     // ];
     // let transaction = do_redeem_collateral(
     //     authority,
     //     updating_keys,
-    //     1,
+    //     7,
     //     Pubkey::from_str(MANAGER).unwrap(),
-    //     Pubkey::from_str(SOBNB_MINT).unwrap(),
+    //     Pubkey::from_str(SOUSDT_MINT).unwrap(),
     //     Pubkey::from_str(OBLIGATION).unwrap(),
-    //     Pubkey::from_str(SOBNB_LONE_TOKEN_ACCOUNT).unwrap(),
-    //     10_000_000_000,
+    //     Pubkey::from_str(SOUSDT_LONE_TOKEN_ACCOUNT).unwrap(),
+    //     u64::MAX,
     //     block_hash,
     // ).unwrap();
     // match client.send_and_confirm_transaction(&transaction) {
@@ -349,80 +345,35 @@ fn main() {
     // }
 
     // liquidate
-    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
-    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    // let transaction = do_liquidate(
-    //     authority,
-    //     Pubkey::from_str("5nBpNCqkH8aKpUkJjruykZsuSjmLKSzCYEnAb2p8TB13").unwrap(),
-    //     Pubkey::from_str("Ev7ugN8CcahvjRXeByFWejhCLhRG9gYZ8s4QReKHRxNP").unwrap(),
-    //     Pubkey::from_str("3sAzDiT2dBjrCPsADnRUPEUi8wquWxNynHDCnnU3M8z1").unwrap(),
-    //     Pubkey::from_str("HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J").unwrap(),
-    //     Pubkey::from_str("6weJxYMjio6qAoXvNafpzgwCF3fi1knQkgm6DHg1WN1J").unwrap(),
-    //     Pubkey::from_str("6MRdknnThzPSz1vkfMAYWnepnAF5wGitRTNrJ6rrQe1s").unwrap(),
-    //     Pubkey::from_str("3vtj3VomHHAoqHKtJQL1ymEP6GQmzXHb9TD1LRkBoxFq").unwrap(),
-    //     vec![Pubkey::from_str("GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b").unwrap()],
-    //     Pubkey::from_str("GZ57zaxfgq1eWvHvGtw1ASsydqGRWLCoqM2TmvYuw1Pw").unwrap(),
-    //     Pubkey::from_str("GjGcDEVXWTZznUGPnzrBfyVYEJaaDEVz8eraBR7pJEEN").unwrap(),
-    //     Pubkey::from_str("EnpPrZtpsKb2CK6Jyue6tYi4vPmztLXPDKdco3WnRYuS").unwrap(),
-    //     0,
-    //     false,
-    //     100_000_000,
-    //     block_hash,
-    // );
-    // match client.send_and_confirm_transaction(&transaction) {
-    //     Ok(sig) => println!("sig is {:?}", sig),
-    //     Err(err) => println!("error: {:?}", err),
-    // }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    // let lamports1 = client.get_minimum_balance_for_rent_exemption(Mint::LEN).unwrap();
-    // let lamports2 = client.get_minimum_balance_for_rent_exemption(Account::LEN).unwrap();
-
-    // let authority = &Keypair::from_base58_string(GLOBAL_OWNER);
-
-    // let mint = &Keypair::new();
-    // let token_account = &Keypair::new();
-    // println!("mint key: {:?}, token account pubkey: {:?}", mint.pubkey(), token_account.pubkey());
-
-    // client.request_airdrop(&authority.pubkey(), 10_000_000_000).unwrap();
-
-    // thread::sleep(Duration::from_secs(30));
-
-    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
-
-    // let transaction = create_token(
-    //     mint,
-    //     authority, 
-    //     token_account, 
-    //     lamports1, 
-    //     lamports2,
-    //     1_000_000_000_000_000_000, 
-    //     block_hash
-    // ).unwrap();
-
-    // match client.send_and_confirm_transaction(&transaction) {
-    //     Ok(sig) => println!("sig is {:?}", sig),
-    //     Err(err) => println!("error: {:?}", err),
-    // }
+    let authority = Keypair::from_base58_string(GLOBAL_OWNER);
+    let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    let updating_keys = vec![
+        (Pubkey::from_str(BNB_RESERVE).unwrap(), Pubkey::from_str(BNB_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(BTC_RESERVE).unwrap(), Pubkey::from_str(BTC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(SOL_RESERVE).unwrap(), Pubkey::from_str(SOL_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(SRM_RESERVE).unwrap(), Pubkey::from_str(SRM_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(DOGE_RESERVE).unwrap(), Pubkey::from_str(DOGE_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(LUNA_RESERVE).unwrap(), Pubkey::from_str(LUNA_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+        (Pubkey::from_str(USDT_RESERVE).unwrap(), Pubkey::from_str(USDT_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    ];
+    let transaction = do_liquidate_by_injection(
+        authority,
+        updating_keys,
+        0,
+        7,
+        Pubkey::from_str(MANAGER).unwrap(),
+        Pubkey::from_str(USDT_MANAGER_TOKEN_ACCOUNT).unwrap(),
+        Pubkey::from_str(SOBNB_MINT).unwrap(),
+        Pubkey::from_str(OBLIGATION).unwrap(),
+        Pubkey::from_str(USDT_LONE_TOKEN_ACCOUNT).unwrap(),
+        Pubkey::from_str(SOBNB_LONE_TOKEN_ACCOUNT).unwrap(),
+        u64::MAX,
+        block_hash,
+    ).unwrap();
+    match client.send_and_confirm_transaction(&transaction) {
+        Ok(sig) => println!("sig is {:?}", sig),
+        Err(err) => println!("error: {:?}", err),
+    }
 }
 

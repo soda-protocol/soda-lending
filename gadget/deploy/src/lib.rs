@@ -40,7 +40,7 @@ pub const PYTH_ID: &str = "gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s";
 pub const QUOTE_CURRENCY: &[u8; 32] = &[85, 83, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 pub const GLOBAL_OWNER: &str = "vG2VqMokQyY82xKda116qAmvMQm4ymoKEV92UtxNVmu4tKDt4X33ELY4rdCfiR1NxJnbek39m5X9rLJnxASNbmQ";
 pub const MANAGER: &str = "F93DUk6QDpLBRd6pVQNtXvgrU4mBNMv5d1JaYkHvhcr5";
-pub const OBLIGATION: &str = "HHVdQ8jLwy4PR3Y15LMofYTLW8pyKJYNV8sbhvDtKmE2";
+pub const OBLIGATION: &str = "DReoERKDtBdaXf3g5k7YbbVq7TzTktPK9tiSwaj8yqnM";
 pub const RATE_ORACLE: &str = "7nHzMWXrse8Mcp3Qc5KSJwG5J16wA75DMNEz7jV6hFpf";
 
 // BNB
@@ -572,8 +572,9 @@ pub fn do_redeem_collateral(
     let (updating_keys_1, updating_keys_2) = updating_keys.split_at(updating_keys.len() / 2);
 
     let transaction = Transaction::new_signed_with_payer(&[
-        update_market_reserves(updating_keys_1.into()),
-        update_market_reserves(updating_keys_2.into()),
+        // update_market_reserves(updating_keys_1.into()),
+        // update_market_reserves(updating_keys_2.into()),
+        update_market_reserves(updating_keys),
         update_user_obligation(user_obligation_key, market_reserves),
         redeem_collateral(
             manager_key,
@@ -1055,6 +1056,63 @@ pub fn do_liquidate_with_friend(
     Ok(transaction)
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn do_liquidate_by_injection(
+    liquidator_authority: Keypair,
+    updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>,
+    collateral_index: usize,
+    loan_index: usize,
+    manager_key: Pubkey,
+    manager_token_account_key: Pubkey,
+    sotoken_mint_key: Pubkey,
+    user_obligation_key: Pubkey,
+    liquidator_token_account_key: Pubkey,
+    liquidator_sotoken_account_key: Pubkey,
+    amount: u64,
+    recent_blockhash: Hash,
+) -> Result<Transaction, ProgramError> {
+    let liquidator_authority_key = &liquidator_authority.pubkey();    
+    let market_reserves = updating_keys
+        .iter()
+        .map(|reserve| reserve.0)
+        .collect::<Vec<_>>();
+
+    let collateral_market_reserve_key = market_reserves
+        .get(collateral_index)
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
+
+    let loan_market_reserve_key = market_reserves
+        .get(loan_index)
+        .ok_or(ProgramError::NotEnoughAccountKeys)?
+        .clone();
+
+    let transaction = Transaction::new_signed_with_payer(&[
+        update_market_reserves(updating_keys),
+        update_user_obligation(user_obligation_key, market_reserves),
+        inject_liquidation(user_obligation_key),
+        liquidate(
+            manager_key,
+            collateral_market_reserve_key,
+            sotoken_mint_key,
+            loan_market_reserve_key,
+            manager_token_account_key,
+            user_obligation_key,
+            None,
+            *liquidator_authority_key,
+            liquidator_token_account_key,
+            liquidator_sotoken_account_key,
+            amount,
+        ),
+    ],
+    Some(liquidator_authority_key),
+        &[&liquidator_authority],
+        recent_blockhash,
+    );
+
+    Ok(transaction)
+}
+
 pub fn do_inject_no_borrow(
     authority: Keypair,
     user_obligation_key: Pubkey,
@@ -1064,24 +1122,6 @@ pub fn do_inject_no_borrow(
 
     Transaction::new_signed_with_payer(&[
         inject_no_borrow(
-            user_obligation_key,
-        ),
-    ],
-    Some(authority_key),
-        &[&authority],
-        recent_blockhash,
-    )
-}
-
-pub fn do_inject_liquidation(
-    authority: Keypair,
-    user_obligation_key: Pubkey,
-    recent_blockhash: Hash,
-) -> Transaction {
-    let authority_key = &authority.pubkey();
-
-    Transaction::new_signed_with_payer(&[
-        inject_liquidation(
             user_obligation_key,
         ),
     ],
@@ -1111,6 +1151,15 @@ pub fn get_market_and_price_map(client: &RpcClient) -> Result<HashMap::<Pubkey, 
             client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
         ),
     );
+    // SOL
+    collaterals_price_oracle_map.insert(
+        Pubkey::from_str(SOL_RESERVE).unwrap(),
+        (
+            client.get_account_data(&Pubkey::from_str(SOL_RESERVE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(SOL_PRICE).unwrap())?,
+            client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
+        ),
+    );
     // SRM
     collaterals_price_oracle_map.insert(
         Pubkey::from_str(SRM_RESERVE).unwrap(),
@@ -1135,15 +1184,6 @@ pub fn get_market_and_price_map(client: &RpcClient) -> Result<HashMap::<Pubkey, 
         (
             client.get_account_data(&Pubkey::from_str(LUNA_RESERVE).unwrap())?,
             client.get_account_data(&Pubkey::from_str(LUNA_PRICE).unwrap())?,
-            client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
-        ),
-    );
-    // SOL
-    collaterals_price_oracle_map.insert(
-        Pubkey::from_str(SOL_RESERVE).unwrap(),
-        (
-            client.get_account_data(&Pubkey::from_str(SOL_RESERVE).unwrap())?,
-            client.get_account_data(&Pubkey::from_str(SOL_PRICE).unwrap())?,
             client.get_account_data(&Pubkey::from_str(RATE_ORACLE).unwrap())?,
         ),
     );

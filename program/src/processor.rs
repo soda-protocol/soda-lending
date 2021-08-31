@@ -1500,7 +1500,7 @@ fn process_liquidate(
 
     // liquidate
     let collateral_index = user_obligation.find_collateral(*collateral_market_reserve_info.key)?;
-    let loan_index = user_obligation.find_collateral(*loan_market_reserve_info.key)?;
+    let loan_index = user_obligation.find_loan(*loan_market_reserve_info.key)?;
     let (amount, liquidation_with_fee) = user_obligation.liquidate(
         amount,
         collateral_index,
