@@ -434,11 +434,10 @@ impl UserObligation {
         let amount_decimal = Decimal::from(amount);
         if amount_decimal >= self.loans[index].borrowed_amount_wads {
             let amount_decimal = self.loans[index].borrowed_amount_wads;
-            let amount = amount_decimal.try_ceil_u64()?;
             self.loans.remove(index);
 
             Ok(RepaySettle {
-                amount,
+                amount: amount_decimal.try_ceil_u64()?,
                 amount_decimal
             })
         } else {

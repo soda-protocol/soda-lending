@@ -191,7 +191,7 @@ impl LiquidityInfo {
         self.available = self.available
             .checked_add(settle.amount)
             .ok_or(LendingError::MathOverflow)?;
-        self.borrowed_amount_wads = self.borrowed_amount_wads.try_sub(settle.amount_decimal)?;
+        // self.borrowed_amount_wads = self.borrowed_amount_wads.try_sub(settle.amount_decimal)?;
 
         Ok(())
     }

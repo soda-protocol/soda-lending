@@ -288,7 +288,7 @@ fn main() {
         Pubkey::from_str(RATE_ORACLE).unwrap(),
         Pubkey::from_str(OBLIGATION).unwrap(),
         Pubkey::from_str(USDT_LONE_TOKEN_ACCOUNT).unwrap(),
-        100_000_000,
+        u64::MAX,
         block_hash,
     );
     match client.send_and_confirm_transaction(&transaction) {
