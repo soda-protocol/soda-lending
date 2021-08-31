@@ -5,7 +5,7 @@ use crate::{
     instruction::LendingInstruction,
     math::{Decimal, TryDiv, TryMul},
     pyth,
-    state::{CollateralConfig, CollateralInfo, EnableBorrow, LastUpdate,
+    state::{CollateralConfig, CollateralInfo, ReserveControl, LastUpdate,
         LiquidityConfig, LiquidityInfo, Manager, MarketReserve, Operator,
         Param, Pause, PROGRAM_VERSION, RateOracle, RateOracleConfig,
         TokenInfo, UserObligation,
@@ -49,10 +49,9 @@ pub fn process_instruction(
         LendingInstruction::InitMarketReserve {
             collateral_config,
             liquidity_config,
-            enable_borrow,
         } => {
             msg!("Instruction: Init Market Reserve");
-            process_init_market_reserve(program_id, accounts, collateral_config, liquidity_config, enable_borrow)
+            process_init_market_reserve(program_id, accounts, collateral_config, liquidity_config)
         }
         LendingInstruction::UpdateMarketReserves => {
             msg!("Instruction: Update Market Reserves");
@@ -110,6 +109,10 @@ pub fn process_instruction(
             msg!("Instruction: Liquidation: amount = {}", amount);
             process_liquidate(program_id, accounts, amount)
         }
+        LendingInstruction::UpdateUserObligationConfig { config } => {
+            msg!("Instruction: Update User Obligation Config");
+            process_operate_user_obligation(program_id, accounts, config)
+        }
         LendingInstruction::PauseRateOracle => {
             msg!("Instruction: Pause Rate Oracle");
             process_operate_rate_oracle(program_id, accounts, Pause)
@@ -118,9 +121,9 @@ pub fn process_instruction(
             msg!("Instruction: Updae Rate Oracle Config");
             process_operate_rate_oracle(program_id, accounts, config)
         }
-        LendingInstruction::EnableBorrowForMarketReserve => {
-            msg!("Instruction: Enable Borrow For Market Reserve");
-            process_operate_market_reserve(program_id, accounts, EnableBorrow)
+        LendingInstruction::ControlMarketReserve { enable } => {
+            msg!("Instruction: Control Market Reserve");
+            process_operate_market_reserve(program_id, accounts, enable as ReserveControl)
         }
         LendingInstruction::UpdateMarketReserveCollateralConfig { config } => {
             msg!("Instruction: Update Market Reserve Collateral Config");
@@ -221,7 +224,6 @@ fn process_init_market_reserve(
     accounts: &[AccountInfo],
     collateral_config: CollateralConfig,
     liquidity_config: LiquidityConfig,
-    enable_borrow: bool,
 ) -> ProgramResult {
     // check config
     collateral_config.is_valid()?;
@@ -331,16 +333,17 @@ fn process_init_market_reserve(
 
     let market_reserve = MarketReserve {
         version: PROGRAM_VERSION,
+        enable: true,
         last_update: LastUpdate::new(clock.slot),
         manager: *manager_info.key,
         market_price,
         token_info: TokenInfo {
+            mint_pubkey: *token_mint_info.key,
             account: *manager_token_account_info.key,
             price_oracle: *pyth_price_info.key,
             decimal: token_mint.decimals,
         },
         liquidity_info: LiquidityInfo {
-            enable_borrow,
             rate_oracle: *rate_oracle_info.key,
             available: 0,
             borrowed_amount_wads: Decimal::zero(),
@@ -1506,7 +1509,7 @@ fn process_liquidate(
         &loan_market_reserve,
         friend_obligation,
     )?;
-    let repay_amount = liquidation_with_fee.need_pay()?;
+    let repay_amount = liquidation_with_fee.need_repay()?;
     loan_market_reserve.liquidity_info.liquidate(liquidation_with_fee)?;
 
     // pack
@@ -1532,6 +1535,47 @@ fn process_liquidate(
         authority_signer_seeds,
         token_program: token_program_id.clone(),
     })
+}
+
+// by manager
+fn process_operate_user_obligation<P: Any + Copy + Param>(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+    param: P,
+) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    // 1
+    let manager_info = next_account_info(account_info_iter)?;
+    if manager_info.owner != program_id {
+        msg!("Manager ower provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
+    }
+    let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
+    // 2
+    let user_obligation_info = next_account_info(account_info_iter)?;
+    if user_obligation_info.owner != program_id {
+        msg!("User obligation owner provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
+    }
+    let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
+    if &user_obligation.manager != manager_info.key {
+        msg!("User obligation manager provided is not matched with manager info");
+        return Err(LendingError::InvalidUserObligation.into());
+    }
+    // 3
+    let authority_info = next_account_info(account_info_iter)?;
+    if authority_info.key != &manager.owner {
+        msg!("Only manager owner can create reserve");
+        return Err(LendingError::InvalidManagerOwner.into());
+    }
+    if !authority_info.is_signer {
+        msg!("authority is not a signer");
+        return Err(LendingError::InvalidSigner.into());
+    }
+
+    user_obligation.operate(param)?;
+    // pack
+    UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
 }
 
 // by rate oracle manager

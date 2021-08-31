@@ -40,7 +40,7 @@ pub const PYTH_ID: &str = "gSbePebfvPy7tRqimPoVecS2UsBvYv46ynrzWocc92s";
 pub const QUOTE_CURRENCY: &[u8; 32] = &[85, 83, 68, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 pub const GLOBAL_OWNER: &str = "vG2VqMokQyY82xKda116qAmvMQm4ymoKEV92UtxNVmu4tKDt4X33ELY4rdCfiR1NxJnbek39m5X9rLJnxASNbmQ";
 pub const MANAGER: &str = "F93DUk6QDpLBRd6pVQNtXvgrU4mBNMv5d1JaYkHvhcr5";
-pub const OBLIGATION: &str = "HCpUvBNkiBNqWBTErHM68v6sKrSSC2N1Ur93bViWgaj7";
+pub const OBLIGATION: &str = "9vPDQLpjwmh9YZkEXq6KUnqN8WHqqTkqAZ38NMjx2tCt";
 pub const RATE_ORACLE: &str = "7nHzMWXrse8Mcp3Qc5KSJwG5J16wA75DMNEz7jV6hFpf";
 
 // BNB
@@ -569,8 +569,11 @@ pub fn do_redeem_collateral(
         .ok_or(ProgramError::NotEnoughAccountKeys)?
         .clone();
 
+    let (updating_keys_1, updating_keys_2) = updating_keys.split_at(updating_keys.len() / 2);
+
     let transaction = Transaction::new_signed_with_payer(&[
-        update_market_reserves(updating_keys),
+        update_market_reserves(updating_keys_1.into()),
+        update_market_reserves(updating_keys_2.into()),
         update_user_obligation(user_obligation_key, market_reserves),
         redeem_collateral(
             manager_key,

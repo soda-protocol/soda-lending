@@ -2,7 +2,7 @@
 use super::*;
 use crate::{
     error::LendingError,
-    math::{Decimal, Rate, TryAdd, TryDiv, TryMul, TrySub, PERCENT_SCALER}
+    math::{Decimal, Rate, TryAdd, TryDiv, TryMul, TrySub, PERCENT_SCALER, WAD}
 };
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use solana_program::{
@@ -11,10 +11,34 @@ use solana_program::{
     program_pack::{IsInitialized, Pack, Sealed},
     pubkey::{Pubkey, PUBKEY_BYTES}
 };
-use std::{convert::TryInto, cmp::Ordering, iter::Iterator};
+use std::{convert::TryInto, cmp::Ordering, iter::Iterator, any::Any};
 
 ///
 const MAX_OBLIGATION_RESERVES: usize = 9;
+
+#[derive(Clone, Debug, Copy, Default, PartialEq)]
+pub struct IndexedCollateralConfig {
+    ///
+    pub index: u8,
+    ///
+    pub borrow_value_ratio: u64,
+    ///
+    pub liquidation_value_ratio: u64,
+    ///
+    pub close_factor: u64,
+}
+
+impl Param for IndexedCollateralConfig {
+    fn is_valid(&self) -> ProgramResult {
+        if self.borrow_value_ratio < self.liquidation_value_ratio &&
+            self.liquidation_value_ratio < WAD &&
+            self.close_factor < WAD {
+            Ok(())
+        } else {
+            Err(LendingError::InvalidIndexedCollateralConfig.into())
+        }
+    }
+}
 
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -226,6 +250,25 @@ pub struct UserObligation {
     pub loans: Vec<Loan>,
     ///
     pub loans_value: Decimal,
+}
+
+impl<P: Any + Param + Copy> Operator<P> for UserObligation {
+    fn operate_unchecked(&mut self, param: P) -> ProgramResult {
+        if let Some(config) = <dyn Any>::downcast_ref::<IndexedCollateralConfig>(&param) {
+            let index = config.index as usize;
+            if index >= self.collaterals.len() {
+                return Err(LendingError::ObligationCollateralIndexExceed.into());
+            }
+
+            self.collaterals[index].borrow_value_ratio = config.borrow_value_ratio;
+            self.collaterals[index].liquidation_value_ratio = config.liquidation_value_ratio;
+            self.collaterals[index].close_factor = config.close_factor;
+
+            return Ok(());
+        }
+
+        panic!("unexpected param type");
+    }
 }
 
 impl UserObligation {
@@ -588,6 +631,9 @@ impl UserObligation {
             .try_mul(Rate::from_scaled_val(self.collaterals[collateral_index].close_factor))?
             .try_floor_u64()?;
         let amount = amount.min(max_liquidation_amount);
+        if amount == 0 {
+            return Err(LendingError::LiquidationReceiveTooSmall.into());
+        }
 
         let collateral_amount = collateral_reserve.exchange_collateral_to_liquidity(amount)?;
         let collateral_value = collateral_reserve.market_price

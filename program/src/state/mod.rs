@@ -165,9 +165,15 @@ impl BorrowWithFee {
     }
     ///
     pub fn receiving(&self) -> Result<u64, ProgramError> {
-        self.amount
+        let receiving = self.amount
             .checked_sub(self.fee)
-            .ok_or(LendingError::MathOverflow.into())
+            .ok_or(LendingError::MathOverflow)?;
+
+        if receiving > 0 {
+            Ok(receiving)
+        } else {
+            Err(LendingError::BorrowReceiveTooSmall.into())
+        }
     }
 }
 ///
@@ -206,10 +212,16 @@ impl LiquidationWithFee {
         }
     }
     ///
-    pub fn need_pay(&self) -> Result<u64, ProgramError> {
-        self.repay
+    pub fn need_repay(&self) -> Result<u64, ProgramError> {
+        let repay = self.repay
             .checked_add(self.fee)
-            .ok_or(LendingError::MathOverflow.into())
+            .ok_or(LendingError::MathOverflow)?;
+
+        if repay > 0 {
+            Ok(repay)
+        } else {
+            Err(LendingError::LiquidationRepayTooSmall.into())
+        }
     }
 }
 

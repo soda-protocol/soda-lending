@@ -17,6 +17,8 @@ use solana_program::{
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TokenInfo {
     ///
+    pub mint_pubkey: Pubkey,
+    ///
     pub account: Pubkey,
     ///
     pub price_oracle: Pubkey,
@@ -86,13 +88,18 @@ pub struct LiquidityConfig {
     pub liquidation_fee_rate: u64,
     ///
     pub flash_loan_fee_rate: u64,
+    ///
+    pub max_deposit: u64,
+    ///
+    pub max_acc_deposit: u64,
 }
 
 impl Param for LiquidityConfig {
     fn is_valid(&self) -> ProgramResult {
         if self.borrow_fee_rate < WAD &&
             self.liquidation_fee_rate < WAD &&
-            self.flash_loan_fee_rate < WAD {
+            self.flash_loan_fee_rate < WAD &&
+            self.max_deposit <= self.max_acc_deposit {
             Ok(())
         } else {
             Err(LendingError::InvalidLiquidityConfig.into())
@@ -101,10 +108,9 @@ impl Param for LiquidityConfig {
 }
 
 ///
-#[derive(Clone, Copy, Debug)]
-pub struct EnableBorrow;
+pub type ReserveControl = bool;
 
-impl Param for EnableBorrow {
+impl Param for ReserveControl {
     fn is_valid(&self) -> ProgramResult {
         Ok(())
     }
@@ -113,8 +119,6 @@ impl Param for EnableBorrow {
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LiquidityInfo {
-    ///
-    pub enable_borrow: bool,
     ///
     pub rate_oracle: Pubkey,
     ///
@@ -147,11 +151,19 @@ impl LiquidityInfo {
     }
     ///
     pub fn deposit(&mut self, amount: u64) -> ProgramResult {
+        if amount > self.config.max_deposit {
+            return Err(LendingError::MarketReserveDepositExceedsLimit.into());
+        }
+
         self.available = self.available
             .checked_add(amount)
             .ok_or(LendingError::MathOverflow)?;
 
-        Ok(())
+        if self.available <= self.config.max_acc_deposit {
+            Ok(())
+        } else {
+            Err(LendingError::MarketReserveAccDepositExceedsLimit.into())
+        }
     }
     ///
     pub fn withdraw(&mut self, amount: u64) -> ProgramResult {
@@ -163,10 +175,6 @@ impl LiquidityInfo {
     }
     ///
     pub fn borrow_out(&mut self, asset: BorrowWithFee) -> ProgramResult {
-        if !self.enable_borrow {
-            return Err(LendingError::MarketReserveBorrowDisabled.into());
-        }
-
         self.available = self.available
             .checked_sub(asset.amount)
             .ok_or(LendingError::MarketReserveLiquidityAvailableInsufficent)?;
@@ -216,6 +224,8 @@ pub struct MarketReserve {
     /// Version of the struct
     pub version: u8,
     ///
+    pub enable: bool,
+    ///
     pub last_update: LastUpdate,
     /// 
     pub manager: Pubkey,
@@ -231,8 +241,8 @@ pub struct MarketReserve {
 
 impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
     fn operate_unchecked(&mut self, param: P) -> ProgramResult {
-        if let Some(_enable) = <dyn Any>::downcast_ref::<EnableBorrow>(&param) {
-            self.liquidity_info.enable_borrow = true;
+        if let Some(enable) = <dyn Any>::downcast_ref::<ReserveControl>(&param) {
+            self.enable = *enable;
             return Ok(())
         }
 
@@ -305,6 +315,10 @@ impl MarketReserve {
     }
     ///
     pub fn deposit(&mut self, amount: u64) -> Result<u64, ProgramError> {
+        if !self.enable {
+            return Err(LendingError::MarketReserveDisabled.into());
+        }
+
         let mint_amount = self.exchange_liquidity_to_collateral(amount)?;
         self.collateral_info.mint(mint_amount)?;
         self.liquidity_info.deposit(amount)?;
@@ -313,6 +327,10 @@ impl MarketReserve {
     }
     ///
     pub fn withdraw(&mut self, amount: u64) -> Result<u64, ProgramError> {
+        if !self.enable {
+            return Err(LendingError::MarketReserveDisabled.into());
+        }
+
         let mint_amount = self.exchange_collateral_to_liquidity(amount)?;
         self.collateral_info.burn(mint_amount)?;
         self.liquidity_info.withdraw(amount)?;
@@ -329,7 +347,7 @@ impl IsInitialized for MarketReserve {
 }
 
 const MARKET_RESERVE_PADDING_LEN: usize = 128;
-const MARKET_RESERVE_LEN: usize = 399;
+const MARKET_RESERVE_LEN: usize = 447;
 
 impl Pack for MarketReserve {
     const LEN: usize = MARKET_RESERVE_LEN;
@@ -339,9 +357,11 @@ impl Pack for MarketReserve {
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             version,
+            enable,
             last_update,
             manager,
             market_price,
+            mint_pubkey,
             account,
             price_oracle,
             decimal,
@@ -350,7 +370,6 @@ impl Pack for MarketReserve {
             borrow_value_ratio,
             liquidation_value_ratio,
             close_factor,
-            enable_borrow,
             rate_oracle,
             available,
             borrowed_amount_wads,
@@ -359,19 +378,22 @@ impl Pack for MarketReserve {
             borrow_fee_rate,
             liquidation_fee_rate,
             flash_loan_fee_rate,
+            max_deposit,
+            max_acc_deposit,
             _padding,
         ) = mut_array_refs![
             output,
+            1,
             1,
             LAST_UPDATE_LEN,
             PUBKEY_BYTES,
             16,
             PUBKEY_BYTES,
             PUBKEY_BYTES,
+            PUBKEY_BYTES,
             1,
             PUBKEY_BYTES,
             8,
-            1,
             1,
             1,
             1,
@@ -379,6 +401,8 @@ impl Pack for MarketReserve {
             8,
             16,
             16,
+            8,
+            8,
             8,
             8,
             8,
@@ -387,15 +411,23 @@ impl Pack for MarketReserve {
         ];
 
         *version = self.version.to_le_bytes();
+        pack_bool(self.enable, enable);
         self.last_update.pack_into_slice(&mut last_update[..]);
         manager.copy_from_slice(self.manager.as_ref());
         pack_decimal(self.market_price, market_price);
 
+        mint_pubkey.copy_from_slice(self.token_info.mint_pubkey.as_ref());
         account.copy_from_slice(self.token_info.account.as_ref());
         price_oracle.copy_from_slice(self.token_info.price_oracle.as_ref());
         *decimal = self.token_info.decimal.to_le_bytes();
 
-        pack_bool(self.liquidity_info.enable_borrow, enable_borrow);
+        sotoken_mint_pubkey.copy_from_slice(self.collateral_info.sotoken_mint_pubkey.as_ref());
+        *total_mint = self.collateral_info.total_mint.to_le_bytes();
+
+        *borrow_value_ratio = self.collateral_info.config.borrow_value_ratio.to_le_bytes();
+        *liquidation_value_ratio = self.collateral_info.config.liquidation_value_ratio.to_le_bytes();
+        *close_factor = self.collateral_info.config.close_factor.to_le_bytes();
+
         rate_oracle.copy_from_slice(self.liquidity_info.rate_oracle.as_ref());
         *available = self.liquidity_info.available.to_le_bytes();
         pack_decimal(self.liquidity_info.borrowed_amount_wads, borrowed_amount_wads);
@@ -405,13 +437,8 @@ impl Pack for MarketReserve {
         *borrow_fee_rate = self.liquidity_info.config.borrow_fee_rate.to_le_bytes();
         *liquidation_fee_rate = self.liquidity_info.config.liquidation_fee_rate.to_le_bytes();
         *flash_loan_fee_rate = self.liquidity_info.config.flash_loan_fee_rate.to_le_bytes();
-
-        sotoken_mint_pubkey.copy_from_slice(self.collateral_info.sotoken_mint_pubkey.as_ref());
-        *total_mint = self.collateral_info.total_mint.to_le_bytes();
-
-        *borrow_value_ratio = self.collateral_info.config.borrow_value_ratio.to_le_bytes();
-        *liquidation_value_ratio = self.collateral_info.config.liquidation_value_ratio.to_le_bytes();
-        *close_factor = self.collateral_info.config.close_factor.to_le_bytes();
+        *max_deposit = self.liquidity_info.config.max_deposit.to_le_bytes();
+        *max_acc_deposit = self.liquidity_info.config.max_acc_deposit.to_le_bytes();
     }
 
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -419,9 +446,11 @@ impl Pack for MarketReserve {
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             version,
+            enable,
             last_update,
             manager,
             market_price,
+            mint_pubkey,
             account,
             price_oracle,
             decimal,
@@ -430,7 +459,6 @@ impl Pack for MarketReserve {
             borrow_value_ratio,
             liquidation_value_ratio,
             close_factor,
-            enable_borrow,
             rate_oracle,
             available,
             borrowed_amount_wads,
@@ -439,19 +467,22 @@ impl Pack for MarketReserve {
             borrow_fee_rate,
             liquidation_fee_rate,
             flash_loan_fee_rate,
+            max_deposit,
+            max_acc_deposit,
             _padding,
         ) = array_refs![
             input,
+            1,
             1,
             LAST_UPDATE_LEN,
             PUBKEY_BYTES,
             16,
             PUBKEY_BYTES,
             PUBKEY_BYTES,
+            PUBKEY_BYTES,
             1,
             PUBKEY_BYTES,
             8,
-            1,
             1,
             1,
             1,
@@ -459,6 +490,8 @@ impl Pack for MarketReserve {
             8,
             16,
             16,
+            8,
+            8,
             8,
             8,
             8,
@@ -474,10 +507,12 @@ impl Pack for MarketReserve {
 
         Ok(Self {
             version,
+            enable: unpack_bool(enable)?,
             last_update: LastUpdate::unpack_from_slice(&last_update[..])?,
             manager: Pubkey::new_from_array(*manager),
             market_price: unpack_decimal(market_price),
             token_info: TokenInfo {
+                mint_pubkey: Pubkey::new_from_array(*mint_pubkey),
                 account: Pubkey::new_from_array(*account),
                 price_oracle: Pubkey::new_from_array(*price_oracle),
                 decimal: u8::from_le_bytes(*decimal),
@@ -492,7 +527,6 @@ impl Pack for MarketReserve {
                 },
             },
             liquidity_info: LiquidityInfo {
-                enable_borrow: unpack_bool(enable_borrow)?,
                 rate_oracle: Pubkey::new_from_array(*rate_oracle),
                 available: u64::from_le_bytes(*available),
                 borrowed_amount_wads: unpack_decimal(borrowed_amount_wads),
@@ -501,7 +535,9 @@ impl Pack for MarketReserve {
                 config: LiquidityConfig {
                     borrow_fee_rate: u64::from_le_bytes(*borrow_fee_rate),
                     liquidation_fee_rate: u64::from_le_bytes(*liquidation_fee_rate),
-                    flash_loan_fee_rate: u64::from_le_bytes(*flash_loan_fee_rate)
+                    flash_loan_fee_rate: u64::from_le_bytes(*flash_loan_fee_rate),
+                    max_deposit: u64::from_le_bytes(*max_deposit),
+                    max_acc_deposit: u64::from_le_bytes(*max_acc_deposit),
                 },
             },
         })

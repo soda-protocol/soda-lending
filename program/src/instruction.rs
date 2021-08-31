@@ -2,7 +2,7 @@
 #![allow(missing_docs)]
 use crate::{
     id, error::LendingError,
-    state::{RateOracleConfig, LiquidityConfig, CollateralConfig},
+    state::{IndexedCollateralConfig, RateOracleConfig, LiquidityConfig, CollateralConfig},
 };
 use solana_program::{
     instruction::{AccountMeta, Instruction},
@@ -32,8 +32,6 @@ pub enum LendingInstruction {
         collateral_config: CollateralConfig,
         ///
         liquidity_config: LiquidityConfig,
-        ///
-        enable_borrow: bool,
     },
     /// 3
     UpdateMarketReserves,
@@ -91,33 +89,41 @@ pub enum LendingInstruction {
         amount: u64,   
     },
     /// 17
-    PauseRateOracle,
+    UpdateUserObligationConfig {
+        ///
+        config: IndexedCollateralConfig,
+    },
     /// 18
+    PauseRateOracle,
+    /// 19
     UpdateRateOracleConfig{
         ///
         config: RateOracleConfig,
     },
-    /// 19
-    EnableBorrowForMarketReserve,
     /// 20
+    ControlMarketReserve {
+        ///
+        enable: bool,
+    },
+    /// 21
     UpdateMarketReserveCollateralConfig {
         ///
         config: CollateralConfig,
     },
-    /// 21
+    /// 22
     UpdateMarketReserveLiquidityConfig {
         ///
         config: LiquidityConfig,
     },
-    /// 22
+    /// 23
     WithdrawFee {
         ///
         amount: u64,
     },
-    /// 23
+    /// 24
     #[cfg(feature = "case-injection")]
     InjectNoBorrow,
-    /// 24
+    /// 25
     #[cfg(feature = "case-injection")]
     InjectLiquidation,
 }
@@ -139,9 +145,8 @@ impl LendingInstruction {
             }
             2 => {
                 let (collateral_config, rest) = Self::unpack_collateral_config(rest)?;
-                let (liquidity_config, rest) = Self::unpack_liquidity_config(rest)?;
-                let (enable_borrow, _rest) = Self::unpack_bool(rest)?;
-                Self::InitMarketReserve { collateral_config, liquidity_config, enable_borrow }
+                let (liquidity_config, _rest) = Self::unpack_liquidity_config(rest)?;
+                Self::InitMarketReserve { collateral_config, liquidity_config }
             }
             3 => Self::UpdateMarketReserves,
             4 => {
@@ -184,33 +189,56 @@ impl LendingInstruction {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::Liquidate { amount }
             }
-            17 => Self::PauseRateOracle,
-            18 => {
+            17 => {
+                let (config, _rest) = Self::unpack_indexed_collateral_config(rest)?;
+                Self::UpdateUserObligationConfig { config }
+            }
+            18 => Self::PauseRateOracle,
+            19 => {
                 let (config, _rest) = Self::unpack_rate_oracle_config(rest)?;
                 Self::UpdateRateOracleConfig { config } 
             }
-            19 => Self::EnableBorrowForMarketReserve,
             20 => {
+                let (enable, _rest) = Self::unpack_bool(rest)?;
+                Self::ControlMarketReserve { enable }
+            }
+            21 => {
                 let (config, _rest) = Self::unpack_collateral_config(rest)?;
                 Self::UpdateMarketReserveCollateralConfig { config }
             }
-            21 => {
+            22 => {
                 let (config, _rest) = Self::unpack_liquidity_config(rest)?;
                 Self::UpdateMarketReserveLiquidityConfig { config }
             }
-            22 => {
+            23 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::WithdrawFee { amount }
             }
             #[cfg(feature = "case-injection")]
-            23 => Self::InjectNoBorrow,
+            24 => Self::InjectNoBorrow,
             #[cfg(feature = "case-injection")]
-            24 => Self::InjectLiquidation,
+            25 => Self::InjectLiquidation,
             _ => {
                 msg!("Instruction cannot be unpacked");
                 return Err(LendingError::InstructionUnpackError.into());
             }
         })
+    }
+
+    fn unpack_indexed_collateral_config(input: &[u8]) -> Result<(IndexedCollateralConfig, &[u8]), ProgramError> {
+        let (index, rest) = Self::unpack_u8(input)?;
+        let (borrow_value_ratio, rest) = Self::unpack_u64(rest)?;
+        let (liquidation_value_ratio, rest) = Self::unpack_u64(rest)?;
+        let (close_factor, rest) = Self::unpack_u64(rest)?;
+
+        Ok((
+            IndexedCollateralConfig {
+                index,
+                borrow_value_ratio,
+                liquidation_value_ratio,
+                close_factor,
+            }, rest
+        ))
     }
 
     fn unpack_rate_oracle_config(input: &[u8]) -> Result<(RateOracleConfig, &[u8]), ProgramError> {
@@ -240,12 +268,16 @@ impl LendingInstruction {
         let (borrow_fee_rate, rest) = Self::unpack_u64(input)?;
         let (liquidation_fee_rate, rest) = Self::unpack_u64(rest)?;
         let (flash_loan_fee_rate, rest) = Self::unpack_u64(rest)?;
+        let (max_deposit, rest) = Self::unpack_u64(rest)?;
+        let (max_acc_deposit, rest) = Self::unpack_u64(rest)?;
 
         Ok((
             LiquidityConfig {
                 borrow_fee_rate,
                 liquidation_fee_rate,
                 flash_loan_fee_rate,
+                max_deposit,
+                max_acc_deposit,
             }, rest
         ))
     }
@@ -337,12 +369,10 @@ impl LendingInstruction {
             Self::InitMarketReserve {
                 collateral_config,
                 liquidity_config,
-                enable_borrow,
             } => {
                 buf.push(2);
                 Self::pack_collateral_config(collateral_config, &mut buf);
                 Self::pack_liquidity_config(liquidity_config, &mut buf);
-                buf.extend_from_slice(&(enable_borrow as u8).to_le_bytes());
             }
             Self::UpdateMarketReserves => buf.push(3),
             Self::Deposit { amount } => {
@@ -385,30 +415,44 @@ impl LendingInstruction {
                 buf.push(16);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::PauseRateOracle => buf.push(17),
+            Self::UpdateUserObligationConfig { config } => {
+                buf.push(17);
+                Self::pack_indexed_collateral_config(config, &mut buf);
+            }
+            Self::PauseRateOracle => buf.push(18),
             Self::UpdateRateOracleConfig { config } => {
-                buf.push(18);
+                buf.push(19);
                 Self::pack_rate_oracle_config(config, &mut buf);
             }
-            Self::EnableBorrowForMarketReserve => buf.push(19),
-            Self::UpdateMarketReserveCollateralConfig { config } => {
+            Self::ControlMarketReserve { enable } => {
                 buf.push(20);
+                buf.extend_from_slice(&(enable as u8).to_le_bytes());
+            }
+            Self::UpdateMarketReserveCollateralConfig { config } => {
+                buf.push(21);
                 Self::pack_collateral_config(config, &mut buf);
             }
             Self::UpdateMarketReserveLiquidityConfig { config } => {
-                buf.push(21);
+                buf.push(22);
                 Self::pack_liquidity_config(config, &mut buf);
             }
             Self::WithdrawFee { amount } => {
-                buf.push(22);
+                buf.push(23);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             #[cfg(feature = "case-injection")]
-            Self::InjectNoBorrow => buf.push(23),
+            Self::InjectNoBorrow => buf.push(24),
             #[cfg(feature = "case-injection")]
-            Self::InjectLiquidation => buf.push(24),
+            Self::InjectLiquidation => buf.push(25),
         }
         buf
+    }
+
+    fn pack_indexed_collateral_config(config: IndexedCollateralConfig, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(&config.index.to_le_bytes());
+        buf.extend_from_slice(&config.borrow_value_ratio.to_le_bytes());
+        buf.extend_from_slice(&config.liquidation_value_ratio.to_le_bytes());
+        buf.extend_from_slice(&config.close_factor.to_le_bytes());
     }
 
     fn pack_rate_oracle_config(config: RateOracleConfig, buf: &mut Vec<u8>) {
@@ -480,7 +524,6 @@ pub fn init_market_reserve(
     authority_key: Pubkey,
     collateral_config: CollateralConfig,
     liquidity_config: LiquidityConfig,
-    enable_borrow: bool,
 ) -> Instruction {
     let program_id = id();
     let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
@@ -508,7 +551,6 @@ pub fn init_market_reserve(
         data: LendingInstruction::InitMarketReserve{
             collateral_config,
             liquidity_config,
-            enable_borrow,
         }.pack(),
     }
 }
@@ -949,6 +991,23 @@ pub fn liquidate(
     }
 }
 
+pub fn update_user_obligation_config(
+    manager_key: Pubkey,
+    user_obligation_key: Pubkey,
+    authority_key: Pubkey,
+    config: IndexedCollateralConfig,
+) -> Instruction {
+    Instruction {
+        program_id: id(),
+        accounts: vec![
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new(user_obligation_key, false),
+            AccountMeta::new_readonly(authority_key, true),
+        ],
+        data: LendingInstruction::UpdateUserObligationConfig{ config }.pack(),
+    }
+}
+
 pub fn pause_rate_oracle(
     rate_oracle_key: Pubkey,
     authority_key: Pubkey,
@@ -974,14 +1033,15 @@ pub fn update_rate_oracle_config(
             AccountMeta::new(rate_oracle_key, false),
             AccountMeta::new_readonly(authority_key, true),
         ],
-        data: LendingInstruction::UpdateRateOracleConfig { config }.pack(),
+        data: LendingInstruction::UpdateRateOracleConfig{ config }.pack(),
     }
 }
 
-pub fn enable_borrow_for_market_reserve(
+pub fn control_market_reserve(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
     authority_key: Pubkey,
+    enable: bool,
 ) -> Instruction {
     Instruction {
         program_id: id(),
@@ -990,7 +1050,7 @@ pub fn enable_borrow_for_market_reserve(
             AccountMeta::new(market_reserve_key, false),
             AccountMeta::new_readonly(authority_key, true),
         ],
-        data: LendingInstruction::EnableBorrowForMarketReserve.pack(),
+        data: LendingInstruction::ControlMarketReserve{ enable }.pack(),
     }
 }
 
