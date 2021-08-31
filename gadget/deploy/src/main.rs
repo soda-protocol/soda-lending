@@ -145,38 +145,39 @@ fn main() {
     // }
 
     // create market reserve
-    // let account_lamports = client.get_minimum_balance_for_rent_exemption(Account::LEN).unwrap();
-    // let reserve_lamports = client.get_minimum_balance_for_rent_exemption(MarketReserve::LEN).unwrap();
-    // let mint_lamports = client.get_minimum_balance_for_rent_exemption(Mint::LEN).unwrap();
-    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
-    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    // let transaction = create_market_reserve(
-    //     authority,
-    //     Pubkey::from_str(MANAGER).unwrap(),
-    //     Pubkey::from_str(USDT_PRODUCT).unwrap(),
-    //     Pubkey::from_str(USDT_PRICE).unwrap(),
-    //     Pubkey::from_str(RATE_ORACLE).unwrap(),
-    //     Pubkey::from_str(USDT_MINT).unwrap(),
-    //     CollateralConfig {
-    //         borrow_value_ratio: 70, 
-    //         liquidation_value_ratio: 85,
-    //         close_factor: 60,
-    //     },
-    //     LiquidityConfig {
-    //         borrow_fee_rate: 50_000_000_000_000_000, // 5%
-    //         liquidation_fee_rate: 50_000_000_000_000_000, // 5%
-    //         flash_loan_fee_rate: 100_000_000_000_000_000, // 10%
-    //     },
-    //     true,
-    //     reserve_lamports,
-    //     account_lamports, 
-    //     mint_lamports,
-    //     block_hash,
-    // ).unwrap();
-    // match client.send_and_confirm_transaction(&transaction) {
-    //     Ok(sig) => println!("sig is {:?}", sig),
-    //     Err(err) => println!("error: {:?}", err),
-    // }
+    let account_lamports = client.get_minimum_balance_for_rent_exemption(Account::LEN).unwrap();
+    let reserve_lamports = client.get_minimum_balance_for_rent_exemption(MarketReserve::LEN).unwrap();
+    let mint_lamports = client.get_minimum_balance_for_rent_exemption(Mint::LEN).unwrap();
+    let authority = Keypair::from_base58_string(GLOBAL_OWNER);
+    let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    let transaction = create_market_reserve(
+        authority,
+        Pubkey::from_str(MANAGER).unwrap(),
+        Pubkey::from_str(BNB_PRODUCT).unwrap(),
+        Pubkey::from_str(BNB_PRICE).unwrap(),
+        Pubkey::from_str(RATE_ORACLE).unwrap(),
+        Pubkey::from_str(BNB_MINT).unwrap(),
+        CollateralConfig {
+            borrow_value_ratio: 80, 
+            liquidation_value_ratio: 90,
+            close_factor: 60,
+        },
+        LiquidityConfig {
+            borrow_fee_rate: 10_000_000_000_000_000, // 1%
+            liquidation_fee_rate: 200_000_000_000_000_000, // 20%
+            flash_loan_fee_rate: 50_000_000_000_000_000, // 5%
+            max_deposit: u64::MAX,
+            max_acc_deposit: u64::MAX,
+        },
+        reserve_lamports,
+        account_lamports, 
+        mint_lamports,
+        block_hash,
+    ).unwrap();
+    match client.send_and_confirm_transaction(&transaction) {
+        Ok(sig) => println!("sig is {:?}", sig),
+        Err(err) => println!("error: {:?}", err),
+    }
 
     // deposit
     // let (block_hash, _) = client.get_recent_blockhash().unwrap();
@@ -299,34 +300,34 @@ fn main() {
     // }
 
     // redeem collateral
-    let authority = Keypair::from_base58_string(GLOBAL_OWNER);
-    let (block_hash, _) = client.get_recent_blockhash().unwrap();
-    let updating_keys = vec![
-        (Pubkey::from_str(BTC_RESERVE).unwrap(), Pubkey::from_str(BTC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(BNB_RESERVE).unwrap(), Pubkey::from_str(BNB_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(SRM_RESERVE).unwrap(), Pubkey::from_str(SRM_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(DOGE_RESERVE).unwrap(), Pubkey::from_str(DOGE_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(LUNA_RESERVE).unwrap(), Pubkey::from_str(LUNA_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(SOL_RESERVE).unwrap(), Pubkey::from_str(SOL_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(USDT_RESERVE).unwrap(), Pubkey::from_str(USDT_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-        (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
-    ];
-    let transaction = do_redeem_collateral(
-        authority,
-        updating_keys,
-        1,
-        Pubkey::from_str(MANAGER).unwrap(),
-        Pubkey::from_str(SOBNB_MINT).unwrap(),
-        Pubkey::from_str(OBLIGATION).unwrap(),
-        Pubkey::from_str(SOBNB_LONE_TOKEN_ACCOUNT).unwrap(),
-        10_000_000_000,
-        block_hash,
-    ).unwrap();
-    match client.send_and_confirm_transaction(&transaction) {
-        Ok(sig) => println!("sig is {:?}", sig),
-        Err(err) => println!("error: {:?}", err),
-    }
+    // let authority = Keypair::from_base58_string(GLOBAL_OWNER);
+    // let (block_hash, _) = client.get_recent_blockhash().unwrap();
+    // let updating_keys = vec![
+    //     (Pubkey::from_str(BTC_RESERVE).unwrap(), Pubkey::from_str(BTC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(BNB_RESERVE).unwrap(), Pubkey::from_str(BNB_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(SRM_RESERVE).unwrap(), Pubkey::from_str(SRM_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(DOGE_RESERVE).unwrap(), Pubkey::from_str(DOGE_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(LUNA_RESERVE).unwrap(), Pubkey::from_str(LUNA_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(SOL_RESERVE).unwrap(), Pubkey::from_str(SOL_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(USDT_RESERVE).unwrap(), Pubkey::from_str(USDT_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    //     (Pubkey::from_str(USDC_RESERVE).unwrap(), Pubkey::from_str(USDC_PRICE).unwrap(), Pubkey::from_str(RATE_ORACLE).unwrap()),
+    // ];
+    // let transaction = do_redeem_collateral(
+    //     authority,
+    //     updating_keys,
+    //     1,
+    //     Pubkey::from_str(MANAGER).unwrap(),
+    //     Pubkey::from_str(SOBNB_MINT).unwrap(),
+    //     Pubkey::from_str(OBLIGATION).unwrap(),
+    //     Pubkey::from_str(SOBNB_LONE_TOKEN_ACCOUNT).unwrap(),
+    //     10_000_000_000,
+    //     block_hash,
+    // ).unwrap();
+    // match client.send_and_confirm_transaction(&transaction) {
+    //     Ok(sig) => println!("sig is {:?}", sig),
+    //     Err(err) => println!("error: {:?}", err),
+    // }
 
     // redeem collateral without loan
     // let authority = Keypair::from_base58_string(GLOBAL_OWNER);

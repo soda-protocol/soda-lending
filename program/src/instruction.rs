@@ -472,6 +472,8 @@ impl LendingInstruction {
         buf.extend_from_slice(&config.borrow_fee_rate.to_le_bytes());
         buf.extend_from_slice(&config.liquidation_fee_rate.to_le_bytes());
         buf.extend_from_slice(&config.flash_loan_fee_rate.to_le_bytes());
+        buf.extend_from_slice(&config.max_deposit.to_le_bytes());
+        buf.extend_from_slice(&config.max_acc_deposit.to_le_bytes());
     }
 }
 

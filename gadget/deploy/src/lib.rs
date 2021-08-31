@@ -46,6 +46,7 @@ pub const RATE_ORACLE: &str = "7nHzMWXrse8Mcp3Qc5KSJwG5J16wA75DMNEz7jV6hFpf";
 // BNB
 pub const BNB_MINT: &str = "6mhUyoQR5CcHN4RJ5PSfcvTjRuWF742ypZeMwptPgFnK";
 pub const SOBNB_MINT: &str = "24Y4Wd6tYBiCgVU4naLAVA8wFSDb9v1hVwdK93x5g7Vw";
+pub const BNB_PRODUCT: &str = "2weC6fjXrfaCLQpqEzdgBHpz6yVNvmSN133m7LDuZaDb";
 pub const BNB_PRICE: &str = "GwzBgrXb4PG59zjce24SF2b9JXbLEjJJTBkmytuEZj1b";
 pub const BNB_MANAGER_TOKEN_ACCOUNT: &str = "DgHRo44dn63LJhTC5hheGhM9dERDQrhAn7V7smz5wWrC";
 pub const BNB_RESERVE: &str = "3raP2UGyEqgQRpza4m6zwqpy6wumioq3fzaqdy1YYcvm";
@@ -55,6 +56,7 @@ pub const SOBNB_LONE_TOKEN_ACCOUNT: &str = "3ikRkx3WZkY2puEo89tk2QpN6FSbcrENN4y5
 // BTC
 pub const BTC_MINT: &str = "9bRWBCW4BHHoLXFLFcLU3FQCDXXLNds1SJBmpeKYFeBZ";
 pub const SOBTC_MINT: &str = "4YPUDRM9LbxemxoAoZDECoigeRuWa1csxAdGHWoztDT9";
+pub const BTC_PRODUCT: &str = "3m1y5h2uv7EQL3KaJZehvAJa4yDNvgc5yAdL9KPMKwvk";
 pub const BTC_PRICE: &str = "HovQMDrbAgAYPCmHVSrezcSmkMtXSSUsLDFANExrZh2J";
 pub const BTC_MANAGER_TOKEN_ACCOUNT: &str = "3D3KLLYbnSY9ZxxXRRpLpFwzWTaCahj5YNYFso7FRExu";
 pub const BTC_RESERVE: &str = "73wnWaSncUBgmEp5RFS1ZBLG7Y3SFv45Etnv92UN2WeQ";
@@ -288,7 +290,6 @@ pub fn create_market_reserve(
     token_mint_key: Pubkey,
     collateral_config: CollateralConfig,
     liquidity_config: LiquidityConfig,
-    enable_borrow: bool,
     reserve_lamports: u64,
     account_lamports: u64,
     mint_lamports: u64,
@@ -342,7 +343,6 @@ pub fn create_market_reserve(
             *authority_key,
             collateral_config,
             liquidity_config,
-            enable_borrow,
         )
     ],
     Some(authority_key),
