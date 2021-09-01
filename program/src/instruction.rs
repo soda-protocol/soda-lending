@@ -8,7 +8,7 @@ use solana_program::{
     instruction::{AccountMeta, Instruction},
     msg,
     program_error::ProgramError,
-    pubkey::Pubkey,
+    pubkey::{Pubkey, PUBKEY_BYTES},
     sysvar
 };
 use std::{convert::{TryInto, TryFrom}, mem::size_of};
@@ -116,14 +116,24 @@ pub enum LendingInstruction {
         config: LiquidityConfig,
     },
     /// 23
+    UpdateMarketReservePriceOracle {
+        ///
+        oracle: Pubkey,
+    },
+    /// 24
+    UpdateMarketReserveRateOracle {
+        ///
+        oracle: Pubkey,
+    },
+    /// 25
     WithdrawFee {
         ///
         amount: u64,
     },
-    /// 24
+    /// 26
     #[cfg(feature = "case-injection")]
     InjectNoBorrow,
-    /// 25
+    /// 27
     #[cfg(feature = "case-injection")]
     InjectLiquidation,
 }
@@ -211,13 +221,21 @@ impl LendingInstruction {
                 Self::UpdateMarketReserveLiquidityConfig { config }
             }
             23 => {
+                let (oracle, _rest) = Self::unpack_pubkey(rest)?;
+                Self::UpdateMarketReservePriceOracle { oracle }
+            }
+            24 => {
+                let (oracle, _rest) = Self::unpack_pubkey(rest)?;
+                Self::UpdateMarketReserveRateOracle { oracle }
+            }
+            25 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::WithdrawFee { amount }
             }
             #[cfg(feature = "case-injection")]
-            24 => Self::InjectNoBorrow,
+            26 => Self::InjectNoBorrow,
             #[cfg(feature = "case-injection")]
-            25 => Self::InjectLiquidation,
+            27 => Self::InjectLiquidation,
             _ => {
                 msg!("Instruction cannot be unpacked");
                 return Err(LendingError::InstructionUnpackError.into());
@@ -280,6 +298,16 @@ impl LendingInstruction {
                 max_acc_deposit,
             }, rest
         ))
+    }
+
+    fn unpack_pubkey(input: &[u8]) -> Result<(Pubkey, &[u8]), ProgramError> {
+        if input.len() < PUBKEY_BYTES {
+            msg!("Pubkey cannot be unpacked");
+            return Err(LendingError::InstructionUnpackError.into());
+        }
+        let (key, rest) = input.split_at(PUBKEY_BYTES);
+        let pk = Pubkey::new(key);
+        Ok((pk, rest))
     }
 
     fn unpack_u128(input: &[u8]) -> Result<(u128, &[u8]), ProgramError> {
@@ -417,7 +445,10 @@ impl LendingInstruction {
             }
             Self::UpdateUserObligationConfig { config } => {
                 buf.push(17);
-                Self::pack_indexed_collateral_config(config, &mut buf);
+                buf.extend_from_slice(&config.index.to_le_bytes());
+                buf.extend_from_slice(&config.borrow_value_ratio.to_le_bytes());
+                buf.extend_from_slice(&config.liquidation_value_ratio.to_le_bytes());
+                buf.extend_from_slice(&config.close_factor.to_le_bytes());
             }
             Self::PauseRateOracle => buf.push(18),
             Self::UpdateRateOracleConfig { config } => {
@@ -436,23 +467,24 @@ impl LendingInstruction {
                 buf.push(22);
                 Self::pack_liquidity_config(config, &mut buf);
             }
-            Self::WithdrawFee { amount } => {
+            Self::UpdateMarketReservePriceOracle { oracle } => {
                 buf.push(23);
+                buf.extend_from_slice(oracle.as_ref());
+            }
+            Self::UpdateMarketReserveRateOracle { oracle } => {
+                buf.push(24);
+                buf.extend_from_slice(oracle.as_ref());
+            }
+            Self::WithdrawFee { amount } => {
+                buf.push(25);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             #[cfg(feature = "case-injection")]
-            Self::InjectNoBorrow => buf.push(24),
+            Self::InjectNoBorrow => buf.push(26),
             #[cfg(feature = "case-injection")]
-            Self::InjectLiquidation => buf.push(25),
+            Self::InjectLiquidation => buf.push(27),
         }
         buf
-    }
-
-    fn pack_indexed_collateral_config(config: IndexedCollateralConfig, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(&config.index.to_le_bytes());
-        buf.extend_from_slice(&config.borrow_value_ratio.to_le_bytes());
-        buf.extend_from_slice(&config.liquidation_value_ratio.to_le_bytes());
-        buf.extend_from_slice(&config.close_factor.to_le_bytes());
     }
 
     fn pack_rate_oracle_config(config: RateOracleConfig, buf: &mut Vec<u8>) {
@@ -1086,6 +1118,40 @@ pub fn update_market_reserve_liquidity_config(
             AccountMeta::new_readonly(authority_key, true),
         ],
         data: LendingInstruction::UpdateMarketReserveLiquidityConfig{ config }.pack(),
+    }
+}
+
+pub fn update_market_reserve_price_oracle(
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    authority_key: Pubkey,
+    oracle: Pubkey,
+) -> Instruction {
+    Instruction {
+        program_id: id(),
+        accounts: vec![
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new_readonly(authority_key, true),
+        ],
+        data: LendingInstruction::UpdateMarketReservePriceOracle{ oracle }.pack(),
+    }
+}
+
+pub fn update_market_reserve_rate_oracle(
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    authority_key: Pubkey,
+    oracle: Pubkey,
+) -> Instruction {
+    Instruction {
+        program_id: id(),
+        accounts: vec![
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new_readonly(authority_key, true),
+        ],
+        data: LendingInstruction::UpdateMarketReserveRateOracle{ oracle }.pack(),
     }
 }
 

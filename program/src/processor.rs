@@ -8,7 +8,7 @@ use crate::{
     state::{CollateralConfig, CollateralInfo, ReserveControl, LastUpdate,
         LiquidityConfig, LiquidityInfo, Manager, MarketReserve, Operator,
         Param, Pause, PROGRAM_VERSION, RateOracle, RateOracleConfig,
-        TokenInfo, UserObligation,
+        ReservePriceOracle, ReserveRateOracle, TokenInfo, UserObligation,
     },
 };
 use num_traits::FromPrimitive;
@@ -123,7 +123,7 @@ pub fn process_instruction(
         }
         LendingInstruction::ControlMarketReserve { enable } => {
             msg!("Instruction: Control Market Reserve");
-            process_operate_market_reserve(program_id, accounts, enable as ReserveControl)
+            process_operate_market_reserve(program_id, accounts, ReserveControl(enable))
         }
         LendingInstruction::UpdateMarketReserveCollateralConfig { config } => {
             msg!("Instruction: Update Market Reserve Collateral Config");
@@ -132,6 +132,14 @@ pub fn process_instruction(
         LendingInstruction::UpdateMarketReserveLiquidityConfig { config } => {
             msg!("Instruction: Update Market Reserve Liquidity Config");
             process_operate_market_reserve(program_id, accounts, config)
+        }
+        LendingInstruction::UpdateMarketReservePriceOracle { oracle } => {
+            msg!("Instruction: Update Market Reserve Price Oracle");
+            process_operate_market_reserve(program_id, accounts, ReservePriceOracle(oracle))
+        }
+        LendingInstruction::UpdateMarketReserveRateOracle { oracle } => {
+            msg!("Instruction: Update Market Reserve Rate Oracle");
+            process_operate_market_reserve(program_id, accounts, ReserveRateOracle(oracle))
         }
         LendingInstruction::WithdrawFee { amount } => {
             msg!("Instruction: Withdraw Fee: {}", amount);

@@ -108,15 +108,6 @@ impl Param for LiquidityConfig {
 }
 
 ///
-pub type ReserveControl = bool;
-
-impl Param for ReserveControl {
-    fn is_valid(&self) -> ProgramResult {
-        Ok(())
-    }
-}
-
-///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LiquidityInfo {
     ///
@@ -241,8 +232,8 @@ pub struct MarketReserve {
 
 impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
     fn operate_unchecked(&mut self, param: P) -> ProgramResult {
-        if let Some(enable) = <dyn Any>::downcast_ref::<ReserveControl>(&param) {
-            self.enable = *enable;
+        if let Some(control) = <dyn Any>::downcast_ref::<ReserveControl>(&param) {
+            self.enable = control.0;
             return Ok(())
         }
 
@@ -254,6 +245,16 @@ impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
         if let Some(config) = <dyn Any>::downcast_ref::<LiquidityConfig>(&param) {
             self.liquidity_info.config = *config;
             return Ok(());
+        }
+
+        if let Some(oracle) = <dyn Any>::downcast_ref::<ReservePriceOracle>(&param) {
+            self.token_info.price_oracle = oracle.0;
+            return Ok(())
+        }
+
+        if let Some(oracle) = <dyn Any>::downcast_ref::<ReserveRateOracle>(&param) {
+            self.liquidity_info.rate_oracle = oracle.0;
+            return Ok(())
         }
 
         panic!("unexpected param type");
@@ -525,5 +526,35 @@ impl Pack for MarketReserve {
                 },
             },
         })
+    }
+}
+
+///
+#[derive(Clone, Debug, Copy)]
+pub struct ReserveControl(pub bool);
+
+impl Param for ReserveControl {
+    fn is_valid(&self) -> ProgramResult {
+        Ok(())
+    }
+}
+
+///
+#[derive(Clone, Debug, Copy)]
+pub struct ReservePriceOracle(pub Pubkey);
+
+impl Param for ReservePriceOracle {
+    fn is_valid(&self) -> ProgramResult {
+        Ok(())
+    }
+}
+
+///
+#[derive(Clone, Debug, Copy)]
+pub struct ReserveRateOracle(pub Pubkey);
+
+impl Param for ReserveRateOracle {
+    fn is_valid(&self) -> ProgramResult {
+        Ok(())
     }
 }
