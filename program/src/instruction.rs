@@ -245,9 +245,9 @@ impl LendingInstruction {
 
     fn unpack_indexed_collateral_config(input: &[u8]) -> Result<(IndexedCollateralConfig, &[u8]), ProgramError> {
         let (index, rest) = Self::unpack_u8(input)?;
-        let (borrow_value_ratio, rest) = Self::unpack_u64(rest)?;
-        let (liquidation_value_ratio, rest) = Self::unpack_u64(rest)?;
-        let (close_factor, rest) = Self::unpack_u64(rest)?;
+        let (borrow_value_ratio, rest) = Self::unpack_u8(rest)?;
+        let (liquidation_value_ratio, rest) = Self::unpack_u8(rest)?;
+        let (close_factor, rest) = Self::unpack_u8(rest)?;
 
         Ok((
             IndexedCollateralConfig {
@@ -283,7 +283,7 @@ impl LendingInstruction {
     }
 
     fn unpack_liquidity_config(input: &[u8]) -> Result<(LiquidityConfig, &[u8]), ProgramError> {
-        let (borrow_fee_rate, rest) = Self::unpack_u64(input)?;
+        let (borrow_fee_rate, rest) = Self::unpack_u8(input)?;
         let (liquidation_fee_rate, rest) = Self::unpack_u64(rest)?;
         let (flash_loan_fee_rate, rest) = Self::unpack_u64(rest)?;
         let (max_deposit, rest) = Self::unpack_u64(rest)?;

@@ -83,7 +83,7 @@ impl CollateralInfo {
 #[derive(Clone, Debug, Copy, Default, PartialEq)]
 pub struct LiquidityConfig {
     ///
-    pub borrow_fee_rate: u64,
+    pub borrow_fee_rate: u8,
     ///
     pub liquidation_fee_rate: u64,
     ///
@@ -96,7 +96,7 @@ pub struct LiquidityConfig {
 
 impl Param for LiquidityConfig {
     fn is_valid(&self) -> ProgramResult {
-        if self.borrow_fee_rate < WAD &&
+        if self.borrow_fee_rate < 100 &&
             self.liquidation_fee_rate < WAD &&
             self.flash_loan_fee_rate < WAD &&
             self.max_deposit <= self.max_acc_deposit {
@@ -297,7 +297,7 @@ impl MarketReserve {
 
             let fee_interest_rate = compounded_interest_rate
                 .try_sub(Rate::one())?
-                .try_mul(Rate::from_scaled_val(self.liquidity_info.config.borrow_fee_rate))?;
+                .try_mul(Rate::from_percent(self.liquidity_info.config.borrow_fee_rate))?;
             let compounded_interest_rate = compounded_interest_rate.try_sub(fee_interest_rate)?;
 
             let fee_wads = self.liquidity_info.borrowed_amount_wads.try_mul(fee_interest_rate)?;
@@ -341,7 +341,7 @@ impl IsInitialized for MarketReserve {
 }
 
 const MARKET_RESERVE_PADDING_LEN: usize = 128;
-const MARKET_RESERVE_LEN: usize = 455;
+const MARKET_RESERVE_LEN: usize = 448;
 
 impl Pack for MarketReserve {
     const LEN: usize = MARKET_RESERVE_LEN;
@@ -396,7 +396,7 @@ impl Pack for MarketReserve {
             16,
             16,
             16,
-            8,
+            1,
             8,
             8,
             8,
@@ -485,7 +485,7 @@ impl Pack for MarketReserve {
             16,
             16,
             16,
-            8,
+            1,
             8,
             8,
             8,
@@ -527,7 +527,7 @@ impl Pack for MarketReserve {
                 borrowed_amount_wads: unpack_decimal(borrowed_amount_wads),
                 fee_wads: unpack_decimal(fee_wads),
                 config: LiquidityConfig {
-                    borrow_fee_rate: u64::from_le_bytes(*borrow_fee_rate),
+                    borrow_fee_rate: u8::from_le_bytes(*borrow_fee_rate),
                     liquidation_fee_rate: u64::from_le_bytes(*liquidation_fee_rate),
                     flash_loan_fee_rate: u64::from_le_bytes(*flash_loan_fee_rate),
                     max_deposit: u64::from_le_bytes(*max_deposit),

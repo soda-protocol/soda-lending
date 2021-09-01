@@ -2,7 +2,7 @@
 use super::*;
 use crate::{
     error::LendingError,
-    math::{Decimal, Rate, TryAdd, TryDiv, TryMul, TrySub, PERCENT_SCALER, WAD}
+    math::{Decimal, Rate, TryAdd, TryDiv, TryMul, TrySub}
 };
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use solana_program::{
@@ -21,18 +21,18 @@ pub struct IndexedCollateralConfig {
     ///
     pub index: u8,
     ///
-    pub borrow_value_ratio: u64,
+    pub borrow_value_ratio: u8,
     ///
-    pub liquidation_value_ratio: u64,
+    pub liquidation_value_ratio: u8,
     ///
-    pub close_factor: u64,
+    pub close_factor: u8,
 }
 
 impl Param for IndexedCollateralConfig {
     fn is_valid(&self) -> ProgramResult {
         if self.borrow_value_ratio < self.liquidation_value_ratio &&
-            self.liquidation_value_ratio < WAD &&
-            self.close_factor < WAD {
+            self.liquidation_value_ratio < 100 &&
+            self.close_factor < 100 {
             Ok(())
         } else {
             Err(LendingError::InvalidIndexedCollateralConfig.into())
@@ -48,11 +48,11 @@ pub struct Collateral {
     ///
     pub amount: u64,
     ///
-    pub borrow_value_ratio: u64,
+    pub borrow_value_ratio: u8,
     ///
-    pub liquidation_value_ratio: u64,
+    pub liquidation_value_ratio: u8,
     ///
-    pub close_factor: u64,
+    pub close_factor: u8,
 }
 
 impl Collateral {
@@ -61,21 +61,21 @@ impl Collateral {
         reserve.market_price
                 .try_mul(reserve.exchange_collateral_to_liquidity(self.amount)?)?
                 .try_div(calculate_decimals(reserve.token_info.decimal)?)?
-                .try_mul(Rate::from_scaled_val(self.borrow_value_ratio))
+                .try_mul(Rate::from_percent(self.borrow_value_ratio))
     }
     ///
     pub fn liquidation_effective_value(&self, reserve: &MarketReserve) -> Result<Decimal, ProgramError> {
         reserve.market_price
             .try_mul(reserve.exchange_collateral_to_liquidity(self.amount)?)?
             .try_div(calculate_decimals(reserve.token_info.decimal)?)?
-            .try_mul(Rate::from_scaled_val(self.liquidation_value_ratio))
+            .try_mul(Rate::from_percent(self.liquidation_value_ratio))
     }
 }
 
 impl Sealed for Collateral {}
 
 const COLLATERAL_PADDING_LEN: usize = 64;
-const COLLATERAL_LEN: usize = 128;
+const COLLATERAL_LEN: usize = 107;
 
 impl Pack for Collateral {
     const LEN: usize = COLLATERAL_LEN;
@@ -94,9 +94,9 @@ impl Pack for Collateral {
             output,
             PUBKEY_BYTES,
             8,
-            8,
-            8,
-            8,
+            1,
+            1,
+            1,
             COLLATERAL_PADDING_LEN
         ];
 
@@ -121,18 +121,18 @@ impl Pack for Collateral {
             input,
             PUBKEY_BYTES,
             8,
-            8,
-            8,
-            8,
+            1,
+            1,
+            1,
             COLLATERAL_PADDING_LEN
         ];
 
         Ok(Self{
             reserve: Pubkey::new_from_array(*reserve),
             amount: u64::from_le_bytes(*amount),
-            borrow_value_ratio: u64::from_le_bytes(*borrow_value_ratio),
-            liquidation_value_ratio: u64::from_le_bytes(*liquidation_value_ratio),
-            close_factor: u64::from_le_bytes(*close_factor),
+            borrow_value_ratio: u8::from_le_bytes(*borrow_value_ratio),
+            liquidation_value_ratio: u8::from_le_bytes(*liquidation_value_ratio),
+            close_factor: u8::from_le_bytes(*close_factor),
         })
     }
 }
@@ -466,9 +466,9 @@ impl UserObligation {
             self.collaterals.push(Collateral {
                 reserve: key,
                 amount,
-                borrow_value_ratio: reserve.collateral_info.config.borrow_value_ratio as u64 * PERCENT_SCALER,
-                liquidation_value_ratio: reserve.collateral_info.config.liquidation_value_ratio as u64 * PERCENT_SCALER,
-                close_factor: reserve.collateral_info.config.close_factor as u64 * PERCENT_SCALER,
+                borrow_value_ratio: reserve.collateral_info.config.borrow_value_ratio,
+                liquidation_value_ratio: reserve.collateral_info.config.liquidation_value_ratio,
+                close_factor: reserve.collateral_info.config.close_factor,
             });
 
             Ok(())
@@ -582,9 +582,9 @@ impl UserObligation {
         self.collaterals.push(Collateral {
             reserve: in_key,
             amount: in_amount,
-            borrow_value_ratio: in_reserve.collateral_info.config.borrow_value_ratio as u64 * PERCENT_SCALER,
-            liquidation_value_ratio: in_reserve.collateral_info.config.liquidation_value_ratio as u64 * PERCENT_SCALER,
-            close_factor: in_reserve.collateral_info.config.close_factor as u64 * PERCENT_SCALER,
+            borrow_value_ratio: in_reserve.collateral_info.config.borrow_value_ratio,
+            liquidation_value_ratio: in_reserve.collateral_info.config.liquidation_value_ratio,
+            close_factor: in_reserve.collateral_info.config.close_factor,
         });
 
         let out_value = out_reserve.market_price
@@ -630,7 +630,7 @@ impl UserObligation {
         
         // max liquidation limit check
         let max_liquidation_amount = Decimal::from(self.collaterals[collateral_index].amount)
-            .try_mul(Rate::from_scaled_val(self.collaterals[collateral_index].close_factor))?
+            .try_mul(Rate::from_percent(self.collaterals[collateral_index].close_factor))?
             .try_floor_u64()?;
         let amount = amount.min(max_liquidation_amount);
         if amount == 0 {
@@ -643,7 +643,7 @@ impl UserObligation {
             .try_div(calculate_decimals(collateral_reserve.token_info.decimal)?)?;
 
         let liquidation_ratio: Rate = collateral_value
-            .try_mul(Rate::from_scaled_val(self.collaterals[collateral_index].liquidation_value_ratio))?
+            .try_mul(Rate::from_percent(self.collaterals[collateral_index].liquidation_value_ratio))?
             .try_div(collaterals_liquidation_value)?
             .try_into()?;
 
