@@ -115,11 +115,11 @@ pub struct LiquidityInfo {
     ///
     pub available: u64,
     ///
-    pub borrowed_amount_wads: Decimal,
-    ///
     pub acc_borrow_rate_wads: Decimal,
     ///
-    pub fee: u64,
+    pub borrowed_amount_wads: Decimal,
+    ///
+    pub fee_wads: Decimal,
     ///
     pub config: LiquidityConfig,
 }
@@ -165,15 +165,11 @@ impl LiquidityInfo {
         Ok(())
     }
     ///
-    pub fn borrow_out(&mut self, asset: BorrowSettle) -> ProgramResult {
+    pub fn borrow_out(&mut self, amount: u64) -> ProgramResult {
         self.available = self.available
-            .checked_sub(asset.amount)
+            .checked_sub(amount)
             .ok_or(LendingError::MarketReserveLiquidityAvailableInsufficent)?;
-        self.borrowed_amount_wads = self.borrowed_amount_wads.try_add(Decimal::from(asset.amount))?;
-
-        self.fee = self.fee
-            .checked_add(asset.fee)
-            .ok_or(LendingError::MathOverflow)?;
+        self.borrowed_amount_wads = self.borrowed_amount_wads.try_add(Decimal::from(amount))?;
 
         Ok(())
     }
@@ -192,18 +188,13 @@ impl LiquidityInfo {
             .checked_add(settle.repay)
             .ok_or(LendingError::MathOverflow)?;
         self.borrowed_amount_wads = self.borrowed_amount_wads.try_sub(settle.repay_decimal)?;
-    
-        self.fee = self.fee
-            .checked_add(settle.fee)
-            .ok_or(LendingError::MathOverflow)?;
-        
+        self.fee_wads = self.fee_wads.try_add(Decimal::from(settle.fee))?;
+
         Ok(())
     }
     ///
     pub fn withdraw_fee(&mut self, fee: u64) -> ProgramResult {
-        self.fee = self.fee
-            .checked_sub(fee)
-            .ok_or(LendingError::MarketReserveLiquidityFeeInsufficent)?;
+        self.fee_wads = self.fee_wads.try_sub(Decimal::from(fee))?;
         
         Ok(())
     }
@@ -284,7 +275,17 @@ impl MarketReserve {
             .try_div(self.exchange_rate()?)?
             .try_floor_u64()
     }
-    ///
+    /// 
+    // compounded_interest_rate: c
+    // borrowed_amount_wads: m
+    // fee rate: k
+    // -----------------------------------------------------------------
+    // d_m = m * (c-1)
+    // fee = k * d_m = [k(c-1)] * m
+    // m = m + (1-k) * d_m = [c - k(c-1)] * m
+    // -----------------------------------------------------------------
+    // we call k(c-1) fee_interest_rate here
+
     pub fn accrue_interest(&mut self, borrow_rate: Rate, slot: Slot) -> ProgramResult {
         let elapsed = self.last_update.slots_elapsed(slot)?;
         if elapsed > 0 {
@@ -293,6 +294,14 @@ impl MarketReserve {
                 .try_pow(elapsed)?;
 
             self.liquidity_info.acc_borrow_rate_wads = self.liquidity_info.acc_borrow_rate_wads.try_mul(compounded_interest_rate)?;
+
+            let fee_interest_rate = compounded_interest_rate
+                .try_sub(Rate::one())?
+                .try_mul(Rate::from_scaled_val(self.liquidity_info.config.borrow_fee_rate))?;
+            let compounded_interest_rate = compounded_interest_rate.try_sub(fee_interest_rate)?;
+
+            let fee_wads = self.liquidity_info.borrowed_amount_wads.try_mul(fee_interest_rate)?;
+            self.liquidity_info.fee_wads = self.liquidity_info.fee_wads.try_add(fee_wads)?;
             self.liquidity_info.borrowed_amount_wads = self.liquidity_info.borrowed_amount_wads.try_mul(compounded_interest_rate)?;
         }
 
@@ -332,7 +341,7 @@ impl IsInitialized for MarketReserve {
 }
 
 const MARKET_RESERVE_PADDING_LEN: usize = 128;
-const MARKET_RESERVE_LEN: usize = 447;
+const MARKET_RESERVE_LEN: usize = 455;
 
 impl Pack for MarketReserve {
     const LEN: usize = MARKET_RESERVE_LEN;
@@ -357,9 +366,9 @@ impl Pack for MarketReserve {
             close_factor,
             rate_oracle,
             available,
-            borrowed_amount_wads,
             acc_borrow_rate_wads,
-            fee,
+            borrowed_amount_wads,
+            fee_wads,
             borrow_fee_rate,
             liquidation_fee_rate,
             flash_loan_fee_rate,
@@ -386,7 +395,7 @@ impl Pack for MarketReserve {
             8,
             16,
             16,
-            8,
+            16,
             8,
             8,
             8,
@@ -415,9 +424,9 @@ impl Pack for MarketReserve {
 
         rate_oracle.copy_from_slice(self.liquidity_info.rate_oracle.as_ref());
         *available = self.liquidity_info.available.to_le_bytes();
-        pack_decimal(self.liquidity_info.borrowed_amount_wads, borrowed_amount_wads);
         pack_decimal(self.liquidity_info.acc_borrow_rate_wads, acc_borrow_rate_wads);
-        *fee = self.liquidity_info.fee.to_le_bytes();
+        pack_decimal(self.liquidity_info.borrowed_amount_wads, borrowed_amount_wads);
+        pack_decimal(self.liquidity_info.fee_wads, fee_wads);
 
         *borrow_fee_rate = self.liquidity_info.config.borrow_fee_rate.to_le_bytes();
         *liquidation_fee_rate = self.liquidity_info.config.liquidation_fee_rate.to_le_bytes();
@@ -446,9 +455,9 @@ impl Pack for MarketReserve {
             close_factor,
             rate_oracle,
             available,
-            borrowed_amount_wads,
             acc_borrow_rate_wads,
-            fee,
+            borrowed_amount_wads,
+            fee_wads,
             borrow_fee_rate,
             liquidation_fee_rate,
             flash_loan_fee_rate,
@@ -475,7 +484,7 @@ impl Pack for MarketReserve {
             8,
             16,
             16,
-            8,
+            16,
             8,
             8,
             8,
@@ -514,9 +523,9 @@ impl Pack for MarketReserve {
             liquidity_info: LiquidityInfo {
                 rate_oracle: Pubkey::new_from_array(*rate_oracle),
                 available: u64::from_le_bytes(*available),
-                borrowed_amount_wads: unpack_decimal(borrowed_amount_wads),
                 acc_borrow_rate_wads: unpack_decimal(acc_borrow_rate_wads),
-                fee: u64::from_le_bytes(*fee),
+                borrowed_amount_wads: unpack_decimal(borrowed_amount_wads),
+                fee_wads: unpack_decimal(fee_wads),
                 config: LiquidityConfig {
                     borrow_fee_rate: u64::from_le_bytes(*borrow_fee_rate),
                     liquidation_fee_rate: u64::from_le_bytes(*liquidation_fee_rate),

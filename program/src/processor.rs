@@ -351,9 +351,9 @@ fn process_init_market_reserve(
         liquidity_info: LiquidityInfo {
             rate_oracle: *rate_oracle_info.key,
             available: 0,
-            borrowed_amount_wads: Decimal::zero(),
             acc_borrow_rate_wads: Decimal::one(),
-            fee: 0,
+            borrowed_amount_wads: Decimal::zero(),
+            fee_wads: Decimal::zero(),
             config: liquidity_config,
         },
         collateral_info: CollateralInfo {
@@ -1287,12 +1287,12 @@ fn process_borrow_liquidity(
     let token_program_id = next_account_info(account_info_iter)?;
 
     // borrow
-    let borrow_settle = if let Ok(index) = user_obligation.find_loan(*market_reserve_info.key) {
+    if let Ok(index) = user_obligation.find_loan(*market_reserve_info.key) {
         user_obligation.borrow_in(amount, index, &market_reserve, friend_obligation)?
     } else {
         user_obligation.new_borrow_in(amount, *market_reserve_info.key, &market_reserve, friend_obligation)?
     };
-    market_reserve.liquidity_info.borrow_out(borrow_settle)?;
+    market_reserve.liquidity_info.borrow_out(amount)?;
 
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
@@ -1302,7 +1302,7 @@ fn process_borrow_liquidity(
     spl_token_transfer(TokenTransferParams {
         source: manager_token_account_info.clone(),
         destination: user_token_account_info.clone(),
-        amount: borrow_settle.receiving,
+        amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
         token_program: token_program_id.clone(),

@@ -383,7 +383,7 @@ impl UserObligation {
         index: usize,
         reserve: &MarketReserve,
         other: Option<Self>,
-    ) -> Result<BorrowSettle, ProgramError> {
+    ) -> ProgramResult {
         self.loans[index].borrowed_amount_wads = self.loans[index].borrowed_amount_wads
             .try_add(Decimal::from(amount))?;
 
@@ -392,9 +392,7 @@ impl UserObligation {
             .try_div(calculate_decimals(reserve.token_info.decimal)?)?;
         self.loans_value = self.loans_value.try_add(value)?;
 
-        self.validate_borrow(other)?;
-
-        BorrowSettle::new(amount, Rate::from_scaled_val(reserve.liquidity_info.config.borrow_fee_rate))
+        self.validate_borrow(other)
     }
     ///
     // need update obligation before
@@ -404,7 +402,7 @@ impl UserObligation {
         key: Pubkey,
         reserve: &MarketReserve,
         other: Option<Self>,
-    ) -> Result<BorrowSettle, ProgramError> {
+    ) -> ProgramResult {
         if self.collaterals.len() + self.loans.len() >= MAX_OBLIGATION_RESERVES {
             return Err(LendingError::ObligationReserveLimitExceed.into());
         }
@@ -420,9 +418,7 @@ impl UserObligation {
             .try_div(calculate_decimals(reserve.token_info.decimal)?)?;
         self.loans_value = self.loans_value.try_add(value)?;
 
-        self.validate_borrow(other)?;
-
-        BorrowSettle::new(amount, Rate::from_scaled_val(reserve.liquidity_info.config.borrow_fee_rate))
+        self.validate_borrow(other)
     }
     ///
     // need accure reserve and obligation interest before

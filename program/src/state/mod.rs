@@ -154,41 +154,6 @@ pub struct RepaySettle {
 
 ///
 #[derive(Clone, Copy, Debug)]
-pub struct BorrowSettle {
-    ///
-    pub amount: u64,
-    ///
-    pub receiving: u64,
-    ///
-    pub fee: u64,
-}
-///
-// fee-exclusive
-impl BorrowSettle {
-    ///
-    pub fn new(amount: u64, rate: Rate) -> Result<Self, ProgramError> {
-        let fee = Decimal::from(amount)
-            .try_div(Rate::one().try_add(rate)?)?
-            .try_mul(rate)?
-            .try_ceil_u64()?;
-
-        let receiving = amount
-            .checked_sub(fee)
-            .ok_or(LendingError::MathOverflow)?;
-
-        if receiving == 0 {
-            return Err(LendingError::BorrowReceiveTooSmall.into());
-        }
-
-        Ok(Self{
-            amount,
-            receiving,
-            fee,
-        })
-    }
-}
-///
-#[derive(Clone, Copy, Debug)]
 pub struct LiquidationSettle {
     ///
     pub repay: u64,
