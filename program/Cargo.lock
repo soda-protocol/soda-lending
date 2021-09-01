@@ -2141,7 +2141,7 @@ dependencies = [
 
 [[package]]
 name = "soda-lending-contract"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "arrayref",
  "assert_matches",

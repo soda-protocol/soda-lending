@@ -261,43 +261,27 @@ impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
 }
 
 impl MarketReserve {
-    ///
-    pub fn exchange_liquidity_to_collateral(&self, amount: u64) -> Result<u64, ProgramError> {
+    fn exchange_rate(&self) -> Result<Rate, ProgramError> {
         let total_amount = self.liquidity_info.total_amount()?;
         if total_amount == Decimal::zero() {
-            Ok(amount)
+            Ok(Rate::one())
         } else {
-            let total_mint = Decimal::from(self.collateral_info.total_mint);
-            let exchange_rate: Rate = total_mint
+            Decimal::from(self.collateral_info.total_mint)
                 .try_div(total_amount)?
-                .try_into()?;
-
-            total_amount
-                .try_add(Decimal::from(amount))?
-                .try_mul(exchange_rate)?
-                .try_sub(total_mint)?
-                .try_floor_u64()
+                .try_into()
         }
     }
     ///
+    pub fn exchange_liquidity_to_collateral(&self, amount: u64) -> Result<u64, ProgramError> {
+        Decimal::from(amount)
+            .try_mul(self.exchange_rate()?)?
+            .try_floor_u64()
+    }
+    ///
     pub fn exchange_collateral_to_liquidity(&self, amount: u64) -> Result<u64, ProgramError> {
-        let total_amount = self.liquidity_info.total_amount()?;
-        if total_amount == Decimal::zero() {
-            Err(LendingError::MarketReserveLiquidityEmpty.into())
-        } else {
-            let total_mint = Decimal::from(self.collateral_info.total_mint);
-            let exchange_rate: Rate = total_mint
-                .try_div(total_amount)?
-                .try_into()?;
-
-            let left_amount = total_mint
-                .try_sub(Decimal::from(amount))?
-                .try_div(exchange_rate)?;
-
-            total_amount
-                .try_sub(left_amount)?
-                .try_floor_u64()
-        }
+        Decimal::from(amount)
+            .try_div(self.exchange_rate()?)?
+            .try_floor_u64()
     }
     ///
     pub fn accrue_interest(&mut self, borrow_rate: Rate, slot: Slot) -> ProgramResult {

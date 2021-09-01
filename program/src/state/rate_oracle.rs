@@ -5,7 +5,7 @@ use std::any::Any;
 use crate::{error::LendingError, math::WAD};
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use solana_program::{
-    clock::{Slot, DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, SECONDS_PER_DAY},
+    clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, SECONDS_PER_DAY},
     entrypoint::ProgramResult, 
     program_error::ProgramError, 
     program_pack::{IsInitialized, Pack, Sealed}, 
@@ -13,9 +13,6 @@ use solana_program::{
 };
 
 const SLOTS_PER_YEAR: u64 = DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY * 365 / DEFAULT_TICKS_PER_SLOT;
-
-/// never expire in current version
-const MAX_RATE_EXPIRED_SLOT: u64 = u64::MAX;
 
 #[derive(Clone, Debug, Copy, Default, PartialEq)]
 pub struct RateOracleConfig {
@@ -50,7 +47,6 @@ pub struct RateOracle {
     pub version: u8,
     pub owner: Pubkey,
     pub available: bool,
-    pub last_slot: Slot,
     pub config: RateOracleConfig,
 }
 
@@ -71,14 +67,8 @@ impl<P: Any + Param + Copy> Operator<P> for RateOracle {
 }
 
 impl RateOracle {
-    fn eplased_slots(&self, slot: Slot) -> Result<Slot, ProgramError> {
-        slot
-            .checked_sub(self.last_slot)
-            .ok_or(LendingError::MathOverflow.into())
-    }
-
-    pub fn calculate_borrow_rate(&self, slot: Slot, utilization_rate: Rate) -> Result<Rate, ProgramError> {
-        if !self.available || self.eplased_slots(slot)? >= MAX_RATE_EXPIRED_SLOT {
+    pub fn calculate_borrow_rate(&self, utilization_rate: Rate) -> Result<Rate, ProgramError> {
+        if !self.available {
             return Err(LendingError::RateOracleNotAvailable.into());
         }
 
@@ -114,7 +104,7 @@ impl IsInitialized for RateOracle {
 
 ///
 const RATE_ORACLE_PADDING_LEN: usize = 256;
-const RATE_ORACLE_LEN: usize = 331;
+const RATE_ORACLE_LEN: usize = 323;
 
 impl Pack for RateOracle {
     const LEN: usize = RATE_ORACLE_LEN;
@@ -126,7 +116,6 @@ impl Pack for RateOracle {
             version,
             owner,
             available,
-            last_slot,
             a,
             c,
             l_u,
@@ -139,7 +128,6 @@ impl Pack for RateOracle {
             1,
             8,
             8,
-            8,
             1,
             16,
             RATE_ORACLE_PADDING_LEN
@@ -148,7 +136,6 @@ impl Pack for RateOracle {
         *version = self.version.to_le_bytes();
         owner.copy_from_slice(self.owner.as_ref());
         pack_bool(self.available, available);
-        *last_slot = self.last_slot.to_le_bytes();
 
         *a = self.config.a.to_le_bytes();
         *c = self.config.c.to_le_bytes();
@@ -163,7 +150,6 @@ impl Pack for RateOracle {
             version,
             owner,
             available,
-            last_slot,
             a,
             c,
             l_u,
@@ -174,7 +160,6 @@ impl Pack for RateOracle {
             1,
             PUBKEY_BYTES,
             1,
-            8,
             8,
             8,
             1,
@@ -192,7 +177,6 @@ impl Pack for RateOracle {
             version,
             owner: Pubkey::new_from_array(*owner),
             available: unpack_bool(available)?,
-            last_slot: u64::from_le_bytes(*last_slot),
             config: RateOracleConfig {
                 a: u64::from_le_bytes(*a),
                 c: u64::from_le_bytes(*c),

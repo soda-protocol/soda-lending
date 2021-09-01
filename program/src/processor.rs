@@ -197,8 +197,6 @@ fn process_init_rate_oracle(
     // 1
     let rent = &Rent::from_account_info(next_account_info(account_info_iter)?)?;
     // 2
-    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
-    // 3
     let rate_oracle_info = next_account_info(account_info_iter)?;
     if rate_oracle_info.owner != program_id {
         msg!("Rate oracle owner provided is not owned by the lending program");
@@ -206,14 +204,13 @@ fn process_init_rate_oracle(
     }
     assert_rent_exempt(rent, rate_oracle_info)?;
     assert_uninitialized::<RateOracle>(rate_oracle_info)?;
-    // 4
+    // 3
     let owner_info = next_account_info(account_info_iter)?;
 
     let rate_oracle = RateOracle {
         version: PROGRAM_VERSION,
         owner: *owner_info.key,
         available: true,
-        last_slot: clock.slot,
         config,
     };
     RateOracle::pack(rate_oracle, &mut rate_oracle_info.try_borrow_mut_data()?)
@@ -413,10 +410,7 @@ fn process_update_market_reserves(
                 return Err(LendingError::InvalidRateOracle.into());
             }
             let rate_oracle = RateOracle::unpack(&rate_oracle_info.try_borrow_data()?)?;
-            let borrow_rate = rate_oracle.calculate_borrow_rate(
-                clock.slot,
-                market_reserve.liquidity_info.utilization_rate()?,
-            )?;
+            let borrow_rate = rate_oracle.calculate_borrow_rate(market_reserve.liquidity_info.utilization_rate()?)?;
         
             // update
             market_reserve.market_price = market_price;
@@ -486,10 +480,7 @@ fn process_deposit_or_withdraw<B: Bit>(
         return Err(LendingError::InvalidRateOracle.into());
     }
     let rate_oracle = RateOracle::unpack(&rate_oracle_info.try_borrow_data()?)?;
-    let borrow_rate = rate_oracle.calculate_borrow_rate(
-        clock.slot,
-        market_reserve.liquidity_info.utilization_rate()?,
-    )?;
+    let borrow_rate = rate_oracle.calculate_borrow_rate(market_reserve.liquidity_info.utilization_rate()?)?;
     // 8
     let user_authority_info = next_account_info(account_info_iter)?;
     // 9
@@ -1341,10 +1332,7 @@ fn process_repay_loan(
         return Err(LendingError::InvalidRateOracle.into());
     }
     let rate_oracle = RateOracle::unpack(&rate_oracle_info.try_borrow_data()?)?;
-    let borrow_rate = rate_oracle.calculate_borrow_rate(
-        clock.slot,
-        market_reserve.liquidity_info.utilization_rate()?,
-    )?;
+    let borrow_rate = rate_oracle.calculate_borrow_rate(market_reserve.liquidity_info.utilization_rate()?)?;
     // 5
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {

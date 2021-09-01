@@ -505,7 +505,6 @@ pub fn init_rate_oracle(
         program_id: id(),
         accounts: vec![
             AccountMeta::new_readonly(sysvar::rent::id(), false),
-            AccountMeta::new_readonly(sysvar::clock::id(), false),
             AccountMeta::new(rate_oracle_key, false),
             AccountMeta::new_readonly(owner_key, false),
         ],
