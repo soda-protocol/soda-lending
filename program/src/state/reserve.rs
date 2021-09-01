@@ -240,12 +240,12 @@ impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
 
         if let Some(oracle) = <dyn Any>::downcast_ref::<ReservePriceOracle>(&param) {
             self.token_info.price_oracle = oracle.0;
-            return Ok(())
+            return Ok(());
         }
 
         if let Some(oracle) = <dyn Any>::downcast_ref::<ReserveRateOracle>(&param) {
             self.liquidity_info.rate_oracle = oracle.0;
-            return Ok(())
+            return Ok(());
         }
 
         panic!("unexpected param type");
