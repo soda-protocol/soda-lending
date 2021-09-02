@@ -252,7 +252,7 @@ impl UserObligation {
         let (collaterals_liquidation_value, loans_value) = if let Some(other) = other {
             let collaterals_liquidation_value = self.collaterals_liquidation_value
                 .try_add(other.collaterals_liquidation_value)?;
-            let loans_value = self.loans_value.try_add(self.loans_value)?;
+            let loans_value = self.loans_value.try_add(other.loans_value)?;
 
             (collaterals_liquidation_value, loans_value)
         } else {
