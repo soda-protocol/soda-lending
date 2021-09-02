@@ -23,7 +23,7 @@ pub struct RateOracleConfig {
 }
 
 impl Param for RateOracleConfig {
-    fn is_valid(&self) -> ProgramResult {
+    fn assert_valid(&self) -> ProgramResult {
         if self.c < WAD && self.l_u < 100 {
             Ok(())
         } else {
@@ -37,7 +37,7 @@ impl Param for RateOracleConfig {
 pub struct Pause;
 
 impl Param for Pause {
-    fn is_valid(&self) -> ProgramResult {
+    fn assert_valid(&self) -> ProgramResult {
         Ok(())
     }
 }
@@ -168,7 +168,7 @@ impl Pack for RateOracle {
         ];
 
         let version = u8::from_le_bytes(*version);
-        if version != PROGRAM_VERSION {
+        if version > PROGRAM_VERSION {
             msg!("RateOracle version does not match lending program version");
             return Err(ProgramError::InvalidAccountData);
         }

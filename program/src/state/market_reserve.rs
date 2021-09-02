@@ -38,7 +38,7 @@ pub struct CollateralConfig {
 }
 
 impl Param for CollateralConfig {
-    fn is_valid(&self) -> ProgramResult {
+    fn assert_valid(&self) -> ProgramResult {
         if self.borrow_value_ratio < self.liquidation_value_ratio && self.liquidation_value_ratio < 100 {
             Ok(())
         } else {
@@ -93,7 +93,7 @@ pub struct LiquidityConfig {
 }
 
 impl Param for LiquidityConfig {
-    fn is_valid(&self) -> ProgramResult {
+    fn assert_valid(&self) -> ProgramResult {
         if self.close_factor < 100 &&
             self.borrow_fee_rate < 100 &&
             self.flash_loan_fee_rate < WAD &&
@@ -472,7 +472,7 @@ impl Pack for MarketReserve {
         ];
 
         let version = u8::from_le_bytes(*version);
-        if version != PROGRAM_VERSION {
+        if version > PROGRAM_VERSION {
             msg!("MarketReserve version does not match lending program version");
             return Err(ProgramError::InvalidAccountData);
         }
@@ -552,7 +552,7 @@ impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
 pub struct LiquidityControl(pub bool);
 
 impl Param for LiquidityControl {
-    fn is_valid(&self) -> ProgramResult {
+    fn assert_valid(&self) -> ProgramResult {
         Ok(())
     }
 }
@@ -562,7 +562,7 @@ impl Param for LiquidityControl {
 pub struct ReservePriceOracle(pub Pubkey);
 
 impl Param for ReservePriceOracle {
-    fn is_valid(&self) -> ProgramResult {
+    fn assert_valid(&self) -> ProgramResult {
         Ok(())
     }
 }
@@ -572,7 +572,7 @@ impl Param for ReservePriceOracle {
 pub struct ReserveRateOracle(pub Pubkey);
 
 impl Param for ReserveRateOracle {
-    fn is_valid(&self) -> ProgramResult {
+    fn assert_valid(&self) -> ProgramResult {
         Ok(())
     }
 }

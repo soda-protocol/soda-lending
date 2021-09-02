@@ -203,7 +203,7 @@ fn process_init_rate_oracle(
     config: RateOracleConfig,
 ) -> ProgramResult {
     // check config
-    config.is_valid()?;
+    config.assert_valid()?;
 
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -235,8 +235,8 @@ fn process_init_market_reserve(
     liquidity_config: LiquidityConfig,
 ) -> ProgramResult {
     // check config
-    collateral_config.is_valid()?;
-    liquidity_config.is_valid()?;
+    collateral_config.assert_valid()?;
+    liquidity_config.assert_valid()?;
 
     let account_info_iter = &mut accounts.iter();
     // 1

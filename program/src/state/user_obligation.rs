@@ -771,7 +771,7 @@ impl Pack for UserObligation {
         ];
 
         let version = u8::from_le_bytes(*version);
-        if version != PROGRAM_VERSION {
+        if version > PROGRAM_VERSION {
             msg!("UserObligation version does not match lending program version");
             return Err(ProgramError::InvalidAccountData);
         }
@@ -841,7 +841,7 @@ pub struct IndexedCollateralConfig {
 }
 
 impl Param for IndexedCollateralConfig {
-    fn is_valid(&self) -> ProgramResult {
+    fn assert_valid(&self) -> ProgramResult {
         if self.borrow_value_ratio < self.liquidation_value_ratio &&
             self.liquidation_value_ratio < 100 {
             Ok(())
@@ -860,7 +860,7 @@ pub struct IndexedLoanConfig {
 }
 
 impl Param for IndexedLoanConfig {
-    fn is_valid(&self) -> ProgramResult {
+    fn assert_valid(&self) -> ProgramResult {
         if self.close_factor < 100 {
             Ok(())
         } else {
