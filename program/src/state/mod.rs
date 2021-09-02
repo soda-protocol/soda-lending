@@ -2,16 +2,16 @@
 #![allow(missing_docs)]
 mod manager;
 mod last_update;
-mod reserve;
-mod obligation;
+mod market_reserve;
+mod user_obligation;
 mod rate_oracle;
 
 use std::convert::TryFrom;
 
 pub use manager::*;
 pub use last_update::*;
-pub use obligation::*;
-pub use reserve::*;
+pub use user_obligation::*;
+pub use market_reserve::*;
 pub use rate_oracle::*;
 
 use crate::{
