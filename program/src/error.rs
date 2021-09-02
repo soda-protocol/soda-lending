@@ -132,8 +132,8 @@ pub enum LendingError {
     #[error("Obligation collaterals are not healthy")]
     ObligationNotHealthy,
     ///
-    #[error("Obligation dept is not empty")]
-    ObligationDeptIsNotEmpty,
+    #[error("Obligation has dept")]
+    ObligationHasDept,
     ///
     #[error("Obligation liquidation is not available")]
     ObligationCanNotLiquidate,

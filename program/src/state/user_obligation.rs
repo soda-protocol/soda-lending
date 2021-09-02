@@ -480,21 +480,14 @@ impl UserObligation {
         Ok(amount)
     }
     ///
-    pub fn redeem_without_loan(&mut self, amount: u64, index: usize, other: Option<Self>) -> Result<u64, ProgramError> {
-        let loan_amount = if let Some(other) = other {
-            self.loans
-                .iter()
-                .chain(other.loans.iter())
-                .try_fold(Decimal::zero(), |acc, loan| loan.borrowed_amount_wads.try_add(acc))?
+    pub fn redeem_without_loan(&mut self, amount: u64, index: usize, other: Option<Self>) -> Result<u64, ProgramError> {        
+        let is_empty = if let Some(other) = other {
+            other.loans.is_empty()
         } else {
-            self.loans
-                .iter()
-                .try_fold(Decimal::zero(), |acc, loan| loan.borrowed_amount_wads.try_add(acc))?
+            true
         };
 
-        if loan_amount > Decimal::zero() {
-            Err(LendingError::ObligationDeptIsNotEmpty.into())
-        } else {
+        if self.loans.is_empty() && is_empty {
             if amount >= self.collaterals[index].amount {
                 let amount = self.collaterals[index].amount;
                 self.collaterals.remove(index);
@@ -505,6 +498,8 @@ impl UserObligation {
 
                 Ok(amount)
             }
+        } else {
+            Err(LendingError::ObligationHasDept.into())
         }
     }
     ///
