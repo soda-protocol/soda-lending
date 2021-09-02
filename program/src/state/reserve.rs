@@ -34,14 +34,12 @@ pub struct CollateralConfig {
     ///
     pub liquidation_value_ratio: u8,
     ///
-    pub close_factor: u8,
+    pub liquidation_bonus_ratio: u8,
 }
 
 impl Param for CollateralConfig {
     fn is_valid(&self) -> ProgramResult {
-        if self.borrow_value_ratio < self.liquidation_value_ratio &&
-            self.liquidation_value_ratio < 100 &&
-            self.close_factor < 100 {
+        if self.borrow_value_ratio < self.liquidation_value_ratio && self.liquidation_value_ratio < 100 {
             Ok(())
         } else {
             Err(LendingError::InvalidCollateralConfig.into())
@@ -83,9 +81,9 @@ impl CollateralInfo {
 #[derive(Clone, Debug, Copy, Default, PartialEq)]
 pub struct LiquidityConfig {
     ///
-    pub borrow_fee_rate: u8,
+    pub close_factor: u8,
     ///
-    pub liquidation_fee_rate: u64,
+    pub borrow_fee_rate: u8,
     ///
     pub flash_loan_fee_rate: u64,
     ///
@@ -96,8 +94,8 @@ pub struct LiquidityConfig {
 
 impl Param for LiquidityConfig {
     fn is_valid(&self) -> ProgramResult {
-        if self.borrow_fee_rate < 100 &&
-            self.liquidation_fee_rate < WAD &&
+        if self.close_factor < 100 &&
+            self.borrow_fee_rate < 100 &&
             self.flash_loan_fee_rate < WAD &&
             self.max_deposit <= self.max_acc_deposit {
             Ok(())
@@ -119,7 +117,7 @@ pub struct LiquidityInfo {
     ///
     pub borrowed_amount_wads: Decimal,
     ///
-    pub fee_wads: Decimal,
+    pub insurance_wads: Decimal,
     ///
     pub config: LiquidityConfig,
 }
@@ -143,7 +141,7 @@ impl LiquidityInfo {
     ///
     pub fn deposit(&mut self, amount: u64) -> ProgramResult {
         if amount > self.config.max_deposit {
-            return Err(LendingError::MarketReserveDepositExceedsLimit.into());
+            return Err(LendingError::MarketReserveDepositTooMuch.into());
         }
 
         self.available = self.available
@@ -153,7 +151,7 @@ impl LiquidityInfo {
         if self.available <= self.config.max_acc_deposit {
             Ok(())
         } else {
-            Err(LendingError::MarketReserveAccDepositExceedsLimit.into())
+            Err(LendingError::MarketReserveAccDepositTooMuch.into())
         }
     }
     ///
@@ -188,13 +186,12 @@ impl LiquidityInfo {
             .checked_add(settle.repay)
             .ok_or(LendingError::MathOverflow)?;
         self.borrowed_amount_wads = self.borrowed_amount_wads.try_sub(settle.repay_decimal)?;
-        self.fee_wads = self.fee_wads.try_add(Decimal::from(settle.fee))?;
 
         Ok(())
     }
     ///
-    pub fn withdraw_fee(&mut self, fee: u64) -> ProgramResult {
-        self.fee_wads = self.fee_wads.try_sub(Decimal::from(fee))?;
+    pub fn reduce_insurance(&mut self, amount: u64) -> ProgramResult {
+        self.insurance_wads = self.insurance_wads.try_sub(Decimal::from(amount))?;
         
         Ok(())
     }
@@ -219,37 +216,6 @@ pub struct MarketReserve {
     pub collateral_info: CollateralInfo,
     ///
     pub liquidity_info: LiquidityInfo,
-}
-
-impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
-    fn operate_unchecked(&mut self, param: P) -> ProgramResult {
-        if let Some(control) = <dyn Any>::downcast_ref::<ReserveControl>(&param) {
-            self.enable = control.0;
-            return Ok(())
-        }
-
-        if let Some(config) = <dyn Any>::downcast_ref::<CollateralConfig>(&param) {
-            self.collateral_info.config = *config;
-            return Ok(());
-        }
-
-        if let Some(config) = <dyn Any>::downcast_ref::<LiquidityConfig>(&param) {
-            self.liquidity_info.config = *config;
-            return Ok(());
-        }
-
-        if let Some(oracle) = <dyn Any>::downcast_ref::<ReservePriceOracle>(&param) {
-            self.token_info.price_oracle = oracle.0;
-            return Ok(());
-        }
-
-        if let Some(oracle) = <dyn Any>::downcast_ref::<ReserveRateOracle>(&param) {
-            self.liquidity_info.rate_oracle = oracle.0;
-            return Ok(());
-        }
-
-        panic!("unexpected param type");
-    }
 }
 
 impl MarketReserve {
@@ -300,8 +266,8 @@ impl MarketReserve {
                 .try_mul(Rate::from_percent(self.liquidity_info.config.borrow_fee_rate))?;
             let compounded_interest_rate = compounded_interest_rate.try_sub(fee_interest_rate)?;
 
-            let fee_wads = self.liquidity_info.borrowed_amount_wads.try_mul(fee_interest_rate)?;
-            self.liquidity_info.fee_wads = self.liquidity_info.fee_wads.try_add(fee_wads)?;
+            let insurance_wads = self.liquidity_info.borrowed_amount_wads.try_mul(fee_interest_rate)?;
+            self.liquidity_info.insurance_wads = self.liquidity_info.insurance_wads.try_add(insurance_wads)?;
             self.liquidity_info.borrowed_amount_wads = self.liquidity_info.borrowed_amount_wads.try_mul(compounded_interest_rate)?;
         }
 
@@ -341,7 +307,7 @@ impl IsInitialized for MarketReserve {
 }
 
 const MARKET_RESERVE_PADDING_LEN: usize = 128;
-const MARKET_RESERVE_LEN: usize = 448;
+const MARKET_RESERVE_LEN: usize = 441;
 
 impl Pack for MarketReserve {
     const LEN: usize = MARKET_RESERVE_LEN;
@@ -363,14 +329,14 @@ impl Pack for MarketReserve {
             total_mint,
             borrow_value_ratio,
             liquidation_value_ratio,
-            close_factor,
+            liquidation_bonus_ratio,
             rate_oracle,
             available,
             acc_borrow_rate_wads,
             borrowed_amount_wads,
-            fee_wads,
+            insurance_wads,
+            close_factor,
             borrow_fee_rate,
-            liquidation_fee_rate,
             flash_loan_fee_rate,
             max_deposit,
             max_acc_deposit,
@@ -397,7 +363,7 @@ impl Pack for MarketReserve {
             16,
             16,
             1,
-            8,
+            1,
             8,
             8,
             8,
@@ -420,16 +386,16 @@ impl Pack for MarketReserve {
 
         *borrow_value_ratio = self.collateral_info.config.borrow_value_ratio.to_le_bytes();
         *liquidation_value_ratio = self.collateral_info.config.liquidation_value_ratio.to_le_bytes();
-        *close_factor = self.collateral_info.config.close_factor.to_le_bytes();
+        *liquidation_bonus_ratio = self.collateral_info.config.liquidation_bonus_ratio.to_le_bytes();
 
         rate_oracle.copy_from_slice(self.liquidity_info.rate_oracle.as_ref());
         *available = self.liquidity_info.available.to_le_bytes();
         pack_decimal(self.liquidity_info.acc_borrow_rate_wads, acc_borrow_rate_wads);
         pack_decimal(self.liquidity_info.borrowed_amount_wads, borrowed_amount_wads);
-        pack_decimal(self.liquidity_info.fee_wads, fee_wads);
+        pack_decimal(self.liquidity_info.insurance_wads, insurance_wads);
 
+        *close_factor = self.liquidity_info.config.close_factor.to_le_bytes();
         *borrow_fee_rate = self.liquidity_info.config.borrow_fee_rate.to_le_bytes();
-        *liquidation_fee_rate = self.liquidity_info.config.liquidation_fee_rate.to_le_bytes();
         *flash_loan_fee_rate = self.liquidity_info.config.flash_loan_fee_rate.to_le_bytes();
         *max_deposit = self.liquidity_info.config.max_deposit.to_le_bytes();
         *max_acc_deposit = self.liquidity_info.config.max_acc_deposit.to_le_bytes();
@@ -452,14 +418,14 @@ impl Pack for MarketReserve {
             total_mint,
             borrow_value_ratio,
             liquidation_value_ratio,
-            close_factor,
+            liquidation_bonus_ratio,
             rate_oracle,
             available,
             acc_borrow_rate_wads,
             borrowed_amount_wads,
-            fee_wads,
+            insurance_wads,
+            close_factor,
             borrow_fee_rate,
-            liquidation_fee_rate,
             flash_loan_fee_rate,
             max_deposit,
             max_acc_deposit,
@@ -486,7 +452,7 @@ impl Pack for MarketReserve {
             16,
             16,
             1,
-            8,
+            1,
             8,
             8,
             8,
@@ -517,7 +483,7 @@ impl Pack for MarketReserve {
                 config: CollateralConfig {
                     borrow_value_ratio: u8::from_le_bytes(*borrow_value_ratio),
                     liquidation_value_ratio: u8::from_le_bytes(*liquidation_value_ratio),
-                    close_factor: u8::from_le_bytes(*close_factor),
+                    liquidation_bonus_ratio: u8::from_le_bytes(*liquidation_bonus_ratio),
                 },
             },
             liquidity_info: LiquidityInfo {
@@ -525,16 +491,47 @@ impl Pack for MarketReserve {
                 available: u64::from_le_bytes(*available),
                 acc_borrow_rate_wads: unpack_decimal(acc_borrow_rate_wads),
                 borrowed_amount_wads: unpack_decimal(borrowed_amount_wads),
-                fee_wads: unpack_decimal(fee_wads),
+                insurance_wads: unpack_decimal(insurance_wads),
                 config: LiquidityConfig {
+                    close_factor: u8::from_le_bytes(*close_factor),
                     borrow_fee_rate: u8::from_le_bytes(*borrow_fee_rate),
-                    liquidation_fee_rate: u64::from_le_bytes(*liquidation_fee_rate),
                     flash_loan_fee_rate: u64::from_le_bytes(*flash_loan_fee_rate),
                     max_deposit: u64::from_le_bytes(*max_deposit),
                     max_acc_deposit: u64::from_le_bytes(*max_acc_deposit),
                 },
             },
         })
+    }
+}
+
+impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
+    fn operate_unchecked(&mut self, param: P) -> ProgramResult {
+        if let Some(control) = <dyn Any>::downcast_ref::<ReserveControl>(&param) {
+            self.enable = control.0;
+            return Ok(())
+        }
+
+        if let Some(config) = <dyn Any>::downcast_ref::<CollateralConfig>(&param) {
+            self.collateral_info.config = *config;
+            return Ok(());
+        }
+
+        if let Some(config) = <dyn Any>::downcast_ref::<LiquidityConfig>(&param) {
+            self.liquidity_info.config = *config;
+            return Ok(());
+        }
+
+        if let Some(oracle) = <dyn Any>::downcast_ref::<ReservePriceOracle>(&param) {
+            self.token_info.price_oracle = oracle.0;
+            return Ok(());
+        }
+
+        if let Some(oracle) = <dyn Any>::downcast_ref::<ReserveRateOracle>(&param) {
+            self.liquidity_info.rate_oracle = oracle.0;
+            return Ok(());
+        }
+
+        panic!("unexpected param type");
     }
 }
 

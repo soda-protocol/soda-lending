@@ -16,30 +16,6 @@ use std::{convert::TryInto, cmp::Ordering, iter::Iterator, any::Any};
 ///
 const MAX_OBLIGATION_RESERVES: usize = 8;
 
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
-pub struct IndexedCollateralConfig {
-    ///
-    pub index: u8,
-    ///
-    pub borrow_value_ratio: u8,
-    ///
-    pub liquidation_value_ratio: u8,
-    ///
-    pub close_factor: u8,
-}
-
-impl Param for IndexedCollateralConfig {
-    fn is_valid(&self) -> ProgramResult {
-        if self.borrow_value_ratio < self.liquidation_value_ratio &&
-            self.liquidation_value_ratio < 100 &&
-            self.close_factor < 100 {
-            Ok(())
-        } else {
-            Err(LendingError::InvalidIndexedCollateralConfig.into())
-        }
-    }
-}
-
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Collateral {
@@ -51,8 +27,6 @@ pub struct Collateral {
     pub borrow_value_ratio: u8,
     ///
     pub liquidation_value_ratio: u8,
-    ///
-    pub close_factor: u8,
 }
 
 impl Collateral {
@@ -75,7 +49,7 @@ impl Collateral {
 impl Sealed for Collateral {}
 
 const COLLATERAL_PADDING_LEN: usize = 64;
-const COLLATERAL_LEN: usize = 107;
+const COLLATERAL_LEN: usize = 106;
 
 impl Pack for Collateral {
     const LEN: usize = COLLATERAL_LEN;
@@ -88,13 +62,11 @@ impl Pack for Collateral {
             amount,
             borrow_value_ratio,
             liquidation_value_ratio,
-            close_factor,
             _padding,
         ) = mut_array_refs![
             output,
             PUBKEY_BYTES,
             8,
-            1,
             1,
             1,
             COLLATERAL_PADDING_LEN
@@ -104,7 +76,6 @@ impl Pack for Collateral {
         *amount = self.amount.to_le_bytes();
         *borrow_value_ratio = self.borrow_value_ratio.to_le_bytes();
         *liquidation_value_ratio = self.liquidation_value_ratio.to_le_bytes();
-        *close_factor = self.close_factor.to_le_bytes();
     }
 
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -115,13 +86,11 @@ impl Pack for Collateral {
             amount,
             borrow_value_ratio,
             liquidation_value_ratio,
-            close_factor,
             _padding,
         ) = array_refs![
             input,
             PUBKEY_BYTES,
             8,
-            1,
             1,
             1,
             COLLATERAL_PADDING_LEN
@@ -132,7 +101,6 @@ impl Pack for Collateral {
             amount: u64::from_le_bytes(*amount),
             borrow_value_ratio: u8::from_le_bytes(*borrow_value_ratio),
             liquidation_value_ratio: u8::from_le_bytes(*liquidation_value_ratio),
-            close_factor: u8::from_le_bytes(*close_factor),
         })
     }
 }
@@ -146,6 +114,8 @@ pub struct Loan {
     pub acc_borrow_rate_wads: Decimal,
     /// Amount of liquidity borrowed plus interest
     pub borrowed_amount_wads: Decimal,
+    ///
+    pub close_factor: u8,
 }
 
 impl Loan {
@@ -169,7 +139,7 @@ impl Loan {
     ///
     pub fn calculate_loan_value(&self, reserve: &MarketReserve) -> Result<Decimal, ProgramError> {
         reserve.market_price
-            .try_mul(self.borrowed_amount_wads.try_ceil_u64()?)?
+            .try_mul(self.borrowed_amount_wads.try_round_u64()?)?
             .try_div(calculate_decimals(reserve.token_info.decimal)?)
     }
 }
@@ -177,7 +147,7 @@ impl Loan {
 impl Sealed for Loan {}
 
 const LOAN_PADDING_LEN: usize = 64;
-const LOAN_LEN: usize = 128;
+const LOAN_LEN: usize = 129;
 
 impl Pack for Loan {
     const LEN: usize = LOAN_LEN;
@@ -189,18 +159,21 @@ impl Pack for Loan {
             reserve,
             acc_borrow_rate_wads,
             borrowed_amount_wads,
+            close_factor,
             _padding,
         ) = mut_array_refs![
             output,
             PUBKEY_BYTES,
             16,
             16,
+            1,
             LOAN_PADDING_LEN
         ];
 
         reserve.copy_from_slice(self.reserve.as_ref());
         pack_decimal(self.acc_borrow_rate_wads, acc_borrow_rate_wads);
         pack_decimal(self.borrowed_amount_wads, borrowed_amount_wads);
+        *close_factor = self.close_factor.to_le_bytes();
     }
 
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -210,12 +183,14 @@ impl Pack for Loan {
             reserve,
             acc_borrow_rate_wads,
             borrowed_amount_wads,
+            close_factor,
             _padding,
         ) = array_refs![
             input,
             PUBKEY_BYTES,
             16,
             16,
+            1,
             LOAN_PADDING_LEN
         ];
 
@@ -223,6 +198,7 @@ impl Pack for Loan {
             reserve: Pubkey::new_from_array(*reserve),
             acc_borrow_rate_wads: unpack_decimal(acc_borrow_rate_wads),
             borrowed_amount_wads: unpack_decimal(borrowed_amount_wads),
+            close_factor: u8::from_le_bytes(*close_factor),
         })
     }
 }
@@ -252,25 +228,6 @@ pub struct UserObligation {
     pub loans_value: Decimal,
 }
 
-impl<P: Any + Param + Copy> Operator<P> for UserObligation {
-    fn operate_unchecked(&mut self, param: P) -> ProgramResult {
-        if let Some(config) = <dyn Any>::downcast_ref::<IndexedCollateralConfig>(&param) {
-            let index = config.index as usize;
-            if index >= self.collaterals.len() {
-                return Err(LendingError::ObligationCollateralIndexExceed.into());
-            }
-
-            self.collaterals[index].borrow_value_ratio = config.borrow_value_ratio;
-            self.collaterals[index].liquidation_value_ratio = config.liquidation_value_ratio;
-            self.collaterals[index].close_factor = config.close_factor;
-
-            return Ok(());
-        }
-
-        panic!("unexpected param type");
-    }
-}
-
 impl UserObligation {
     ///
     fn validate_borrow(&self, other: Option<Self>) -> ProgramResult {
@@ -288,6 +245,25 @@ impl UserObligation {
             Ok(())
         } else {
             Err(LendingError::ObligationNotHealthy.into())
+        }
+    }
+    ///
+    fn validate_liquidation(&self, other: Option<Self>) -> ProgramResult {
+        let (collaterals_liquidation_value, loans_value) = if let Some(other) = other {
+            let collaterals_liquidation_value = self.collaterals_liquidation_value
+                .try_add(other.collaterals_liquidation_value)?;
+            let loans_value = self.loans_value.try_add(self.loans_value)?;
+
+            (collaterals_liquidation_value, loans_value)
+        } else {
+            (self.collaterals_liquidation_value, self.loans_value)
+        };
+
+        // valid liquidation
+        if loans_value >= collaterals_liquidation_value {
+            Ok(())
+        } else {
+            return Err(LendingError::ObligationCanNotLiquidate.into());
         }
     }
     ///
@@ -311,7 +287,7 @@ impl UserObligation {
 
             Ok(())
         } else {
-            Err(LendingError::ObligationAlreadyBinding.into())
+            Err(LendingError::ObligationAlreadyBindFriend.into())
         }
     }
     ///
@@ -404,13 +380,14 @@ impl UserObligation {
         other: Option<Self>,
     ) -> ProgramResult {
         if self.collaterals.len() + self.loans.len() >= MAX_OBLIGATION_RESERVES {
-            return Err(LendingError::ObligationReserveLimitExceed.into());
+            return Err(LendingError::ObligationReservesFull.into());
         }
 
         self.loans.push(Loan{
             reserve: key,
             acc_borrow_rate_wads: reserve.liquidity_info.acc_borrow_rate_wads,
             borrowed_amount_wads: Decimal::from(amount),
+            close_factor: reserve.liquidity_info.config.close_factor,
         });
 
         let value = reserve.market_price
@@ -461,14 +438,13 @@ impl UserObligation {
         reserve: &MarketReserve,
     ) -> ProgramResult {
         if self.collaterals.len() + self.loans.len() >= MAX_OBLIGATION_RESERVES {
-            Err(LendingError::ObligationReserveLimitExceed.into())
+            Err(LendingError::ObligationReservesFull.into())
         } else {
             self.collaterals.push(Collateral {
                 reserve: key,
                 amount,
                 borrow_value_ratio: reserve.collateral_info.config.borrow_value_ratio,
                 liquidation_value_ratio: reserve.collateral_info.config.liquidation_value_ratio,
-                close_factor: reserve.collateral_info.config.close_factor,
             });
 
             Ok(())
@@ -517,7 +493,7 @@ impl UserObligation {
         };
 
         if loan_amount > Decimal::zero() {
-            Err(LendingError::ObligationLoanNotEmpty.into())
+            Err(LendingError::ObligationDeptIsNotEmpty.into())
         } else {
             if amount >= self.collaterals[index].amount {
                 let amount = self.collaterals[index].amount;
@@ -584,7 +560,6 @@ impl UserObligation {
             amount: in_amount,
             borrow_value_ratio: in_reserve.collateral_info.config.borrow_value_ratio,
             liquidation_value_ratio: in_reserve.collateral_info.config.liquidation_value_ratio,
-            close_factor: in_reserve.collateral_info.config.close_factor,
         });
 
         let out_value = out_reserve.market_price
@@ -606,6 +581,7 @@ impl UserObligation {
     #[allow(clippy::too_many_arguments)]
     pub fn liquidate(
         &mut self,
+        by_collateral: bool,
         amount: u64,
         collateral_index: usize,
         loan_index: usize,
@@ -613,61 +589,84 @@ impl UserObligation {
         loan_reserve: &MarketReserve,
         other: Option<Self>,
     ) -> Result<(u64, LiquidationSettle), ProgramError> {
-        let (collaterals_liquidation_value, loans_value) = if let Some(other) = other {
-            let collaterals_liquidation_value = self.collaterals_liquidation_value
-                .try_add(other.collaterals_liquidation_value)?;
-            let loans_value = self.loans_value.try_add(self.loans_value)?;
+        // check valid
+        self.validate_liquidation(other)?;
 
-            (collaterals_liquidation_value, loans_value)
+        if by_collateral {
+            // input amount represents collateral
+            // update collaterals
+            let amount = if self.collaterals[collateral_index].amount > amount {
+                self.collaterals[collateral_index].amount -= amount;
+                amount
+            } else {
+                let amount = self.collaterals[collateral_index].amount;
+                self.collaterals.remove(collateral_index);
+                amount
+            };
+
+            // calculate repay amount
+            let incentive_ratio = Rate::one()
+                .try_add(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_bonus_ratio))?;
+            let liquidation_amount = Decimal::from(amount)
+                .try_div(incentive_ratio)?
+                .try_round_u64()?;
+            let repay_decimal = collateral_reserve.market_price
+                .try_mul(collateral_reserve.exchange_collateral_to_liquidity(liquidation_amount)?)?
+                .try_div(calculate_decimals(collateral_reserve.token_info.decimal)?)?
+                .try_mul(calculate_decimals(loan_reserve.token_info.decimal)?)?
+                .try_div(loan_reserve.market_price)?;
+
+            // repay amount check
+            let repay_decimal = self.loans[loan_index].borrowed_amount_wads
+                .try_mul(Rate::from_percent(loan_reserve.liquidity_info.config.close_factor))?
+                .min(repay_decimal);
+            if repay_decimal == Decimal::zero() {
+                return Err(LendingError::LiquidationRepayTooSmall.into());
+            }
+            // update loans
+            self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads.try_sub(repay_decimal)?;
+
+            Ok((amount, LiquidationSettle {
+                repay: repay_decimal.try_ceil_u64()?,
+                repay_decimal,
+            }))
         } else {
-            (self.collaterals_liquidation_value, self.loans_value)
-        };
+            // input amount represents loan
+            // calculate repay amount
+            let repay_decimal = self.loans[loan_index].borrowed_amount_wads
+                .try_mul(Rate::from_percent(loan_reserve.liquidity_info.config.close_factor))?
+                .min(Decimal::from(amount));
+            // update loans
+            self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads.try_sub(repay_decimal)?;
 
-        // valid liquidation
-        if loans_value < collaterals_liquidation_value {
-            return Err(LendingError::ObligationLiquidationNotAvailable.into());
+            // calculate seize amount
+            let incentive_ratio = Rate::one()
+                .try_add(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_bonus_ratio))?;
+            let seize_liquidity_amount = loan_reserve.market_price
+                .try_mul(amount)?
+                .try_div(calculate_decimals(loan_reserve.token_info.decimal)?)?
+                .try_mul(calculate_decimals(collateral_reserve.token_info.decimal)?)?
+                .try_div(collateral_reserve.market_price)?
+                .try_mul(incentive_ratio)?
+                .try_round_u64()?;
+
+            // update collaterals
+            let mut seize_amount = collateral_reserve.exchange_liquidity_to_collateral(seize_liquidity_amount)?;
+            if self.collaterals[collateral_index].amount > seize_amount {
+                self.collaterals[collateral_index].amount -= seize_amount;
+            } else {
+                seize_amount = self.collaterals[collateral_index].amount;
+                self.collaterals.remove(collateral_index);
+            };
+            if seize_amount == 0 {
+                return Err(LendingError::LiquidationSeizeTooSmall.into());
+            }
+
+            Ok((seize_amount, LiquidationSettle {
+                repay: amount,
+                repay_decimal,
+            }))
         }
-        
-        // max liquidation limit check
-        let max_liquidation_amount = Decimal::from(self.collaterals[collateral_index].amount)
-            .try_mul(Rate::from_percent(self.collaterals[collateral_index].close_factor))?
-            .try_floor_u64()?;
-        let amount = amount.min(max_liquidation_amount);
-        if amount == 0 {
-            return Err(LendingError::LiquidationReceiveTooSmall.into());
-        }
-
-        let collateral_amount = collateral_reserve.exchange_collateral_to_liquidity(amount)?;
-        let collateral_value = collateral_reserve.market_price
-            .try_mul(collateral_amount)?
-            .try_div(calculate_decimals(collateral_reserve.token_info.decimal)?)?;
-
-        let liquidation_ratio: Rate = collateral_value
-            .try_mul(Rate::from_percent(self.collaterals[collateral_index].liquidation_value_ratio))?
-            .try_div(collaterals_liquidation_value)?
-            .try_into()?;
-
-        // calculate repay amount
-        let loan_decimals = calculate_decimals(loan_reserve.token_info.decimal)?;
-        let repay_amount = loans_value
-            .try_mul(loan_decimals)?
-            .try_div(loan_reserve.market_price)?
-            .try_mul(liquidation_ratio)?;
-    
-        // update collaterals and loans        
-        self.collaterals[collateral_index].amount -= amount;
-        self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads
-            .try_sub(repay_amount)?;
-
-        let settle = LiquidationSettle::new(
-            collateral_value,
-            loan_reserve.market_price,
-            repay_amount,
-            loan_decimals,
-            Rate::from_scaled_val(loan_reserve.liquidity_info.config.liquidation_fee_rate),
-        )?;
-
-        Ok((amount, settle))
     }
 }
 
@@ -679,9 +678,9 @@ impl IsInitialized for UserObligation {
 }
 
 // const MAX_PADDING_LEN: usize = max(COLLATERAL_LEN, LOAN_LEN);
-const MAX_PADDING_LEN: usize = 128;
+const MAX_COLLATERAL_OR_LOAN_LEN: usize = LOAN_LEN;
 const USER_OBLIGATITION_PADDING_LEN: usize = 128;
-const USER_OBLIGATITION_LEN: usize = 1312;
+const USER_OBLIGATITION_LEN: usize = 1320;
 
 impl Pack for UserObligation {
     const LEN: usize = USER_OBLIGATITION_LEN;
@@ -714,7 +713,7 @@ impl Pack for UserObligation {
             16,
             1,
             1,
-            MAX_PADDING_LEN * MAX_OBLIGATION_RESERVES,
+            MAX_COLLATERAL_OR_LOAN_LEN * MAX_OBLIGATION_RESERVES,
             USER_OBLIGATITION_PADDING_LEN
         ];
 
@@ -770,7 +769,7 @@ impl Pack for UserObligation {
             16,
             1,
             1,
-            MAX_PADDING_LEN * MAX_OBLIGATION_RESERVES,
+            MAX_COLLATERAL_OR_LOAN_LEN * MAX_OBLIGATION_RESERVES,
             USER_OBLIGATITION_PADDING_LEN
         ];
 
@@ -805,5 +804,70 @@ impl Pack for UserObligation {
             loans,
             loans_value: unpack_decimal(loans_value),
         })
+    }
+}
+
+impl<P: Any + Param + Copy> Operator<P> for UserObligation {
+    fn operate_unchecked(&mut self, param: P) -> ProgramResult {
+        if let Some(config) = <dyn Any>::downcast_ref::<IndexedCollateralConfig>(&param) {
+            let collateral = self.collaterals
+                .get_mut(config.index as usize)
+                .ok_or(LendingError::ObligationInvalidCollateralIndex)?;
+
+            collateral.borrow_value_ratio = config.borrow_value_ratio;
+            collateral.liquidation_value_ratio = config.liquidation_value_ratio;
+
+            return Ok(());
+        }
+
+        if let Some(config) = <dyn Any>::downcast_ref::<IndexedLoanConfig>(&param) {
+            let loan = self.loans
+                .get_mut(config.index as usize)
+                .ok_or(LendingError::ObligationInvalidLoanIndex)?;
+            loan.close_factor = config.close_factor;
+
+            return Ok(());
+        }
+
+        panic!("unexpected param type");
+    }
+}
+
+#[derive(Clone, Debug, Copy, Default, PartialEq)]
+pub struct IndexedCollateralConfig {
+    ///
+    pub index: u8,
+    ///
+    pub borrow_value_ratio: u8,
+    ///
+    pub liquidation_value_ratio: u8,
+}
+
+impl Param for IndexedCollateralConfig {
+    fn is_valid(&self) -> ProgramResult {
+        if self.borrow_value_ratio < self.liquidation_value_ratio &&
+            self.liquidation_value_ratio < 100 {
+            Ok(())
+        } else {
+            Err(LendingError::InvalidIndexedCollateralConfig.into())
+        }
+    }
+}
+
+#[derive(Clone, Debug, Copy, Default, PartialEq)]
+pub struct IndexedLoanConfig {
+    ///
+    pub index: u8,
+    ///
+    pub close_factor: u8,
+}
+
+impl Param for IndexedLoanConfig {
+    fn is_valid(&self) -> ProgramResult {
+        if self.close_factor < 100 {
+            Ok(())
+        } else {
+            Err(LendingError::InvalidIndexedLoanConfig.into())
+        }
     }
 }

@@ -105,12 +105,16 @@ pub fn process_instruction(
             msg!("Instruction: Repay Loan: {}", amount);
             process_repay_loan(program_id, accounts, amount)
         }
-        LendingInstruction::Liquidate { amount } => {
-            msg!("Instruction: Liquidation: amount = {}", amount);
-            process_liquidate(program_id, accounts, amount)
+        LendingInstruction::Liquidate { by_collateral, amount } => {
+            msg!("Instruction: Liquidation: by collateral = {}, amount = {}", by_collateral, amount);
+            process_liquidate(program_id, accounts, by_collateral, amount)
         }
-        LendingInstruction::UpdateUserObligationConfig { config } => {
-            msg!("Instruction: Update User Obligation Config");
+        LendingInstruction::UpdateIndexedCollateralConfig { config } => {
+            msg!("Instruction: Update User Obligation Collateral Config");
+            process_operate_user_obligation(program_id, accounts, config)
+        }
+        LendingInstruction::UpdateIndexedLoanConfig { config } => {
+            msg!("Instruction: Update User Obligation Loan Config");
             process_operate_user_obligation(program_id, accounts, config)
         }
         LendingInstruction::PauseRateOracle => {
@@ -141,9 +145,9 @@ pub fn process_instruction(
             msg!("Instruction: Update Market Reserve Rate Oracle");
             process_operate_market_reserve(program_id, accounts, ReserveRateOracle(oracle))
         }
-        LendingInstruction::WithdrawFee { amount } => {
-            msg!("Instruction: Withdraw Fee: {}", amount);
-            process_withdraw_fee(program_id, accounts, amount)
+        LendingInstruction::ReduceInsurance { amount } => {
+            msg!("Instruction: Reduce Insurance: {}", amount);
+            process_reduce_insurance(program_id, accounts, amount)
         }
         #[cfg(feature = "case-injection")]
         LendingInstruction::InjectNoBorrow => {
@@ -271,33 +275,33 @@ fn process_init_market_reserve(
     let pyth_product_info = next_account_info(account_info_iter)?;
     if pyth_product_info.owner != &manager.pyth_program_id {
         msg!("Pyth product account provided is not owned by the pyth program");
-        return Err(LendingError::InvalidOracleConfig.into());
+        return Err(LendingError::InvalidPriceOracleConfig.into());
     }
     let pyth_product_data = pyth_product_info.try_borrow_data()?;
     let pyth_product = pyth::load::<pyth::Product>(&pyth_product_data)
         .map_err(|_| ProgramError::InvalidAccountData)?;
     if pyth_product.magic != pyth::MAGIC {
         msg!("Pyth product account provided is not a valid Pyth account");
-        return Err(LendingError::InvalidOracleConfig.into());
+        return Err(LendingError::InvalidPriceOracleConfig.into());
     }
     if pyth_product.ver != pyth::VERSION_2 {
         msg!("Pyth product account provided has a different version than expected");
-        return Err(LendingError::InvalidOracleConfig.into());
+        return Err(LendingError::InvalidPriceOracleConfig.into());
     }
     if pyth_product.atype != pyth::AccountType::Product as u32 {
         msg!("Pyth product account provided is not a valid Pyth product account");
-        return Err(LendingError::InvalidOracleConfig.into());
+        return Err(LendingError::InvalidPriceOracleConfig.into());
     }
     let quote_currency = get_pyth_product_quote_currency(pyth_product)?;
     if manager.quote_currency != quote_currency {
         msg!("Lending market quote currency does not match the oracle quote currency");
-        return Err(LendingError::InvalidOracleConfig.into());
+        return Err(LendingError::InvalidPriceOracleConfig.into());
     }
     // 8
     let pyth_price_info = next_account_info(account_info_iter)?;
     if pyth_price_info.owner != &manager.pyth_program_id {
         msg!("Pyth price account provided is not owned by the lending market oracle program");
-        return Err(LendingError::InvalidOracleConfig.into());
+        return Err(LendingError::InvalidPriceOracleConfig.into());
     }
     let pyth_price_pubkey_bytes: &[u8; 32] = pyth_price_info.key
         .as_ref()
@@ -305,7 +309,7 @@ fn process_init_market_reserve(
         .map_err(|_| LendingError::InvalidAccountInput)?;
     if pyth_price_pubkey_bytes != &pyth_product.px_acc.val {
         msg!("Pyth product price account does not match the Pyth price provided");
-        return Err(LendingError::InvalidOracleConfig.into());
+        return Err(LendingError::InvalidPriceOracleConfig.into());
     }
     let market_price = get_pyth_price(pyth_price_info, clock)?;
     // 9
@@ -323,7 +327,7 @@ fn process_init_market_reserve(
     let authority_info = next_account_info(account_info_iter)?;
     if authority_info.key != &manager.owner {
         msg!("Only manager owner can create reserve");
-        return Err(LendingError::InvalidManagerOwner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     if !authority_info.is_signer {
         msg!("authority is not a signer");
@@ -353,7 +357,7 @@ fn process_init_market_reserve(
             available: 0,
             acc_borrow_rate_wads: Decimal::one(),
             borrowed_amount_wads: Decimal::zero(),
-            fee_wads: Decimal::zero(),
+            insurance_wads: Decimal::zero(),
             config: liquidity_config,
         },
         collateral_info: CollateralInfo {
@@ -663,15 +667,15 @@ fn process_bind_friend(
     let mut friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
 
     if user_obligation_info.key == friend_obligation_info.key {
-        return Err(LendingError::UserObligationInvalidFriend.into())
+        return Err(LendingError::ObligationInvalidFriend.into())
     }
     if user_obligation.manager != friend_obligation.manager {
-        return Err(LendingError::UserObligationFriendNotMatched.into());
+        return Err(LendingError::ObligationInvalidFriend.into());
     }
     // 3
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
-        return Err(LendingError::InvalidUserAuthority.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     if !user_authority_info.is_signer {
         msg!("authority is not a signer");
@@ -680,7 +684,7 @@ fn process_bind_friend(
     // 4
     let friend_authority_info = next_account_info(account_info_iter)?;
     if friend_authority_info.key != &friend_obligation.owner {
-        return Err(LendingError::InvalidUserAuthority.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     if !friend_authority_info.is_signer {
         msg!("authority is not a signer");
@@ -724,12 +728,12 @@ fn process_unbind_friend(
         return Err(LendingError::ObligationStale.into());
     }
     if user_obligation.manager != friend_obligation.manager {
-        return Err(LendingError::UserObligationFriendNotMatched.into());
+        return Err(LendingError::ObligationInvalidFriend.into());
     }
     // 4
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
-        return Err(LendingError::InvalidUserAuthority.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     if !user_authority_info.is_signer {
         msg!("authority is not a signer");
@@ -738,7 +742,7 @@ fn process_unbind_friend(
     // 5
     let friend_authority_info = next_account_info(account_info_iter)?;
     if friend_authority_info.key != &friend_obligation.owner {
-        return Err(LendingError::InvalidUserAuthority.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     if !friend_authority_info.is_signer {
         msg!("authority is not a signer");
@@ -791,7 +795,7 @@ fn process_pledge_collateral(
     // 4
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
-        return Err(LendingError::InvalidUserAuthority.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     // 5
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
@@ -888,7 +892,7 @@ fn process_redeem_collateral(
         // 7
         let friend_obligation_info = next_account_info(account_info_iter)?;
         if friend_obligation_info.key != friend {
-            return Err(LendingError::UserObligationFriendNotMatched.into());
+            return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
         if friend_obligation.last_update.is_stale(clock.slot)? {
@@ -902,7 +906,7 @@ fn process_redeem_collateral(
     // 7/8
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
-        return Err(LendingError::InvalidUserAuthority.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     if !user_authority_info.is_signer {
         msg!("authority is not a signer");
@@ -991,7 +995,7 @@ fn process_redeem_collateral_without_loan(
         // 6
         let friend_obligation_info = next_account_info(account_info_iter)?;
         if friend_obligation_info.key != friend {
-            return Err(LendingError::UserObligationFriendNotMatched.into());
+            return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
 
@@ -1002,7 +1006,7 @@ fn process_redeem_collateral_without_loan(
     // 6/7
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
-        return Err(LendingError::InvalidUserAuthority.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     if !user_authority_info.is_signer {
         msg!("authority is not a signer");
@@ -1119,7 +1123,7 @@ fn process_replace_collateral(
         // 9
         let friend_obligation_info = next_account_info(account_info_iter)?;
         if friend_obligation_info.key != friend {
-            return Err(LendingError::UserObligationFriendNotMatched.into());
+            return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
         if friend_obligation.last_update.is_stale(clock.slot)? {
@@ -1133,7 +1137,7 @@ fn process_replace_collateral(
     // 9/10
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
-        return Err(LendingError::InvalidUserAuthority.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     if !user_authority_info.is_signer {
         msg!("authority is not a signer");
@@ -1261,7 +1265,7 @@ fn process_borrow_liquidity(
         // 7
         let friend_obligation_info = next_account_info(account_info_iter)?;
         if friend_obligation_info.key != friend {
-            return Err(LendingError::UserObligationFriendNotMatched.into());
+            return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
         if friend_obligation.last_update.is_stale(clock.slot)? {
@@ -1275,7 +1279,7 @@ fn process_borrow_liquidity(
     // 7/8
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
-        return Err(LendingError::InvalidUserAuthority.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     if !user_authority_info.is_signer {
         msg!("authority is not a signer");
@@ -1389,10 +1393,11 @@ fn process_repay_loan(
 fn process_liquidate(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
+    by_collateral: bool,
     amount: u64,
 ) -> ProgramResult {
     if amount == 0 {
-        msg!("Collateral amount provided cannot be zero");
+        msg!("Liquidation amount provided cannot be zero");
         return Err(LendingError::InvalidAmount.into());
     }
 
@@ -1473,7 +1478,7 @@ fn process_liquidate(
         // 9
         let friend_obligation_info = next_account_info(account_info_iter)?;
         if friend_obligation_info.key != friend {
-            return Err(LendingError::UserObligationFriendNotMatched.into());
+            return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
         if friend_obligation.last_update.is_stale(clock.slot)? {
@@ -1496,7 +1501,8 @@ fn process_liquidate(
     // liquidate
     let collateral_index = user_obligation.find_collateral(*collateral_market_reserve_info.key)?;
     let loan_index = user_obligation.find_loan(*loan_market_reserve_info.key)?;
-    let (amount, liquidation_settle) = user_obligation.liquidate(
+    let (amount, settle) = user_obligation.liquidate(
+        by_collateral,
         amount,
         collateral_index,
         loan_index,
@@ -1504,7 +1510,7 @@ fn process_liquidate(
         &loan_market_reserve,
         friend_obligation,
     )?;
-    loan_market_reserve.liquidity_info.liquidate(liquidation_settle)?;
+    loan_market_reserve.liquidity_info.liquidate(settle)?;
 
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
@@ -1514,7 +1520,7 @@ fn process_liquidate(
     spl_token_transfer(TokenTransferParams {
         source: liquidator_token_account_info.clone(),
         destination: manager_token_account_info.clone(),
-        amount: liquidation_settle.repay_with_fee,
+        amount: settle.repay,
         authority: liquidator_authority_info.clone(),
         authority_signer_seeds: &[],
         token_program: token_program_id.clone(),
@@ -1554,13 +1560,13 @@ fn process_operate_user_obligation<P: Any + Copy + Param>(
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
     if &user_obligation.manager != manager_info.key {
         msg!("User obligation manager provided is not matched with manager info");
-        return Err(LendingError::InvalidUserObligation.into());
+        return Err(LendingError::InvalidManager.into());
     }
     // 3
     let authority_info = next_account_info(account_info_iter)?;
     if authority_info.key != &manager.owner {
-        msg!("Only manager owner can create reserve");
-        return Err(LendingError::InvalidManagerOwner.into());
+        msg!("Only manager owner can operate user obligation");
+        return Err(LendingError::InvalidAuthority.into());
     }
     if !authority_info.is_signer {
         msg!("authority is not a signer");
@@ -1593,7 +1599,7 @@ fn process_operate_rate_oracle<P: Any + Copy + Param>(
         return Err(LendingError::InvalidSigner.into());
     }
     if authority_info.key != &rate_oracle.owner {
-        return Err(LendingError::InvalidOracleAuthority.into())
+        return Err(LendingError::InvalidAuthority.into())
     }
 
     rate_oracle.operate(param)?;
@@ -1628,8 +1634,8 @@ fn process_operate_market_reserve<P: Any + Copy + Param>(
     // 3
     let authority_info = next_account_info(account_info_iter)?;
     if authority_info.key != &manager.owner {
-        msg!("Only manager owner can create reserve");
-        return Err(LendingError::InvalidManagerOwner.into());
+        msg!("Only manager owner can operate market reserve");
+        return Err(LendingError::InvalidAuthority.into());
     }
     if !authority_info.is_signer {
         msg!("authority is not a signer");
@@ -1642,7 +1648,7 @@ fn process_operate_market_reserve<P: Any + Copy + Param>(
 }
 
 // by manager
-fn process_withdraw_fee(
+fn process_reduce_insurance(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     amount: u64,
@@ -1685,8 +1691,8 @@ fn process_withdraw_fee(
     // 5
     let authority_info = next_account_info(account_info_iter)?;
     if authority_info.key != &manager.owner {
-        msg!("Only manager owner can withdraw fee");
-        return Err(LendingError::InvalidManagerOwner.into());
+        msg!("Only manager owner can reduce insurance");
+        return Err(LendingError::InvalidAuthority.into());
     }
     if !authority_info.is_signer {
         msg!("authority is not a signer");
@@ -1697,8 +1703,8 @@ fn process_withdraw_fee(
     // 7
     let token_program_id = next_account_info(account_info_iter)?;
 
-    // withdraw fee
-    market_reserve.liquidity_info.withdraw_fee(amount)?;
+    // reduce insurance
+    market_reserve.liquidity_info.reduce_insurance(amount)?;
     // pack
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
     // transfer
@@ -1734,7 +1740,7 @@ fn process_inject_case<B: Bit>(
             user_obligation.loans_value = user_obligation.collaterals_liquidation_value;
         }
         _ => {
-            return Err(LendingError::UndefinedCase.into());
+            return Err(LendingError::UndefinedCaseInjection.into());
         }
     }
     // pack
@@ -1772,7 +1778,7 @@ fn get_pyth_product_quote_currency(pyth_product: &pyth::Product) -> Result<[u8; 
             let mut end = start + length;
             if end > pyth::PROD_ATTR_SIZE {
                 msg!("Pyth product attribute key length too long");
-                return Err(LendingError::InvalidOracleConfig.into());
+                return Err(LendingError::InvalidPriceOracleConfig.into());
             }
 
             let key = &pyth_product.attr[start..end];
@@ -1784,7 +1790,7 @@ fn get_pyth_product_quote_currency(pyth_product: &pyth::Product) -> Result<[u8; 
                 end = start + length;
                 if length > 32 || end > pyth::PROD_ATTR_SIZE {
                     msg!("Pyth product quote currency value too long");
-                    return Err(LendingError::InvalidOracleConfig.into());
+                    return Err(LendingError::InvalidPriceOracleConfig.into());
                 }
 
                 let mut value = [0u8; 32];
@@ -1798,7 +1804,7 @@ fn get_pyth_product_quote_currency(pyth_product: &pyth::Product) -> Result<[u8; 
     }
 
     msg!("Pyth product quote currency not found");
-    Err(LendingError::InvalidOracleConfig.into())
+    Err(LendingError::InvalidPriceOracleConfig.into())
 }
 
 fn get_pyth_price(pyth_price_info: &AccountInfo, clock: &Clock) -> Result<Decimal, ProgramError> {
@@ -1810,7 +1816,7 @@ fn get_pyth_price(pyth_price_info: &AccountInfo, clock: &Clock) -> Result<Decima
 
     if pyth_price.ptype != pyth::PriceType::Price {
         msg!("Oracle price type is invalid");
-        return Err(LendingError::InvalidOracleConfig.into());
+        return Err(LendingError::InvalidPriceOracleConfig.into());
     }
 
     let slots_elapsed = clock.slot
@@ -1818,12 +1824,12 @@ fn get_pyth_price(pyth_price_info: &AccountInfo, clock: &Clock) -> Result<Decima
         .ok_or(LendingError::MathOverflow)?;
     if slots_elapsed >= STALE_AFTER_SLOTS_ELAPSED {
         msg!("Oracle price is stale");
-        return Err(LendingError::InvalidOracleConfig.into());
+        return Err(LendingError::InvalidPriceOracleConfig.into());
     }
 
     let price: u64 = pyth_price.agg.price.try_into().map_err(|_| {
         msg!("Oracle price cannot be negative");
-        LendingError::InvalidOracleConfig
+        LendingError::InvalidPriceOracleConfig
     })?;
 
     if pyth_price.expo >= 0 {

@@ -159,52 +159,6 @@ pub struct LiquidationSettle {
     pub repay: u64,
     ///
     pub repay_decimal: Decimal,
-    ///
-    pub repay_with_fee: u64,
-    ///
-    pub fee: u64,
-}
-
-impl LiquidationSettle {
-    ///
-    pub fn new(
-        collateral_value: Decimal,
-        loan_price: Decimal,
-        loan_amount: Decimal,
-        loan_decimals: u64,
-        fee_rate: Rate,
-    ) -> Result<Self, ProgramError> {
-        let equivalent_amount = collateral_value
-            .try_mul(loan_decimals)?
-            .try_div(loan_price)?;
-
-        let repay = loan_amount.try_ceil_u64()?;
-        let (repay_with_fee, fee) = if equivalent_amount > loan_amount {
-            let fee = equivalent_amount
-                .try_sub(loan_amount)?
-                .try_mul(fee_rate)?
-                .try_ceil_u64()?;
-
-            let repay_with_fee = repay
-                .checked_add(fee)
-                .ok_or(LendingError::MathOverflow)?;
-
-            (repay_with_fee, fee)
-        } else {
-            (repay, 0)
-        };
-
-        if repay_with_fee == 0 {
-            return Err(LendingError::LiquidationRepayTooSmall.into());
-        }
-
-        Ok(Self {
-            repay,
-            repay_decimal: loan_amount,
-            repay_with_fee,
-            fee,
-        })
-    }
 }
 
 // #[cfg(test)]
