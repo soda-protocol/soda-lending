@@ -152,15 +152,6 @@ pub struct RepaySettle {
     pub amount_decimal: Decimal,
 }
 
-///
-#[derive(Clone, Copy, Debug)]
-pub struct LiquidationSettle {
-    ///
-    pub repay: u64,
-    ///
-    pub repay_decimal: Decimal,
-}
-
 // #[cfg(test)]
 // mod test {
 //     use super::*;

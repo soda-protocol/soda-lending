@@ -111,7 +111,7 @@ pub enum LendingInstruction {
         config: RateOracleConfig,
     },
     /// 21
-    ControlMarketReserve {
+    ControlMarketReserveLiquidity {
         ///
         enable: bool,
     },
@@ -225,7 +225,7 @@ impl LendingInstruction {
             }
             21 => {
                 let (enable, _rest) = Self::unpack_bool(rest)?;
-                Self::ControlMarketReserve { enable }
+                Self::ControlMarketReserveLiquidity { enable }
             }
             22 => {
                 let (config, _rest) = Self::unpack_collateral_config(rest)?;
@@ -468,7 +468,7 @@ impl LendingInstruction {
                 buf.push(20);
                 Self::pack_rate_oracle_config(config, &mut buf);
             }
-            Self::ControlMarketReserve { enable } => {
+            Self::ControlMarketReserveLiquidity { enable } => {
                 buf.push(21);
                 buf.extend_from_slice(&(enable as u8).to_le_bytes());
             }
@@ -1101,7 +1101,7 @@ pub fn update_rate_oracle_config(
     }
 }
 
-pub fn control_market_reserve(
+pub fn control_market_reserve_liquidity(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
     authority_key: Pubkey,
@@ -1114,7 +1114,7 @@ pub fn control_market_reserve(
             AccountMeta::new(market_reserve_key, false),
             AccountMeta::new_readonly(authority_key, true),
         ],
-        data: LendingInstruction::ControlMarketReserve{ enable }.pack(),
+        data: LendingInstruction::ControlMarketReserveLiquidity{ enable }.pack(),
     }
 }
 

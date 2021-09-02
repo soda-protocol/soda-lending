@@ -92,7 +92,7 @@ impl Pack for Manager {
         ];
 
         let version = u8::from_le_bytes(*version);
-        if version > PROGRAM_VERSION {
+        if version != PROGRAM_VERSION {
             msg!("Manager version does not match lending program version");
             return Err(ProgramError::InvalidAccountData);
         }

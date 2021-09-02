@@ -5,7 +5,7 @@ use crate::{
     instruction::LendingInstruction,
     math::{Decimal, TryDiv, TryMul},
     pyth,
-    state::{CollateralConfig, CollateralInfo, ReserveControl, LastUpdate,
+    state::{CollateralConfig, CollateralInfo, LiquidityControl, LastUpdate,
         LiquidityConfig, LiquidityInfo, Manager, MarketReserve, Operator,
         Param, Pause, PROGRAM_VERSION, RateOracle, RateOracleConfig,
         ReservePriceOracle, ReserveRateOracle, TokenInfo, UserObligation,
@@ -125,9 +125,9 @@ pub fn process_instruction(
             msg!("Instruction: Updae Rate Oracle Config");
             process_operate_rate_oracle(program_id, accounts, config)
         }
-        LendingInstruction::ControlMarketReserve { enable } => {
-            msg!("Instruction: Control Market Reserve");
-            process_operate_market_reserve(program_id, accounts, ReserveControl(enable))
+        LendingInstruction::ControlMarketReserveLiquidity { enable } => {
+            msg!("Instruction: Control Market Reserve Liquidity");
+            process_operate_market_reserve(program_id, accounts, LiquidityControl(enable))
         }
         LendingInstruction::UpdateMarketReserveCollateralConfig { config } => {
             msg!("Instruction: Update Market Reserve Collateral Config");
@@ -342,7 +342,6 @@ fn process_init_market_reserve(
 
     let market_reserve = MarketReserve {
         version: PROGRAM_VERSION,
-        enable: true,
         last_update: LastUpdate::new(clock.slot),
         manager: *manager_info.key,
         market_price,
@@ -353,6 +352,7 @@ fn process_init_market_reserve(
             decimal: token_mint.decimals,
         },
         liquidity_info: LiquidityInfo {
+            enable: true,
             rate_oracle: *rate_oracle_info.key,
             available: 0,
             acc_borrow_rate_wads: Decimal::one(),
@@ -1520,7 +1520,7 @@ fn process_liquidate(
     spl_token_transfer(TokenTransferParams {
         source: liquidator_token_account_info.clone(),
         destination: manager_token_account_info.clone(),
-        amount: settle.repay,
+        amount: settle.amount,
         authority: liquidator_authority_info.clone(),
         authority_signer_seeds: &[],
         token_program: token_program_id.clone(),

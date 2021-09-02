@@ -588,7 +588,7 @@ impl UserObligation {
         collateral_reserve: &MarketReserve,
         loan_reserve: &MarketReserve,
         other: Option<Self>,
-    ) -> Result<(u64, LiquidationSettle), ProgramError> {
+    ) -> Result<(u64, RepaySettle), ProgramError> {
         // check valid
         self.validate_liquidation(other)?;
 
@@ -605,10 +605,8 @@ impl UserObligation {
             };
 
             // calculate repay amount
-            let incentive_ratio = Rate::one()
-                .try_add(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_bonus_ratio))?;
             let liquidation_amount = Decimal::from(amount)
-                .try_div(incentive_ratio)?
+                .try_div(Rate::one().try_add(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_bonus_ratio))?)?
                 .try_round_u64()?;
             let repay_decimal = collateral_reserve.market_price
                 .try_mul(collateral_reserve.exchange_collateral_to_liquidity(liquidation_amount)?)?
@@ -626,28 +624,27 @@ impl UserObligation {
             // update loans
             self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads.try_sub(repay_decimal)?;
 
-            Ok((amount, LiquidationSettle {
-                repay: repay_decimal.try_ceil_u64()?,
-                repay_decimal,
+            Ok((amount, RepaySettle {
+                amount: repay_decimal.try_ceil_u64()?,
+                amount_decimal: repay_decimal,
             }))
         } else {
             // input amount represents loan
-            // calculate repay amount
-            let repay_decimal = self.loans[loan_index].borrowed_amount_wads
+            // calculate repay amount            
+            let amount_decimal = self.loans[loan_index].borrowed_amount_wads
                 .try_mul(Rate::from_percent(loan_reserve.liquidity_info.config.close_factor))?
                 .min(Decimal::from(amount));
+            let amount = amount_decimal.try_ceil_u64()?;
             // update loans
-            self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads.try_sub(repay_decimal)?;
+            self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads.try_sub(amount_decimal)?;
 
             // calculate seize amount
-            let incentive_ratio = Rate::one()
-                .try_add(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_bonus_ratio))?;
             let seize_liquidity_amount = loan_reserve.market_price
                 .try_mul(amount)?
                 .try_div(calculate_decimals(loan_reserve.token_info.decimal)?)?
                 .try_mul(calculate_decimals(collateral_reserve.token_info.decimal)?)?
                 .try_div(collateral_reserve.market_price)?
-                .try_mul(incentive_ratio)?
+                .try_mul(Rate::one().try_add(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_bonus_ratio))?)?
                 .try_round_u64()?;
 
             // update collaterals
@@ -662,9 +659,9 @@ impl UserObligation {
                 return Err(LendingError::LiquidationSeizeTooSmall.into());
             }
 
-            Ok((seize_amount, LiquidationSettle {
-                repay: amount,
-                repay_decimal,
+            Ok((seize_amount, RepaySettle {
+                amount,
+                amount_decimal,
             }))
         }
     }
@@ -774,7 +771,7 @@ impl Pack for UserObligation {
         ];
 
         let version = u8::from_le_bytes(*version);
-        if version > PROGRAM_VERSION {
+        if version != PROGRAM_VERSION {
             msg!("UserObligation version does not match lending program version");
             return Err(ProgramError::InvalidAccountData);
         }

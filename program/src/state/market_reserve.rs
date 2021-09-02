@@ -109,6 +109,8 @@ impl Param for LiquidityConfig {
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LiquidityInfo {
     ///
+    pub enable: bool,
+    ///
     pub rate_oracle: Pubkey,
     ///
     pub available: u64,
@@ -140,6 +142,10 @@ impl LiquidityInfo {
     }
     ///
     pub fn deposit(&mut self, amount: u64) -> ProgramResult {
+        if !self.enable {
+            return Err(LendingError::MarketReserveDisabled.into());
+        }
+        
         if amount > self.config.max_deposit {
             return Err(LendingError::MarketReserveDepositTooMuch.into());
         }
@@ -156,6 +162,10 @@ impl LiquidityInfo {
     }
     ///
     pub fn withdraw(&mut self, amount: u64) -> ProgramResult {
+        if !self.enable {
+            return Err(LendingError::MarketReserveDisabled.into());
+        }
+
         self.available = self.available
             .checked_sub(amount)
             .ok_or(LendingError::MarketReserveLiquidityAvailableInsufficent)?;
@@ -164,6 +174,10 @@ impl LiquidityInfo {
     }
     ///
     pub fn borrow_out(&mut self, amount: u64) -> ProgramResult {
+        if !self.enable {
+            return Err(LendingError::MarketReserveDisabled.into());
+        }
+
         self.available = self.available
             .checked_sub(amount)
             .ok_or(LendingError::MarketReserveLiquidityAvailableInsufficent)?;
@@ -173,6 +187,10 @@ impl LiquidityInfo {
     }
     ///
     pub fn repay(&mut self, settle: RepaySettle) -> ProgramResult {
+        if !self.enable {
+            return Err(LendingError::MarketReserveDisabled.into());
+        }
+
         self.available = self.available
             .checked_add(settle.amount)
             .ok_or(LendingError::MathOverflow)?;
@@ -181,11 +199,15 @@ impl LiquidityInfo {
         Ok(())
     }
     ///
-    pub fn liquidate(&mut self, settle: LiquidationSettle) -> ProgramResult {
+    pub fn liquidate(&mut self, settle: RepaySettle) -> ProgramResult {
+        if !self.enable {
+            return Err(LendingError::MarketReserveDisabled.into());
+        }
+
         self.available = self.available
-            .checked_add(settle.repay)
+            .checked_add(settle.amount)
             .ok_or(LendingError::MathOverflow)?;
-        self.borrowed_amount_wads = self.borrowed_amount_wads.try_sub(settle.repay_decimal)?;
+        self.borrowed_amount_wads = self.borrowed_amount_wads.try_sub(settle.amount_decimal)?;
 
         Ok(())
     }
@@ -202,8 +224,6 @@ impl LiquidityInfo {
 pub struct MarketReserve {
     /// Version of the struct
     pub version: u8,
-    ///
-    pub enable: bool,
     ///
     pub last_update: LastUpdate,
     /// 
@@ -275,10 +295,6 @@ impl MarketReserve {
     }
     ///
     pub fn deposit(&mut self, amount: u64) -> Result<u64, ProgramError> {
-        if !self.enable {
-            return Err(LendingError::MarketReserveDisabled.into());
-        }
-
         let mint_amount = self.exchange_liquidity_to_collateral(amount)?;
         self.collateral_info.mint(mint_amount)?;
         self.liquidity_info.deposit(amount)?;
@@ -287,10 +303,6 @@ impl MarketReserve {
     }
     ///
     pub fn withdraw(&mut self, amount: u64) -> Result<u64, ProgramError> {
-        if !self.enable {
-            return Err(LendingError::MarketReserveDisabled.into());
-        }
-
         let mint_amount = self.exchange_collateral_to_liquidity(amount)?;
         self.collateral_info.burn(mint_amount)?;
         self.liquidity_info.withdraw(amount)?;
@@ -317,7 +329,6 @@ impl Pack for MarketReserve {
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             version,
-            enable,
             last_update,
             manager,
             market_price,
@@ -330,6 +341,7 @@ impl Pack for MarketReserve {
             borrow_value_ratio,
             liquidation_value_ratio,
             liquidation_bonus_ratio,
+            enable,
             rate_oracle,
             available,
             acc_borrow_rate_wads,
@@ -344,7 +356,6 @@ impl Pack for MarketReserve {
         ) = mut_array_refs![
             output,
             1,
-            1,
             LAST_UPDATE_LEN,
             PUBKEY_BYTES,
             16,
@@ -354,6 +365,7 @@ impl Pack for MarketReserve {
             1,
             PUBKEY_BYTES,
             8,
+            1,
             1,
             1,
             1,
@@ -371,7 +383,6 @@ impl Pack for MarketReserve {
         ];
 
         *version = self.version.to_le_bytes();
-        pack_bool(self.enable, enable);
         self.last_update.pack_into_slice(&mut last_update[..]);
         manager.copy_from_slice(self.manager.as_ref());
         pack_decimal(self.market_price, market_price);
@@ -388,6 +399,7 @@ impl Pack for MarketReserve {
         *liquidation_value_ratio = self.collateral_info.config.liquidation_value_ratio.to_le_bytes();
         *liquidation_bonus_ratio = self.collateral_info.config.liquidation_bonus_ratio.to_le_bytes();
 
+        pack_bool(self.liquidity_info.enable, enable);
         rate_oracle.copy_from_slice(self.liquidity_info.rate_oracle.as_ref());
         *available = self.liquidity_info.available.to_le_bytes();
         pack_decimal(self.liquidity_info.acc_borrow_rate_wads, acc_borrow_rate_wads);
@@ -406,7 +418,6 @@ impl Pack for MarketReserve {
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             version,
-            enable,
             last_update,
             manager,
             market_price,
@@ -419,6 +430,7 @@ impl Pack for MarketReserve {
             borrow_value_ratio,
             liquidation_value_ratio,
             liquidation_bonus_ratio,
+            enable,
             rate_oracle,
             available,
             acc_borrow_rate_wads,
@@ -433,7 +445,6 @@ impl Pack for MarketReserve {
         ) = array_refs![
             input,
             1,
-            1,
             LAST_UPDATE_LEN,
             PUBKEY_BYTES,
             16,
@@ -443,6 +454,7 @@ impl Pack for MarketReserve {
             1,
             PUBKEY_BYTES,
             8,
+            1,
             1,
             1,
             1,
@@ -460,14 +472,13 @@ impl Pack for MarketReserve {
         ];
 
         let version = u8::from_le_bytes(*version);
-        if version > PROGRAM_VERSION {
+        if version != PROGRAM_VERSION {
             msg!("MarketReserve version does not match lending program version");
             return Err(ProgramError::InvalidAccountData);
         }
 
         Ok(Self {
             version,
-            enable: unpack_bool(enable)?,
             last_update: LastUpdate::unpack_from_slice(&last_update[..])?,
             manager: Pubkey::new_from_array(*manager),
             market_price: unpack_decimal(market_price),
@@ -487,6 +498,7 @@ impl Pack for MarketReserve {
                 },
             },
             liquidity_info: LiquidityInfo {
+                enable: unpack_bool(enable)?,
                 rate_oracle: Pubkey::new_from_array(*rate_oracle),
                 available: u64::from_le_bytes(*available),
                 acc_borrow_rate_wads: unpack_decimal(acc_borrow_rate_wads),
@@ -506,8 +518,8 @@ impl Pack for MarketReserve {
 
 impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
     fn operate_unchecked(&mut self, param: P) -> ProgramResult {
-        if let Some(control) = <dyn Any>::downcast_ref::<ReserveControl>(&param) {
-            self.enable = control.0;
+        if let Some(control) = <dyn Any>::downcast_ref::<LiquidityControl>(&param) {
+            self.liquidity_info.enable = control.0;
             return Ok(())
         }
 
@@ -537,9 +549,9 @@ impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
 
 ///
 #[derive(Clone, Debug, Copy)]
-pub struct ReserveControl(pub bool);
+pub struct LiquidityControl(pub bool);
 
-impl Param for ReserveControl {
+impl Param for LiquidityControl {
     fn is_valid(&self) -> ProgramResult {
         Ok(())
     }
