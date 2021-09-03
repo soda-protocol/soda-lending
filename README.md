@@ -64,7 +64,7 @@ SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ
     - rent pubkey
     - clock pubkey
     - manager pubkey
-    - obligation pubkey
+    - obligation pubkey *Writable*
     - user authority pubkey
 - data
     - InitUserObligation
@@ -72,7 +72,7 @@ SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ
 ### <span id = "update_obligation">update obligation</span>
 - accounts
     - clock pubkey
-    - obligation pubkey
+    - obligation pubkey *Writable*
     - market reserve 1 pubkey
     - market reserve 2 pubkey
     - market reserve .. pubkey
@@ -84,13 +84,13 @@ SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ
 ### <span id = "update_market_reserves">update market reserves</span>
 - accounts
     - clock pubkey
-    - market reserve 1 pubkey
+    - market reserve 1 pubkey *Writable*
     - price oracle 1 pubkey
     - rate oracle 1 pubkey
-    - market reserve 2 pubkey
+    - market reserve 2 pubkey *Writable*
     - price oracle 2 pubkey
     - rate oracle 2 pubkey
-    - market reserve .. pubkey
+    - market reserve .. pubkey *Writable*
     - price oracle .. pubkey
     - rate oracle .. pubkey
 - data
@@ -103,13 +103,13 @@ SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ
     - clock pubkey
     - manager pubkey
     - manager authority pubkey
-    - market reserve pubkey
-    - sotoken mint pubkey
-    - manager token account pubkey
+    - market reserve pubkey *Writable*
+    - sotoken mint pubkey *Writable*
+    - manager token account pubkey *Writable*
     - rate oracle pubkey
     - user authority pubkey **Signer**
-    - user token account pubkey
-    - user sotoken account pubkey
+    - user token account pubkey *Writable*
+    - user sotoken account pubkey *Writable*
     - spl token program
 - data
     - Deposit{ amount }
@@ -117,10 +117,10 @@ SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ
 ### <span id = "pledge">pledge</span>
 - accounts
     - market reserve pubkey
-    - sotoken mint pubkey
-    - user obligation pubkey
+    - sotoken mint pubkey *Writable*
+    - user obligation pubkey *Writable*
     - user authority pubkey  **Signer**
-    - user sotoken account pubkey
+    - user sotoken account pubkey *Writable*
     - spl token program
 - data
     - PledgeCollateral{ amount }
@@ -130,11 +130,11 @@ SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ
     - clock pubkey
     - manager pubkey
     - manager authority pubkey 
-    - market reserve pubkey
-    - manager token account key
-    - user obligation pubkey
+    - market reserve pubkey *Writable*
+    - manager token account key *Writable*
+    - user obligation pubkey *Writable*
     - user authority pubkey  **Signer**
-    - user token account key
+    - user token account key *Writable*
     - spl token program
 - data
     - BorrowLiquidity{ amount }
@@ -142,12 +142,12 @@ SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ
 ### <span id = "repay">repay</span>
 - accounts
     - clock pubkey
-    - market reserve pubkey
-    - manager token account key
+    - market reserve pubkey *Writable*
+    - manager token account key *Writable*
     - rate oracle pubkey
-    - user obligation pubkey
+    - user obligation pubkey *Writable*
     - user authority pubkey  **Signer**
-    - user token account key
+    - user token account key *Writable*
     - spl token program
 - data
     - RepayLoan{ amount }
@@ -158,10 +158,10 @@ SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ
     - manager pubkey
     - manager authority pubkey
     - market reserve pubkey
-    - sotoken mint pubkey
-    - user obligation pubkey
+    - sotoken mint pubkey *Writable*
+    - user obligation pubkey *Writable*
     - user authority pubkey  **Signer**
-    - user sotoken account pubkey
+    - user sotoken account pubkey *Writable*
     - spl token program
 - data
     - RedeemCollateral{ amount }
@@ -171,10 +171,10 @@ SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ
     - manager pubkey
     - manager authority pubkey
     - market reserve pubkey
-    - sotoken mint pubkey
-    - user obligation pubkey
+    - sotoken mint pubkey *Writable*
+    - user obligation pubkey *Writable*
     - user authority pubkey  **Signer**
-    - user sotoken account pubkey
+    - user sotoken account pubkey *Writable*
     - spl token program
 - data
     - RedeemCollateralWithoutLoan{ amount }
@@ -184,13 +184,13 @@ SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ
     - clock pubkey
     - manager pubkey
     - manager authority pubkey
-    - market reserve pubkey
-    - sotoken mint pubkey
-    - manager token account pubkey
+    - market reserve pubkey *Writable*
+    - sotoken mint pubkey *Writable*
+    - manager token account pubkey *Writable*
     - rate oracle pubkey
     - user authority pubkey  **Signer**
-    - user token account pubkey
-    - user sotoken account pubkey
+    - user token account pubkey *Writable*
+    - user sotoken account pubkey *Writable*
     - spl token program
 - data
     - Withdraw{ amount }

@@ -89,6 +89,7 @@ fn unpack_coption_pubkey(src: &[u8; COPTION_LEN + PUBKEY_BYTES]) -> Result<COpti
         _ => Err(LendingError::COptionUnpackError.into()),
     }
 }
+
 #[allow(dead_code)]
 fn pack_coption_struct<T: Pack>(src: &COption<T>, dst: &mut [u8]) {
     let (tag, data) = dst.split_at_mut(COPTION_LEN);
@@ -100,6 +101,7 @@ fn pack_coption_struct<T: Pack>(src: &COption<T>, dst: &mut [u8]) {
         COption::None => tag.copy_from_slice(&COPTION_NONE_TAG[..]),
     }
 }
+
 #[allow(dead_code)]
 fn unpack_coption_struct<T: Pack>(src: &[u8]) -> Result<COption<T>, ProgramError> {
     let (tag, data) = src.split_at(COPTION_LEN);

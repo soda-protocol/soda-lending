@@ -5,7 +5,8 @@ use crate::{
     instruction::LendingInstruction,
     math::{Decimal, TryDiv, TryMul},
     pyth,
-    state::{CollateralConfig, CollateralInfo, LiquidityControl, LastUpdate,
+    state::{
+        CollateralConfig, CollateralInfo, LiquidityControl, LastUpdate,
         LiquidityConfig, LiquidityInfo, Manager, MarketReserve, Operator,
         Param, Pause, PROGRAM_VERSION, RateOracle, RateOracleConfig,
         ReservePriceOracle, ReserveRateOracle, TokenInfo, UserObligation,

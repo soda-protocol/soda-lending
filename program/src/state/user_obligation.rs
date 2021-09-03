@@ -13,7 +13,7 @@ use solana_program::{
 };
 use std::{convert::TryInto, cmp::Ordering, iter::Iterator, any::Any};
 
-///
+/// compute unit comsumed 160000-170000 for 8 
 const MAX_OBLIGATION_RESERVES: usize = 8;
 
 ///
@@ -805,7 +805,6 @@ impl<P: Any + Param + Copy> Operator<P> for UserObligation {
             let collateral = self.collaterals
                 .get_mut(config.index as usize)
                 .ok_or(LendingError::ObligationInvalidCollateralIndex)?;
-
             collateral.borrow_value_ratio = config.borrow_value_ratio;
             collateral.liquidation_value_ratio = config.liquidation_value_ratio;
 

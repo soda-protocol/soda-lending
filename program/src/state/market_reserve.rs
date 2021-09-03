@@ -271,7 +271,6 @@ impl MarketReserve {
     // m = m + (1-k) * d_m = [c - k(c-1)] * m
     // -----------------------------------------------------------------
     // we call k(c-1) fee_interest_rate here
-
     pub fn accrue_interest(&mut self, borrow_rate: Rate, slot: Slot) -> ProgramResult {
         let elapsed = self.last_update.slots_elapsed(slot)?;
         if elapsed > 0 {
@@ -516,6 +515,7 @@ impl Pack for MarketReserve {
     }
 }
 
+/// All Operations due MarketReserve
 impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
     fn operate_unchecked(&mut self, param: P) -> ProgramResult {
         if let Some(control) = <dyn Any>::downcast_ref::<LiquidityControl>(&param) {
