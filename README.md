@@ -77,7 +77,7 @@ SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ
     - market reserve 2 pubkey
     - market reserve .. pubkey
 - data
-    - UpdateUserObligation
+    - RefreshUserObligation
 - remark
     - **market reserve pubkeys 是用户obligation中collaterals和loans里包含的所有market reserve**
 
@@ -94,7 +94,7 @@ SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ
     - price oracle .. pubkey
     - rate oracle .. pubkey
 - data
-    - UpdateMarketReserves
+    - RefreshMarketReserves
 - remark
     - **market reserve pubkey 要按照用户obligation中collaterals和loans里的market reserve依次排序，rate oracle和price oracle要和market reserve对应**
 

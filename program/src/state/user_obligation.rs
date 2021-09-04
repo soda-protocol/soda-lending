@@ -291,9 +291,9 @@ impl UserObligation {
         }
     }
     ///
-    // need update obligation before
+    // need refresh obligation before
     pub fn unbind_friend(&mut self) -> ProgramResult {
-        if self.collaterals_liquidation_value < self.loans_value {
+        if self.collaterals_liquidation_value > self.loans_value {
             self.friend = COption::None;
 
             Ok(())
@@ -302,7 +302,7 @@ impl UserObligation {
         }
     }
     ///
-    // need update reserves before
+    // need refresh reserves before
     pub fn update_user_obligation<'a, I>(&mut self, reserve_iter: &mut I) -> ProgramResult
     where
         I: Iterator<Item = &'a (Pubkey, MarketReserve)>,
@@ -352,7 +352,7 @@ impl UserObligation {
         Ok(())
     }
     ///
-    // need update obligation before
+    // need refresh obligation before
     pub fn borrow_in(
         &mut self,
         amount: u64,
@@ -371,7 +371,7 @@ impl UserObligation {
         self.validate_borrow(other)
     }
     ///
-    // need update obligation before
+    // need refresh obligation before
     pub fn new_borrow_in(
         &mut self,
         amount: u64, 
@@ -451,7 +451,7 @@ impl UserObligation {
         }
     }
     ///
-    // need update obligation before
+    // need refresh obligation before
     pub fn redeem(
         &mut self,
         amount: u64,
@@ -503,7 +503,7 @@ impl UserObligation {
         }
     }
     ///
-    // need update obligation before
+    // need refresh obligation before
     #[allow(clippy::too_many_arguments)]
     pub fn replace_collateral(
         &mut self,
@@ -536,7 +536,7 @@ impl UserObligation {
         Ok(out_amount)
     }
     ///
-    // need update obligation before
+    // need refresh obligation before
     #[allow(clippy::too_many_arguments)]
     pub fn replace_collateral_for_new(
         &mut self,
@@ -572,7 +572,7 @@ impl UserObligation {
         Ok(out_amount)
     }
     ///
-    // need update obligation before
+    // need refresh obligation before
     #[allow(clippy::too_many_arguments)]
     pub fn liquidate(
         &mut self,
@@ -650,9 +650,6 @@ impl UserObligation {
                 seize_amount = self.collaterals[collateral_index].amount;
                 self.collaterals.remove(collateral_index);
             };
-            if seize_amount == 0 {
-                return Err(LendingError::LiquidationSeizeTooSmall.into());
-            }
 
             Ok((seize_amount, RepaySettle {
                 amount,

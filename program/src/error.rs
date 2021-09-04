@@ -71,9 +71,9 @@ pub enum LendingError {
     /// Invalid config value
     #[error("Input account must be a signer")]
     InvalidSigner,
-    /// Invalid account input
-    #[error("Invalid account input")]
-    InvalidAccountInput,
+    ///
+    #[error("Input flash loan account is not valid")]
+    InvalidFlashLoanInputAccount,
     /// Math operation overflow
     #[error("Math operation overflow")]
     MathOverflow,
@@ -103,9 +103,6 @@ pub enum LendingError {
     /// Liquidation repay amount too small
     #[error("Liquidation repaying liquidity amount is too small")]
     LiquidationRepayTooSmall,
-    /// Liquidation seize amount too small
-    #[error("Liquidation seize collateral amount is too small")]
-    LiquidationSeizeTooSmall,
 
     // 30
     ///
@@ -119,9 +116,6 @@ pub enum LendingError {
     /// Negative interest rate
     #[error("Interest rate is negative")]
     NegativeInterestRate,
-    /// Not enough liquidity after flash loan
-    #[error("Not enough liquidity after flash loan")]
-    NotEnoughLiquidityAfterFlashLoan,
     ///
     #[error("Obligation collaterals not matched")]
     ObligationCollateralsNotMatched,
@@ -164,10 +158,13 @@ pub enum LendingError {
     MarketReserveAccDepositTooMuch,
     ///
     #[error("Market Reserve liquidity available insufficient")]
-    MarketReserveLiquidityAvailableInsufficent,
+    MarketReserveInsufficentLiquidity,
     ///
     #[error("Market Reserve is stale")]
     MarketReserveStale,
+    ///
+    #[error("Flash loan repay insufficient")]
+    FlashLoanRepayInsufficient,
     ///
     #[error("Rate Oracle is not available")]
     RateOracleNotAvailable,

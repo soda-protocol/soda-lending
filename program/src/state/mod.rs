@@ -154,6 +154,16 @@ pub struct RepaySettle {
     pub amount_decimal: Decimal,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct FlashLoanSettle {
+    ///
+    pub amount: u64,
+    ///
+    pub amount_decimal: Decimal,
+    ///
+    pub fee_decimal: Decimal,
+}
+
 // #[cfg(test)]
 // mod test {
 //     use super::*;

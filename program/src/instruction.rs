@@ -37,7 +37,7 @@ pub enum LendingInstruction {
         liquidity_config: LiquidityConfig,
     },
     /// 3
-    UpdateMarketReserves,
+    RefreshMarketReserves,
     /// 4
     Deposit {
         ///
@@ -51,7 +51,7 @@ pub enum LendingInstruction {
     /// 6
     InitUserObligation,
     /// 7
-    UpdateUserObligation,
+    RefreshUserObligation,
     /// 8
     BindFriend,
     /// 9
@@ -168,7 +168,7 @@ impl LendingInstruction {
                 let (liquidity_config, _rest) = Self::unpack_liquidity_config(rest)?;
                 Self::InitMarketReserve { collateral_config, liquidity_config }
             }
-            3 => Self::UpdateMarketReserves,
+            3 => Self::RefreshMarketReserves,
             4 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::Deposit { amount }
@@ -178,7 +178,7 @@ impl LendingInstruction {
                 Self::Withdraw { amount }
             }
             6 => Self::InitUserObligation,
-            7 => Self::UpdateUserObligation,
+            7 => Self::RefreshUserObligation,
             8 => Self::BindFriend,
             9 => Self::UnbindFriend,
             10 => {
@@ -292,7 +292,7 @@ impl LendingInstruction {
 
     fn unpack_liquidity_config(input: &[u8]) -> Result<(LiquidityConfig, &[u8]), ProgramError> {
         let (close_factor, rest) = Self::unpack_u8(input)?;
-        let (borrow_fee_rate, rest) = Self::unpack_u8(rest)?;
+        let (borrow_tax_rate, rest) = Self::unpack_u8(rest)?;
         let (flash_loan_fee_rate, rest) = Self::unpack_u64(rest)?;
         let (max_deposit, rest) = Self::unpack_u64(rest)?;
         let (max_acc_deposit, rest) = Self::unpack_u64(rest)?;
@@ -300,7 +300,7 @@ impl LendingInstruction {
         Ok((
             LiquidityConfig {
                 close_factor,
-                borrow_fee_rate,
+                borrow_tax_rate,
                 flash_loan_fee_rate,
                 max_deposit,
                 max_acc_deposit,
@@ -410,7 +410,7 @@ impl LendingInstruction {
                 Self::pack_collateral_config(collateral_config, &mut buf);
                 Self::pack_liquidity_config(liquidity_config, &mut buf);
             }
-            Self::UpdateMarketReserves => buf.push(3),
+            Self::RefreshMarketReserves => buf.push(3),
             Self::Deposit { amount } => {
                 buf.push(4);
                 buf.extend_from_slice(&amount.to_le_bytes());
@@ -420,7 +420,7 @@ impl LendingInstruction {
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             Self::InitUserObligation => buf.push(6),
-            Self::UpdateUserObligation => buf.push(7),
+            Self::RefreshUserObligation => buf.push(7),
             Self::BindFriend => buf.push(8),
             Self::UnbindFriend => buf.push(9),
             Self::PledgeCollateral { amount } => {
@@ -515,7 +515,7 @@ impl LendingInstruction {
 
     fn pack_liquidity_config(config: LiquidityConfig, buf: &mut Vec<u8>) {
         buf.extend_from_slice(&config.close_factor.to_le_bytes());
-        buf.extend_from_slice(&config.borrow_fee_rate.to_le_bytes());
+        buf.extend_from_slice(&config.borrow_tax_rate.to_le_bytes());
         buf.extend_from_slice(&config.flash_loan_fee_rate.to_le_bytes());
         buf.extend_from_slice(&config.max_deposit.to_le_bytes());
         buf.extend_from_slice(&config.max_acc_deposit.to_le_bytes());
@@ -601,7 +601,7 @@ pub fn init_market_reserve(
     }
 }
 
-pub fn update_market_reserves(
+pub fn refresh_market_reserves(
     updating_keys: Vec<(Pubkey, Pubkey, Pubkey)>
 ) -> Instruction {
     let mut accounts = vec![AccountMeta::new_readonly(sysvar::clock::id(), false)];
@@ -622,7 +622,7 @@ pub fn update_market_reserves(
     Instruction {
         program_id: id(),
         accounts,
-        data: LendingInstruction::UpdateMarketReserves.pack(),
+        data: LendingInstruction::RefreshMarketReserves.pack(),
     }
 }
 
@@ -718,7 +718,7 @@ pub fn init_user_obligation(
     }
 }
 
-pub fn update_user_obligation(
+pub fn refresh_user_obligation(
     user_obligation_key: Pubkey,
     market_reserve_keys: Vec<Pubkey>,
 ) -> Instruction {
@@ -736,7 +736,7 @@ pub fn update_user_obligation(
     Instruction {
         program_id: id(),
         accounts,
-        data: LendingInstruction::UpdateUserObligation.pack(),
+        data: LendingInstruction::RefreshUserObligation.pack(),
     }
 }
 
@@ -773,7 +773,7 @@ pub fn unbind_friend(
             AccountMeta::new_readonly(user_authority_key, true),
             AccountMeta::new_readonly(friend_authority_key, true),
         ],
-        data: LendingInstruction::BindFriend.pack(),
+        data: LendingInstruction::UnbindFriend.pack(),
     }
 }
 

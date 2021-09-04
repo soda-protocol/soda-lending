@@ -83,7 +83,7 @@ pub struct LiquidityConfig {
     ///
     pub close_factor: u8,
     ///
-    pub borrow_fee_rate: u8,
+    pub borrow_tax_rate: u8,
     ///
     pub flash_loan_fee_rate: u64,
     ///
@@ -95,7 +95,7 @@ pub struct LiquidityConfig {
 impl Param for LiquidityConfig {
     fn assert_valid(&self) -> ProgramResult {
         if self.close_factor < 100 &&
-            self.borrow_fee_rate < 100 &&
+            self.borrow_tax_rate < 100 &&
             self.flash_loan_fee_rate < WAD &&
             self.max_deposit <= self.max_acc_deposit {
             Ok(())
@@ -115,6 +115,8 @@ pub struct LiquidityInfo {
     ///
     pub available: u64,
     ///
+    pub flash_loan_fee: u64,
+    ///
     pub acc_borrow_rate_wads: Decimal,
     ///
     pub borrowed_amount_wads: Decimal,
@@ -126,17 +128,17 @@ pub struct LiquidityInfo {
 
 impl LiquidityInfo {
     ///
-    pub fn total_amount(&self) -> Result<Decimal, ProgramError> {
+    fn total_supply(&self) -> Result<Decimal, ProgramError> {
         Decimal::from(self.available).try_add(self.borrowed_amount_wads)
     }
     ///
     pub fn utilization_rate(&self) -> Result<Rate, ProgramError> {
-        let total_amount = self.total_amount()?;
-        if total_amount == Decimal::zero() {
+        let total_supply = self.total_supply()?;
+        if total_supply == Decimal::zero() {
             Ok(Rate::zero())
         } else {
             self.borrowed_amount_wads
-                .try_div(self.total_amount()?)?
+                .try_div(total_supply)?
                 .try_into()
         }
     }
@@ -168,7 +170,7 @@ impl LiquidityInfo {
 
         self.available = self.available
             .checked_sub(amount)
-            .ok_or(LendingError::MarketReserveLiquidityAvailableInsufficent)?;
+            .ok_or(LendingError::MarketReserveInsufficentLiquidity)?;
 
         Ok(())
     }
@@ -180,11 +182,51 @@ impl LiquidityInfo {
 
         self.available = self.available
             .checked_sub(amount)
-            .ok_or(LendingError::MarketReserveLiquidityAvailableInsufficent)?;
+            .ok_or(LendingError::MarketReserveInsufficentLiquidity)?;
         self.borrowed_amount_wads = self.borrowed_amount_wads.try_add(Decimal::from(amount))?;
 
         Ok(())
     }
+    ///
+    pub fn calculate_flash_loan(&self, amount: u64) -> Result<(u64, u64), ProgramError> {
+        if !self.enable {
+            return Err(LendingError::MarketReserveDisabled.into());
+        }
+
+        let amount = self.available.max(amount);
+        let fee = Decimal::from(amount)
+            .try_mul(Rate::from_scaled_val(self.config.flash_loan_fee_rate))?
+            .try_ceil_u64()?;
+
+        Ok((amount, fee))
+    }
+    // ///
+    // pub fn flash_loan_borrow_out(&mut self, amount: u64) -> Result<(u64, FlashLoanSettle), ProgramError> {
+    //     if !self.enable {
+    //         return Err(LendingError::MarketReserveDisabled.into());
+    //     }
+
+    //     let amount = self.available.max(amount);
+    //     let amount_decimal = Decimal::from(amount);
+
+    //     self.available -= amount;
+    //     self.borrowed_amount_wads = self.borrowed_amount_wads.try_add(amount_decimal)?;
+
+    //     let fee_decimal = amount_decimal.try_mul(Rate::from_scaled_val(self.config.flash_loan_fee_rate))?;
+    //     let total_borrow = amount_decimal
+    //         .try_add(fee_decimal)?
+    //         .try_ceil_u64()?;
+
+    //     if total_borrow > 0 {
+    //         Ok((total_borrow, FlashLoanSettle {
+    //             amount,
+    //             amount_decimal,
+    //             fee_decimal,
+    //         }))
+    //     } else {
+    //         Err(LendingError::FlashLoanBorrowTooSmall.into())
+    //     }
+    // }
     ///
     pub fn repay(&mut self, settle: RepaySettle) -> ProgramResult {
         if !self.enable {
@@ -212,8 +254,22 @@ impl LiquidityInfo {
         Ok(())
     }
     ///
+    pub fn add_flash_loan_fee(&mut self, amount: u64) -> ProgramResult {
+        self.flash_loan_fee = self.flash_loan_fee
+            .checked_add(amount)
+            .ok_or(LendingError::MathOverflow)?;
+
+        Ok(())
+    }
+    ///
     pub fn reduce_insurance(&mut self, amount: u64) -> ProgramResult {
-        self.insurance_wads = self.insurance_wads.try_sub(Decimal::from(amount))?;
+        if amount <= self.flash_loan_fee {
+            self.flash_loan_fee -= amount;
+        } else {
+            let amount = amount - self.flash_loan_fee;
+            self.flash_loan_fee = 0;
+            self.insurance_wads = self.insurance_wads.try_sub(Decimal::from(amount))?;
+        }
         
         Ok(())
     }
@@ -239,26 +295,31 @@ pub struct MarketReserve {
 }
 
 impl MarketReserve {
-    fn exchange_rate(&self) -> Result<Rate, ProgramError> {
-        let total_amount = self.liquidity_info.total_amount()?;
-        if total_amount == Decimal::zero() {
-            Ok(Rate::one())
-        } else {
-            Decimal::from(self.collateral_info.total_mint)
-                .try_div(total_amount)?
-                .try_into()
-        }
-    }
     ///
     pub fn exchange_liquidity_to_collateral(&self, amount: u64) -> Result<u64, ProgramError> {
+        let total_supply = self.liquidity_info.total_supply()?;
+        let exchange_rate = if total_supply == Decimal::zero() {
+            Rate::one()
+        } else {
+            Decimal::from(self.collateral_info.total_mint)
+                .try_div(total_supply)?
+                .try_into()?
+        };
+
         Decimal::from(amount)
-            .try_mul(self.exchange_rate()?)?
+            .try_mul(exchange_rate)?
             .try_floor_u64()
     }
     ///
     pub fn exchange_collateral_to_liquidity(&self, amount: u64) -> Result<u64, ProgramError> {
+        let exchange_rate: Rate = self.liquidity_info
+            .total_supply()?
+            .try_sub(self.liquidity_info.insurance_wads)?
+            .try_div(Decimal::from(self.collateral_info.total_mint))?
+            .try_into()?;
+
         Decimal::from(amount)
-            .try_div(self.exchange_rate()?)?
+            .try_mul(exchange_rate)?
             .try_floor_u64()
     }
     /// 
@@ -267,26 +328,23 @@ impl MarketReserve {
     // fee rate: k
     // -----------------------------------------------------------------
     // d_m = m * (c-1)
-    // fee = k * d_m = [k(c-1)] * m
-    // m = m + (1-k) * d_m = [c - k(c-1)] * m
+    // d_fee = k * d_m = [k(c-1)] * m
+    // m = m + d_m
+    // fee = fee + d_fee
     // -----------------------------------------------------------------
-    // we call k(c-1) fee_interest_rate here
     pub fn accrue_interest(&mut self, borrow_rate: Rate, slot: Slot) -> ProgramResult {
         let elapsed = self.last_update.slots_elapsed(slot)?;
         if elapsed > 0 {
             let compounded_interest_rate = Rate::one()
                 .try_add(borrow_rate)?
                 .try_pow(elapsed)?;
-
-            self.liquidity_info.acc_borrow_rate_wads = self.liquidity_info.acc_borrow_rate_wads.try_mul(compounded_interest_rate)?;
-
             let fee_interest_rate = compounded_interest_rate
                 .try_sub(Rate::one())?
-                .try_mul(Rate::from_percent(self.liquidity_info.config.borrow_fee_rate))?;
-            let compounded_interest_rate = compounded_interest_rate.try_sub(fee_interest_rate)?;
-
+                .try_mul(Rate::from_percent(self.liquidity_info.config.borrow_tax_rate))?;
             let insurance_wads = self.liquidity_info.borrowed_amount_wads.try_mul(fee_interest_rate)?;
+
             self.liquidity_info.insurance_wads = self.liquidity_info.insurance_wads.try_add(insurance_wads)?;
+            self.liquidity_info.acc_borrow_rate_wads = self.liquidity_info.acc_borrow_rate_wads.try_mul(compounded_interest_rate)?;
             self.liquidity_info.borrowed_amount_wads = self.liquidity_info.borrowed_amount_wads.try_mul(compounded_interest_rate)?;
         }
 
@@ -318,7 +376,7 @@ impl IsInitialized for MarketReserve {
 }
 
 const MARKET_RESERVE_PADDING_LEN: usize = 128;
-const MARKET_RESERVE_LEN: usize = 441;
+const MARKET_RESERVE_LEN: usize = 449;
 
 impl Pack for MarketReserve {
     const LEN: usize = MARKET_RESERVE_LEN;
@@ -343,11 +401,12 @@ impl Pack for MarketReserve {
             enable,
             rate_oracle,
             available,
+            flash_loan_fee,
             acc_borrow_rate_wads,
             borrowed_amount_wads,
             insurance_wads,
             close_factor,
-            borrow_fee_rate,
+            borrow_tax_rate,
             flash_loan_fee_rate,
             max_deposit,
             max_acc_deposit,
@@ -369,6 +428,7 @@ impl Pack for MarketReserve {
             1,
             1,
             PUBKEY_BYTES,
+            8,
             8,
             16,
             16,
@@ -401,12 +461,13 @@ impl Pack for MarketReserve {
         pack_bool(self.liquidity_info.enable, enable);
         rate_oracle.copy_from_slice(self.liquidity_info.rate_oracle.as_ref());
         *available = self.liquidity_info.available.to_le_bytes();
+        *flash_loan_fee = self.liquidity_info.flash_loan_fee.to_le_bytes();
         pack_decimal(self.liquidity_info.acc_borrow_rate_wads, acc_borrow_rate_wads);
         pack_decimal(self.liquidity_info.borrowed_amount_wads, borrowed_amount_wads);
         pack_decimal(self.liquidity_info.insurance_wads, insurance_wads);
 
         *close_factor = self.liquidity_info.config.close_factor.to_le_bytes();
-        *borrow_fee_rate = self.liquidity_info.config.borrow_fee_rate.to_le_bytes();
+        *borrow_tax_rate = self.liquidity_info.config.borrow_tax_rate.to_le_bytes();
         *flash_loan_fee_rate = self.liquidity_info.config.flash_loan_fee_rate.to_le_bytes();
         *max_deposit = self.liquidity_info.config.max_deposit.to_le_bytes();
         *max_acc_deposit = self.liquidity_info.config.max_acc_deposit.to_le_bytes();
@@ -432,11 +493,12 @@ impl Pack for MarketReserve {
             enable,
             rate_oracle,
             available,
+            flash_loan_fee,
             acc_borrow_rate_wads,
             borrowed_amount_wads,
             insurance_wads,
             close_factor,
-            borrow_fee_rate,
+            borrow_tax_rate,
             flash_loan_fee_rate,
             max_deposit,
             max_acc_deposit,
@@ -458,6 +520,7 @@ impl Pack for MarketReserve {
             1,
             1,
             PUBKEY_BYTES,
+            8,
             8,
             16,
             16,
@@ -500,12 +563,13 @@ impl Pack for MarketReserve {
                 enable: unpack_bool(enable)?,
                 rate_oracle: Pubkey::new_from_array(*rate_oracle),
                 available: u64::from_le_bytes(*available),
+                flash_loan_fee: u64::from_le_bytes(*flash_loan_fee),
                 acc_borrow_rate_wads: unpack_decimal(acc_borrow_rate_wads),
                 borrowed_amount_wads: unpack_decimal(borrowed_amount_wads),
                 insurance_wads: unpack_decimal(insurance_wads),
                 config: LiquidityConfig {
                     close_factor: u8::from_le_bytes(*close_factor),
-                    borrow_fee_rate: u8::from_le_bytes(*borrow_fee_rate),
+                    borrow_tax_rate: u8::from_le_bytes(*borrow_tax_rate),
                     flash_loan_fee_rate: u64::from_le_bytes(*flash_loan_fee_rate),
                     max_deposit: u64::from_le_bytes(*max_deposit),
                     max_acc_deposit: u64::from_le_bytes(*max_acc_deposit),
