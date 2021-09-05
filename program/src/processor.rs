@@ -445,7 +445,6 @@ fn process_refresh_market_reserves(
             market_reserve.market_price = market_price;
             market_reserve.accrue_interest(borrow_rate, clock.slot)?;
             market_reserve.last_update.update_slot(clock.slot, false);
-
             // pack
             MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)
         })
@@ -525,7 +524,10 @@ fn process_deposit_or_withdraw<B: Bit>(
     market_reserve.last_update.update_slot(clock.slot, true);
 
     if B::BOOL {
+        let user_token_account_balance = Account::unpack(&user_token_account_info.try_borrow_data()?)?.amount;
+        let amount = calculate_amount(amount, user_token_account_balance);
         let mint_amount = market_reserve.deposit(amount)?;
+        // pack
         MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
 
         // transfer from user to manager
@@ -548,7 +550,10 @@ fn process_deposit_or_withdraw<B: Bit>(
             token_program: token_program_id.clone(),
         })
     } else {
+        let user_sotoken_account_balance = Account::unpack(&user_sotoken_account_info.try_borrow_data()?)?.amount;
+        let amount = calculate_amount(amount, user_sotoken_account_balance);
         let withdraw_amount = market_reserve.withdraw(amount)?;
+        // pack
         MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
     
         // burn sotoken
@@ -655,7 +660,6 @@ fn process_refresh_user_obligation(
     // update
     user_obligation.update_user_obligation(&mut reserves.iter())?;
     user_obligation.last_update.update_slot(clock.slot, false);
-
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
 }
@@ -707,7 +711,6 @@ fn process_bind_friend(
 
     user_obligation.bind_friend(*friend_obligation_info.key)?;
     friend_obligation.bind_friend(*user_obligation_info.key)?;
-
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
     UserObligation::pack(friend_obligation, &mut friend_obligation_info.try_borrow_mut_data()?)
@@ -814,17 +817,18 @@ fn process_pledge_collateral(
     }
     // 5
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
+    let user_sotoken_account_balance = Account::unpack(&user_sotoken_account_info.try_borrow_data()?)?.amount;
     // 6
     let token_program_id = next_account_info(account_info_iter)?;
 
     // handle obligation
+    let amount = calculate_amount(amount, user_sotoken_account_balance);
     if let Ok(index) = user_obligation.find_collateral(*market_reserve_info.key) {
         user_obligation.pledge(amount, index)?;
     } else {
         user_obligation.new_pledge(amount, *market_reserve_info.key, &market_reserve)?;
     }
     user_obligation.last_update.mark_stale();
-
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
     
@@ -937,7 +941,6 @@ fn process_redeem_collateral(
     // redeem in obligation
     let index = user_obligation.find_collateral(*market_reserve_info.key)?;
     let amount = user_obligation.redeem(amount, index, &market_reserve, friend_obligation)?;
-    
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
     
@@ -1038,8 +1041,7 @@ fn process_redeem_collateral_without_loan(
     // redeem in obligation
     let index = user_obligation.find_collateral(*market_reserve_info.key)?;
     let amount = user_obligation.redeem_without_loan(amount, index, friend_obligation)?;
-    user_obligation.last_update.mark_stale();
-    
+    user_obligation.last_update.mark_stale();    
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
     
@@ -1167,14 +1169,16 @@ fn process_replace_collateral(
     let user_out_sotoken_account_info = next_account_info(account_info_iter)?;
     // 12/13
     let user_in_sotoken_account_info = next_account_info(account_info_iter)?;
+    let user_in_sotoken_account_balance = Account::unpack(&user_in_sotoken_account_info.try_borrow_data()?)?.amount;
     // 13/14
     let token_program_id = next_account_info(account_info_iter)?;
 
     // replace
+    let in_amount = calculate_amount(amount, user_in_sotoken_account_balance);
     let out_index = user_obligation.find_collateral(*out_market_reserve_info.key)?;
     let out_amount = if let Ok(in_index) = user_obligation.find_collateral(*in_market_reserve_info.key) {
         user_obligation.replace_collateral(
-            amount,
+            in_amount,
             out_index,
             in_index,
             &out_market_reserve,
@@ -1183,7 +1187,7 @@ fn process_replace_collateral(
         )?
     } else {
         user_obligation.replace_collateral_for_new(
-            amount,
+            in_amount,
             out_index,
             *in_market_reserve_info.key,
             &out_market_reserve,
@@ -1191,7 +1195,6 @@ fn process_replace_collateral(
             friend_obligation,
         )?
     };
-
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
 
@@ -1209,7 +1212,7 @@ fn process_replace_collateral(
     spl_token_burn(TokenBurnParams {
         mint: in_sotoken_mint_info.clone(),
         source: user_in_sotoken_account_info.clone(),
-        amount,
+        amount: in_amount,
         authority: user_authority_info.clone(),
         authority_signer_seeds: &[],
         token_program: token_program_id.clone(),
@@ -1395,7 +1398,6 @@ fn process_repay_loan(
     user_obligation.last_update.mark_stale();
     // repay in reserve 
     market_reserve.liquidity_info.repay(settle)?;
-
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
@@ -1533,7 +1535,6 @@ fn process_liquidate<IsCollateral: Bit>(
     )?;
     user_obligation.last_update.mark_stale();
     loan_market_reserve.liquidity_info.repay(settle)?;
-
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
     MarketReserve::pack(loan_market_reserve, &mut loan_market_reserve_info.try_borrow_mut_data()?)?;

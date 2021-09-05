@@ -331,12 +331,12 @@ impl MarketReserve {
         Ok(mint_amount)
     }
     ///
-    pub fn withdraw(&mut self, burn_amount: u64) -> Result<u64, ProgramError> {
-        let amount = self.exchange_collateral_to_liquidity(burn_amount)?;
-        self.collateral_info.burn(burn_amount)?;
-        self.liquidity_info.withdraw(amount)?;
+    pub fn withdraw(&mut self, amount: u64) -> Result<u64, ProgramError> {
+        let withdraw_amount = self.exchange_collateral_to_liquidity(amount)?;
+        self.collateral_info.burn(amount)?;
+        self.liquidity_info.withdraw(withdraw_amount)?;
 
-        Ok(amount)
+        Ok(withdraw_amount)
     }
 }
 
