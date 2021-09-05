@@ -107,9 +107,25 @@ pub fn process_instruction(
             msg!("Instruction: Repay Loan: {}", amount);
             process_repay_loan(program_id, accounts, amount)
         }
-        LendingInstruction::Liquidate { by_collateral, amount } => {
-            msg!("Instruction: Liquidation: by collateral = {}, amount = {}", by_collateral, amount);
-            process_liquidate(program_id, accounts, by_collateral, amount)
+        LendingInstruction::LiquidateByCollateral { amount } => {
+            msg!("Instruction: Liquidate by collateral amount = {}", amount);
+            process_liquidate::<True>(program_id, accounts, amount)
+        }
+        LendingInstruction::LiquidateByLoan { amount } => {
+            msg!("Instruction: Liquidate by loan amount = {}", amount);
+            process_liquidate::<False>(program_id, accounts, amount)
+        }
+        LendingInstruction::FlashLiquidationByCollateral { amount } => {
+            msg!("Instruction: Flash Liquidation by Collateral: amount = {}", amount);
+            process_flash_liquidation::<True>(program_id, accounts, amount)
+        }
+        LendingInstruction::FlashLiquidationByLoan { amount } => {
+            msg!("Instruction: Flash Liquidation by Loan: amount = {}", amount);
+            process_flash_liquidation::<False>(program_id, accounts, amount)
+        }
+        LendingInstruction::FlashLoan { amount } => {
+            msg!("Instruction: Flash Loan: amount = {}", amount);
+            process_flash_loan(program_id, accounts, amount)
         }
         LendingInstruction::UpdateIndexedCollateralConfig { config } => {
             msg!("Instruction: Update User Obligation Collateral Config");
@@ -230,6 +246,7 @@ fn process_init_rate_oracle(
     RateOracle::pack(rate_oracle, &mut rate_oracle_info.try_borrow_mut_data()?)
 }
 
+#[inline(never)]
 fn process_init_market_reserve(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -434,6 +451,7 @@ fn process_refresh_market_reserves(
         })
 }
 
+#[inline(never)]
 fn process_deposit_or_withdraw<B: Bit>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -754,6 +772,7 @@ fn process_unbind_friend(
     UserObligation::pack(friend_obligation, &mut friend_obligation_info.try_borrow_mut_data()?)
 }
 
+#[inline(never)]
 fn process_pledge_collateral(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -821,6 +840,7 @@ fn process_pledge_collateral(
 }
 
 // must after update obligation
+#[inline(never)]
 fn process_redeem_collateral(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -932,6 +952,7 @@ fn process_redeem_collateral(
     })
 }
 
+#[inline(never)]
 fn process_redeem_collateral_without_loan(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -1034,6 +1055,7 @@ fn process_redeem_collateral_without_loan(
 }
 
 // must after update obligation
+#[inline(never)]
 fn process_replace_collateral(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -1195,6 +1217,7 @@ fn process_replace_collateral(
 }
 
 // must after update obligation
+#[inline(never)]
 fn process_borrow_liquidity(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -1311,6 +1334,7 @@ fn process_borrow_liquidity(
     })
 }
 
+#[inline(never)]
 fn process_repay_loan(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -1388,10 +1412,10 @@ fn process_repay_loan(
 }
 
 // must after update obligation
+#[inline(never)]
 fn process_liquidate<IsCollateral: Bit>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    by_collateral: bool,
     amount: u64,
 ) -> ProgramResult {
     if amount == 0 {
@@ -1535,11 +1559,12 @@ fn process_liquidate<IsCollateral: Bit>(
     })
 }
 
+// must after update obligation
+#[inline(never)]
 fn process_flash_liquidation<IsCollateral: Bit>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     amount: u64,
-    mut flash_liquidation_data: Vec<u8>,
 ) -> ProgramResult {
     if amount == 0 {
         msg!("Liquidation amount provided cannot be zero");
@@ -1635,8 +1660,8 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         None
     };
     // 9/10
-    let liquidator_collateral_token_account_info = next_account_info(account_info_iter)?;
-    // 11/12
+    let liquidator_token_account_info = next_account_info(account_info_iter)?;
+    // 10/11
     let token_program_id = next_account_info(account_info_iter)?;
     // 
     if account_info_iter.peek().is_none() {
@@ -1671,10 +1696,10 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     // prepare instruction and account infos
     let mut flash_loan_instruction_account_infos = vec![
         manager_loan_token_account_info.clone(),
-        liquidator_collateral_token_account_info.clone(),
+        liquidator_token_account_info.clone(),
         token_program_id.clone(),
     ];
-    // 12 ~
+    // 11 ~
     account_info_iter.try_for_each(|account_info| -> ProgramResult {
         if account_info.key != program_id {
             flash_loan_instruction_account_infos.push(account_info.clone());
@@ -1705,7 +1730,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     // transfer collateral from manager to liquidator
     spl_token_transfer(TokenTransferParams {
         source: manager_collateral_token_account_info.clone(),
-        destination: liquidator_collateral_token_account_info.clone(),
+        destination: liquidator_token_account_info.clone(),
         amount: collateral_amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
@@ -1713,8 +1738,13 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     })?;
 
     // do invoke
+    const FLASH_LIQUIDATION_DATA_LEN: usize = 1 + 8 + 8;
+    const FLASH_LIQUIDATION_TAG: u8 = u8::MAX;
+    let mut flash_liquidation_data = Vec::with_capacity(FLASH_LIQUIDATION_DATA_LEN);
+    flash_liquidation_data.push(FLASH_LIQUIDATION_TAG);
     flash_liquidation_data.extend_from_slice(&collateral_amount.to_le_bytes());
     flash_liquidation_data.extend_from_slice(&flash_loan_total_repay.to_le_bytes());
+
     invoke(
         &Instruction {
             program_id: *liquidator_program_id,
@@ -1735,11 +1765,12 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     MarketReserve::pack(loan_market_reserve, &mut loan_market_reserve_info.try_borrow_mut_data()?)
 }
 
+// must after update market reserve
+#[inline(never)]
 fn process_flash_loan(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     amount: u64,
-    mut flash_loan_data: Vec<u8>,
 ) -> ProgramResult {
     if amount == 0 {
         msg!("Flash loan amount provided cannot be zero");
@@ -1845,7 +1876,12 @@ fn process_flash_loan(
         .checked_add(flash_loan_total_repay)
         .ok_or(LendingError::MathOverflow)?;
 
+    const FLASH_LOAN_DATA_LEN: usize = 1 + 8;
+    const FLASH_LOAN_TAG: u8 = u8::MAX;
+    let mut flash_loan_data = Vec::with_capacity(FLASH_LOAN_DATA_LEN);
+    flash_loan_data.push(FLASH_LOAN_TAG);
     flash_loan_data.extend_from_slice(&flash_loan_total_repay.to_le_bytes());
+
     invoke(
         &Instruction {
             program_id: *receiver_program_id,
