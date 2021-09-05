@@ -145,6 +145,24 @@ fn calculate_decimals(decimal: u8) -> Result<u64, ProgramError> {
         .ok_or(LendingError::MathOverflow.into())
 }
 
+#[inline(always)]
+pub fn calculate_amount(amount: u64, max: u64) -> u64 {
+    if amount == u64::MAX {
+        max
+    } else {
+        amount
+    }
+}
+
+#[inline(always)]
+fn calculate_amount_pair(amount: u64, max: Decimal) -> Result<(u64, Decimal), ProgramError> {
+    if amount == u64::MAX {
+        Ok((max.try_ceil_u64()?, max))
+    } else {
+        Ok((amount, Decimal::from(amount)))
+    }
+}
+
 ///
 #[derive(Clone, Copy, Debug)]
 pub struct RepaySettle {

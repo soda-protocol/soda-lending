@@ -12,6 +12,7 @@ use solana_program::{
     pubkey::{Pubkey, PUBKEY_BYTES}
 };
 use std::{convert::TryInto, cmp::Ordering, iter::Iterator, any::Any};
+use typenum::Bit;
 
 /// compute unit comsumed 160000-170000 for 8 
 const MAX_OBLIGATION_RESERVES: usize = 8;
@@ -31,14 +32,14 @@ pub struct Collateral {
 
 impl Collateral {
     ///
-    pub fn borrow_effective_value(&self, reserve: &MarketReserve) -> Result<Decimal, ProgramError> {
+    fn borrow_effective_value(&self, reserve: &MarketReserve) -> Result<Decimal, ProgramError> {
         reserve.market_price
                 .try_mul(reserve.exchange_collateral_to_liquidity(self.amount)?)?
                 .try_div(calculate_decimals(reserve.token_info.decimal)?)?
                 .try_mul(Rate::from_percent(self.borrow_value_ratio))
     }
     ///
-    pub fn liquidation_effective_value(&self, reserve: &MarketReserve) -> Result<Decimal, ProgramError> {
+    fn liquidation_effective_value(&self, reserve: &MarketReserve) -> Result<Decimal, ProgramError> {
         reserve.market_price
             .try_mul(reserve.exchange_collateral_to_liquidity(self.amount)?)?
             .try_div(calculate_decimals(reserve.token_info.decimal)?)?
@@ -137,7 +138,7 @@ impl Loan {
         }
     }
     ///
-    pub fn calculate_loan_value(&self, reserve: &MarketReserve) -> Result<Decimal, ProgramError> {
+    fn calculate_loan_value(&self, reserve: &MarketReserve) -> Result<Decimal, ProgramError> {
         reserve.market_price
             .try_mul(self.borrowed_amount_wads.try_round_u64()?)?
             .try_div(calculate_decimals(reserve.token_info.decimal)?)
@@ -404,25 +405,19 @@ impl UserObligation {
         amount: u64,
         index: usize,
     ) -> Result<RepaySettle, ProgramError> {
-        let amount_decimal = Decimal::from(amount);
-        if amount_decimal >= self.loans[index].borrowed_amount_wads {
-            let amount_decimal = self.loans[index].borrowed_amount_wads;
+        let (amount, amount_decimal) = calculate_amount_pair(amount, self.loans[index].borrowed_amount_wads)?;
+
+        self.loans[index].borrowed_amount_wads = self.loans[index].borrowed_amount_wads.try_sub(amount_decimal)?;
+        if self.loans[index].borrowed_amount_wads == Decimal::zero() {
             self.loans.remove(index);
-
-            Ok(RepaySettle {
-                amount: amount_decimal.try_ceil_u64()?,
-                amount_decimal
-            })
-        } else {
-            self.loans[index].borrowed_amount_wads = self.loans[index].borrowed_amount_wads.try_sub(amount_decimal)?;
-
-            Ok(RepaySettle {
-                amount,
-                amount_decimal
-            })
         }
+
+        Ok(RepaySettle {
+            amount,
+            amount_decimal
+        })
     }
-    ///
+    /// mark stale later
     pub fn pledge(&mut self, amount: u64, index: usize) -> ProgramResult {
         self.collaterals[index].amount = self.collaterals[index].amount
             .checked_add(amount)
@@ -459,16 +454,14 @@ impl UserObligation {
         reserve: &MarketReserve,
         other: Option<Self>,
     ) -> Result<u64, ProgramError> {
-        let amount = if amount >= self.collaterals[index].amount {
-            let amount = self.collaterals[index].amount;
+        let amount = calculate_amount(amount, self.collaterals[index].amount);
+
+        self.collaterals[index].amount = self.collaterals[index].amount
+            .checked_sub(amount)
+            .ok_or(LendingError::ObligationCollateralInsufficient)?;
+        if self.collaterals[index].amount == 0 {
             self.collaterals.remove(index);
-
-            amount
-        } else {
-            self.collaterals[index].amount -= amount;
-
-            amount
-        };
+        }
 
         let value = reserve.market_price
             .try_mul(reserve.exchange_collateral_to_liquidity(amount)?)?
@@ -480,24 +473,22 @@ impl UserObligation {
         Ok(amount)
     }
     ///
-    pub fn redeem_without_loan(&mut self, amount: u64, index: usize, other: Option<Self>) -> Result<u64, ProgramError> {        
-        let is_empty = if let Some(other) = other {
-            other.loans.is_empty()
-        } else {
-            true
-        };
+    pub fn redeem_without_loan(&mut self, amount: u64, index: usize, other: Option<Self>) -> Result<u64, ProgramError> {
+        let is_empty = other
+            .map(|obligation| obligation.loans.is_empty())
+            .unwrap_or(true);
 
-        if self.loans.is_empty() && is_empty {
-            if amount >= self.collaterals[index].amount {
-                let amount = self.collaterals[index].amount;
+        if is_empty && self.loans.is_empty() {
+            let amount = calculate_amount(amount, self.collaterals[index].amount);
+
+            self.collaterals[index].amount = self.collaterals[index].amount
+                .checked_sub(amount)
+                .ok_or(LendingError::ObligationCollateralInsufficient)?;
+            if self.collaterals[index].amount == 0 {
                 self.collaterals.remove(index);
-
-                Ok(amount)
-            } else {
-                self.collaterals[index].amount -= amount;
-
-                Ok(amount)
             }
+
+            Ok(amount)
         } else {
             Err(LendingError::ObligationHasDept.into())
         }
@@ -548,8 +539,8 @@ impl UserObligation {
         other: Option<Self>,
     ) -> Result<u64, ProgramError> {
         let out_amount = self.collaterals[out_index].amount;
-        self.collaterals.remove(out_index);
 
+        self.collaterals.remove(out_index);
         self.collaterals.push(Collateral {
             reserve: in_key,
             amount: in_amount,
@@ -574,9 +565,8 @@ impl UserObligation {
     ///
     // need refresh obligation before
     #[allow(clippy::too_many_arguments)]
-    pub fn liquidate(
+    pub fn liquidate<IsCollateral: Bit>(
         &mut self,
-        by_collateral: bool,
         amount: u64,
         collateral_index: usize,
         loan_index: usize,
@@ -587,55 +577,61 @@ impl UserObligation {
         // check valid
         self.validate_liquidation(other)?;
 
-        if by_collateral {
+        if IsCollateral::BOOL {
             // input amount represents collateral
             // update collaterals
-            let amount = if self.collaterals[collateral_index].amount > amount {
-                self.collaterals[collateral_index].amount -= amount;
-                amount
-            } else {
-                let amount = self.collaterals[collateral_index].amount;
+            let collateral_amount = calculate_amount(amount, self.collaterals[collateral_index].amount);
+
+            self.collaterals[collateral_index].amount = self.collaterals[collateral_index].amount
+                .checked_sub(collateral_amount)
+                .ok_or(LendingError::ObligationCollateralInsufficient)?;
+            if self.collaterals[collateral_index].amount == 0 {
                 self.collaterals.remove(collateral_index);
-                amount
-            };
+            }
 
             // calculate repay amount
-            let liquidation_amount = Decimal::from(amount)
+            let liquidation_amount = Decimal::from(collateral_amount)
                 .try_div(Rate::one().try_add(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_bonus_ratio))?)?
                 .try_round_u64()?;
-            let repay_decimal = collateral_reserve.market_price
+            let repay_amount_decimal = collateral_reserve.market_price
                 .try_mul(collateral_reserve.exchange_collateral_to_liquidity(liquidation_amount)?)?
                 .try_div(calculate_decimals(collateral_reserve.token_info.decimal)?)?
                 .try_mul(calculate_decimals(loan_reserve.token_info.decimal)?)?
                 .try_div(loan_reserve.market_price)?;
 
             // repay amount check
-            let repay_decimal = self.loans[loan_index].borrowed_amount_wads
-                .try_mul(Rate::from_percent(loan_reserve.liquidity_info.config.close_factor))?
-                .min(repay_decimal);
-            if repay_decimal == Decimal::zero() {
+            if repay_amount_decimal == Decimal::zero() {
                 return Err(LendingError::LiquidationRepayTooSmall.into());
             }
+            let max_repay_amount_decimal = self.loans[loan_index].borrowed_amount_wads
+                .try_mul(Rate::from_percent(loan_reserve.liquidity_info.config.close_factor))?;
+            if repay_amount_decimal > max_repay_amount_decimal {
+                return Err(LendingError::LiquidationRepayTooMuch.into());
+            }
+
             // update loans
-            self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads.try_sub(repay_decimal)?;
+            self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads.try_sub(repay_amount_decimal)?;
 
             Ok((amount, RepaySettle {
-                amount: repay_decimal.try_ceil_u64()?,
-                amount_decimal: repay_decimal,
+                amount: repay_amount_decimal.try_ceil_u64()?,
+                amount_decimal: repay_amount_decimal,
             }))
         } else {
             // input amount represents loan
-            // calculate repay amount            
-            let amount_decimal = self.loans[loan_index].borrowed_amount_wads
-                .try_mul(Rate::from_percent(loan_reserve.liquidity_info.config.close_factor))?
-                .min(Decimal::from(amount));
-            let amount = amount_decimal.try_ceil_u64()?;
+            // calculate repay amount
+            let max_repay_amount_decimal = self.loans[loan_index].borrowed_amount_wads
+                .try_mul(Rate::from_percent(loan_reserve.liquidity_info.config.close_factor))?;
+            let (repay_amount, repay_amount_decimal) = calculate_amount_pair(amount, max_repay_amount_decimal)?;
+            if repay_amount_decimal > max_repay_amount_decimal {
+                return Err(LendingError::LiquidationRepayTooMuch.into());
+            }
+
             // update loans
-            self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads.try_sub(amount_decimal)?;
+            self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads.try_sub(repay_amount_decimal)?;
 
             // calculate seize amount
             let seize_liquidity_amount = loan_reserve.market_price
-                .try_mul(amount)?
+                .try_mul(repay_amount)?
                 .try_div(calculate_decimals(loan_reserve.token_info.decimal)?)?
                 .try_mul(calculate_decimals(collateral_reserve.token_info.decimal)?)?
                 .try_div(collateral_reserve.market_price)?
@@ -644,16 +640,16 @@ impl UserObligation {
 
             // update collaterals
             let mut seize_amount = collateral_reserve.exchange_liquidity_to_collateral(seize_liquidity_amount)?;
-            if self.collaterals[collateral_index].amount > seize_amount {
-                self.collaterals[collateral_index].amount -= seize_amount;
-            } else {
-                seize_amount = self.collaterals[collateral_index].amount;
+            self.collaterals[collateral_index].amount = self.collaterals[collateral_index].amount
+                .checked_sub(seize_amount)
+                .ok_or(LendingError::ObligationCollateralInsufficient)?;
+            if self.collaterals[collateral_index].amount == 0 {
                 self.collaterals.remove(collateral_index);
-            };
+            }
 
             Ok((seize_amount, RepaySettle {
-                amount,
-                amount_decimal,
+                amount: repay_amount,
+                amount_decimal: repay_amount_decimal,
             }))
         }
     }

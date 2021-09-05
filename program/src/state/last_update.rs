@@ -78,10 +78,10 @@ impl LastUpdate {
         self.stale = stale;
     }
 
-    /// Set stale to true
-    // pub fn mark_stale(&mut self) {
-    //     self.stale = true;
-    // }
+    // Set stale to true
+    pub fn mark_stale(&mut self) {
+        self.stale = true;
+    }
 
     /// Check if marked stale or last update slot is too long ago
     pub fn is_stale(&self, slot: Slot) -> Result<bool, ProgramError> {

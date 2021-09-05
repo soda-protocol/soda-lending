@@ -188,45 +188,26 @@ impl LiquidityInfo {
         Ok(())
     }
     ///
-    pub fn calculate_flash_loan(&self, amount: u64) -> Result<(u64, u64), ProgramError> {
+    pub fn flash_loan_borrow_out(&mut self, amount: u64) -> Result<(u64, u64), ProgramError> {
         if !self.enable {
             return Err(LendingError::MarketReserveDisabled.into());
         }
 
-        let amount = self.available.max(amount);
+        self.available = self.available
+            .checked_sub(amount)
+            .ok_or(LendingError::MarketReserveInsufficentLiquidity)?;
+        self.borrowed_amount_wads = self.borrowed_amount_wads.try_add(Decimal::from(amount))?;
+
         let fee = Decimal::from(amount)
             .try_mul(Rate::from_scaled_val(self.config.flash_loan_fee_rate))?
             .try_ceil_u64()?;
 
-        Ok((amount, fee))
+        let total_repay = amount
+            .checked_add(fee)
+            .ok_or(LendingError::MathOverflow)?;
+
+        Ok((total_repay, fee))
     }
-    // ///
-    // pub fn flash_loan_borrow_out(&mut self, amount: u64) -> Result<(u64, FlashLoanSettle), ProgramError> {
-    //     if !self.enable {
-    //         return Err(LendingError::MarketReserveDisabled.into());
-    //     }
-
-    //     let amount = self.available.max(amount);
-    //     let amount_decimal = Decimal::from(amount);
-
-    //     self.available -= amount;
-    //     self.borrowed_amount_wads = self.borrowed_amount_wads.try_add(amount_decimal)?;
-
-    //     let fee_decimal = amount_decimal.try_mul(Rate::from_scaled_val(self.config.flash_loan_fee_rate))?;
-    //     let total_borrow = amount_decimal
-    //         .try_add(fee_decimal)?
-    //         .try_ceil_u64()?;
-
-    //     if total_borrow > 0 {
-    //         Ok((total_borrow, FlashLoanSettle {
-    //             amount,
-    //             amount_decimal,
-    //             fee_decimal,
-    //         }))
-    //     } else {
-    //         Err(LendingError::FlashLoanBorrowTooSmall.into())
-    //     }
-    // }
     ///
     pub fn repay(&mut self, settle: RepaySettle) -> ProgramResult {
         if !self.enable {
@@ -241,22 +222,13 @@ impl LiquidityInfo {
         Ok(())
     }
     ///
-    pub fn liquidate(&mut self, settle: RepaySettle) -> ProgramResult {
-        if !self.enable {
-            return Err(LendingError::MarketReserveDisabled.into());
-        }
-
+    pub fn flash_loan_repay(&mut self, amount: u64, fee: u64) -> ProgramResult {
         self.available = self.available
-            .checked_add(settle.amount)
-            .ok_or(LendingError::MathOverflow)?;
-        self.borrowed_amount_wads = self.borrowed_amount_wads.try_sub(settle.amount_decimal)?;
-
-        Ok(())
-    }
-    ///
-    pub fn add_flash_loan_fee(&mut self, amount: u64) -> ProgramResult {
-        self.flash_loan_fee = self.flash_loan_fee
             .checked_add(amount)
+            .ok_or(LendingError::MarketReserveInsufficentLiquidity)?;
+        self.borrowed_amount_wads = self.borrowed_amount_wads.try_sub(Decimal::from(amount))?;
+        self.flash_loan_fee = self.flash_loan_fee
+            .checked_add(fee)
             .ok_or(LendingError::MathOverflow)?;
 
         Ok(())
@@ -359,12 +331,12 @@ impl MarketReserve {
         Ok(mint_amount)
     }
     ///
-    pub fn withdraw(&mut self, amount: u64) -> Result<u64, ProgramError> {
-        let mint_amount = self.exchange_collateral_to_liquidity(amount)?;
-        self.collateral_info.burn(mint_amount)?;
+    pub fn withdraw(&mut self, burn_amount: u64) -> Result<u64, ProgramError> {
+        let amount = self.exchange_collateral_to_liquidity(burn_amount)?;
+        self.collateral_info.burn(burn_amount)?;
         self.liquidity_info.withdraw(amount)?;
 
-        Ok(mint_amount)
+        Ok(amount)
     }
 }
 

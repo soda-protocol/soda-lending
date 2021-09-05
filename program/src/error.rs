@@ -73,7 +73,7 @@ pub enum LendingError {
     InvalidSigner,
     ///
     #[error("Input flash loan account is not valid")]
-    InvalidFlashLoanInputAccount,
+    InvalidFlashLoanAccountInput,
     /// Math operation overflow
     #[error("Math operation overflow")]
     MathOverflow,
@@ -103,7 +103,9 @@ pub enum LendingError {
     /// Liquidation repay amount too small
     #[error("Liquidation repaying liquidity amount is too small")]
     LiquidationRepayTooSmall,
-
+    /// Liquidation repay amount too small
+    #[error("Liquidation repaying liquidity amount is too much")]
+    LiquidationRepayTooMuch,
     // 30
     ///
     #[error("Obligation is already in binding")]
@@ -137,6 +139,9 @@ pub enum LendingError {
     ///
     #[error("Obligation collateral not found")]
     ObligationCollateralNotFound,
+    ///
+    #[error("Obligation collateral insufficient")]
+    ObligationCollateralInsufficient,
     ///
     #[error("Obligation loan not found")]
     ObligationLoanNotFound,
