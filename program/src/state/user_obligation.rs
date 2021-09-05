@@ -639,7 +639,7 @@ impl UserObligation {
                 .try_round_u64()?;
 
             // update collaterals
-            let mut seize_amount = collateral_reserve.exchange_liquidity_to_collateral(seize_liquidity_amount)?;
+            let seize_amount = collateral_reserve.exchange_liquidity_to_collateral(seize_liquidity_amount)?;
             self.collaterals[collateral_index].amount = self.collaterals[collateral_index].amount
                 .checked_sub(seize_amount)
                 .ok_or(LendingError::ObligationCollateralInsufficient)?;
