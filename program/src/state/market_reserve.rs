@@ -19,7 +19,7 @@ pub struct TokenInfo {
     ///
     pub mint_pubkey: Pubkey,
     ///
-    pub account: Pubkey,
+    pub supply_account: Pubkey,
     ///
     pub price_oracle: Pubkey,
     ///
@@ -362,7 +362,7 @@ impl Pack for MarketReserve {
             manager,
             market_price,
             mint_pubkey,
-            account,
+            supply_account,
             price_oracle,
             decimal,
             sotoken_mint_pubkey,
@@ -419,7 +419,7 @@ impl Pack for MarketReserve {
         pack_decimal(self.market_price, market_price);
 
         mint_pubkey.copy_from_slice(self.token_info.mint_pubkey.as_ref());
-        account.copy_from_slice(self.token_info.account.as_ref());
+        supply_account.copy_from_slice(self.token_info.supply_account.as_ref());
         price_oracle.copy_from_slice(self.token_info.price_oracle.as_ref());
         *decimal = self.token_info.decimal.to_le_bytes();
 
@@ -454,7 +454,7 @@ impl Pack for MarketReserve {
             manager,
             market_price,
             mint_pubkey,
-            account,
+            supply_account,
             price_oracle,
             decimal,
             sotoken_mint_pubkey,
@@ -518,7 +518,7 @@ impl Pack for MarketReserve {
             market_price: unpack_decimal(market_price),
             token_info: TokenInfo {
                 mint_pubkey: Pubkey::new_from_array(*mint_pubkey),
-                account: Pubkey::new_from_array(*account),
+                supply_account: Pubkey::new_from_array(*supply_account),
                 price_oracle: Pubkey::new_from_array(*price_oracle),
                 decimal: u8::from_le_bytes(*decimal),
             },

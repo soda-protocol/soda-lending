@@ -27,7 +27,7 @@ use solana_program::{
     pubkey::Pubkey,
     sysvar::{clock::Clock, rent::Rent, Sysvar}
 };
-use spl_token::{check_program_account, state::{Mint, Account}};
+use spl_token::{state::{Mint, Account}, check_program_account, native_mint};
 use typenum::{Bit, True, False};
 #[cfg(feature = "case-injection")]
 use typenum::{B0, B1};
@@ -281,7 +281,7 @@ fn process_init_market_reserve(
         return Err(LendingError::InvalidManagerAuthority.into());
     }
     // 5
-    let manager_token_account_info = next_account_info(account_info_iter)?;
+    let supply_token_account_info = next_account_info(account_info_iter)?;
     // 6
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
@@ -336,7 +336,7 @@ fn process_init_market_reserve(
     RateOracle::unpack(&rate_oracle_info.try_borrow_data()?)?;
     // 10
     let token_mint_info = next_account_info(account_info_iter)?;
-    let token_mint = Mint::unpack(&token_mint_info.try_borrow_data()?)?;
+    let token_decimals = get_token_decimals(token_mint_info)?;
     // 11
     let sotoken_mint_info = next_account_info(account_info_iter)?;
     // 12
@@ -363,9 +363,9 @@ fn process_init_market_reserve(
         market_price,
         token_info: TokenInfo {
             mint_pubkey: *token_mint_info.key,
-            account: *manager_token_account_info.key,
+            supply_account: *supply_token_account_info.key,
             price_oracle: *pyth_price_info.key,
-            decimal: token_mint.decimals,
+            decimal: token_decimals,
         },
         liquidity_info: LiquidityInfo {
             enable: true,
@@ -387,7 +387,7 @@ fn process_init_market_reserve(
 
     // init manager token account
     spl_token_init_account(TokenInitializeAccountParams {
-        account: manager_token_account_info.clone(),
+        account: supply_token_account_info.clone(),
         mint: token_mint_info.clone(),
         owner: manager_authority_info.clone(),
         rent: rent_info.clone(),
@@ -399,7 +399,7 @@ fn process_init_market_reserve(
         mint: sotoken_mint_info.clone(),
         rent: rent_info.clone(),
         authority: manager_authority_info.key,
-        decimals: token_mint.decimals,
+        decimals: token_decimals,
         token_program: token_program_id.clone(),
     })
 }
@@ -499,9 +499,9 @@ fn process_deposit_or_withdraw<B: Bit>(
         return Err(LendingError::InvalidSoTokenMint.into())
     }
     // 6
-    let manager_token_account_info = next_account_info(account_info_iter)?;
-    if manager_token_account_info.key != &market_reserve.token_info.account {
-        return Err(LendingError::InvalidManagerTokenAccount.into()); 
+    let supply_token_account_info = next_account_info(account_info_iter)?;
+    if supply_token_account_info.key != &market_reserve.token_info.supply_account {
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 7
     let rate_oracle_info = next_account_info(account_info_iter)?;
@@ -531,7 +531,7 @@ fn process_deposit_or_withdraw<B: Bit>(
         // transfer from user to manager
         spl_token_transfer(TokenTransferParams {
             source: user_token_account_info.clone(),
-            destination: manager_token_account_info.clone(),
+            destination: supply_token_account_info.clone(),
             amount,
             authority: user_authority_info.clone(),
             authority_signer_seeds: &[],
@@ -563,7 +563,7 @@ fn process_deposit_or_withdraw<B: Bit>(
     
         // transfer from manager to user
         spl_token_transfer(TokenTransferParams {
-            source: manager_token_account_info.clone(),
+            source: supply_token_account_info.clone(),
             destination: user_token_account_info.clone(),
             amount: withdraw_amount,
             authority: manager_authority_info.clone(),
@@ -1264,9 +1264,9 @@ fn process_borrow_liquidity(
         return Err(LendingError::MarketReserveStale.into());
     }
     // 5
-    let manager_token_account_info = next_account_info(account_info_iter)?;
-    if manager_token_account_info.key != &market_reserve.token_info.account {
-        return Err(LendingError::InvalidManagerTokenAccount.into()); 
+    let supply_token_account_info = next_account_info(account_info_iter)?;
+    if supply_token_account_info.key != &market_reserve.token_info.supply_account {
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 6
     let user_obligation_info = next_account_info(account_info_iter)?;
@@ -1325,7 +1325,7 @@ fn process_borrow_liquidity(
 
     // transfer token to user
     spl_token_transfer(TokenTransferParams {
-        source: manager_token_account_info.clone(),
+        source: supply_token_account_info.clone(),
         destination: user_token_account_info.clone(),
         amount,
         authority: manager_authority_info.clone(),
@@ -1356,9 +1356,9 @@ fn process_repay_loan(
     }
     let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     // 3
-    let manager_token_account_info = next_account_info(account_info_iter)?;
-    if manager_token_account_info.key != &market_reserve.token_info.account {
-        return Err(LendingError::InvalidManagerTokenAccount.into())
+    let supply_token_account_info = next_account_info(account_info_iter)?;
+    if supply_token_account_info.key != &market_reserve.token_info.supply_account {
+        return Err(LendingError::InvalidSupplyTokenAccount.into())
     }
     // 4
     let rate_oracle_info = next_account_info(account_info_iter)?;
@@ -1403,7 +1403,7 @@ fn process_repay_loan(
     // transfer to manager
     spl_token_transfer(TokenTransferParams {
         source: user_token_account_info.clone(),
-        destination: manager_token_account_info.clone(),
+        destination: supply_token_account_info.clone(),
         amount: settle.amount,
         authority: user_authority_info.clone(),
         authority_signer_seeds: &[],
@@ -1478,9 +1478,9 @@ fn process_liquidate<IsCollateral: Bit>(
         return Err(LendingError::MarketReserveStale.into());
     }
     // 7
-    let manager_token_account_info = next_account_info(account_info_iter)?;
-    if manager_token_account_info.key != &loan_market_reserve.token_info.account {
-        return Err(LendingError::InvalidManagerTokenAccount.into());
+    let supply_token_account_info = next_account_info(account_info_iter)?;
+    if supply_token_account_info.key != &loan_market_reserve.token_info.supply_account {
+        return Err(LendingError::InvalidSupplyTokenAccount.into());
     }
     // 8
     let user_obligation_info = next_account_info(account_info_iter)?;
@@ -1541,7 +1541,7 @@ fn process_liquidate<IsCollateral: Bit>(
     // transfer token to manager
     spl_token_transfer(TokenTransferParams {
         source: liquidator_token_account_info.clone(),
-        destination: manager_token_account_info.clone(),
+        destination: supply_token_account_info.clone(),
         amount: settle.amount,
         authority: liquidator_authority_info.clone(),
         authority_signer_seeds: &[],
@@ -1607,9 +1607,9 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         return Err(LendingError::MarketReserveStale.into());
     }
     // 5
-    let manager_collateral_token_account_info = next_account_info(account_info_iter)?;
-    if manager_collateral_token_account_info.key != &collateral_market_reserve.token_info.account {
-        return Err(LendingError::InvalidManagerTokenAccount.into());
+    let collateral_supply_account_info = next_account_info(account_info_iter)?;
+    if collateral_supply_account_info.key != &collateral_market_reserve.token_info.supply_account {
+        return Err(LendingError::InvalidSupplyTokenAccount.into());
     }
     // 6
     let loan_market_reserve_info = next_account_info(account_info_iter)?;
@@ -1626,9 +1626,9 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         return Err(LendingError::MarketReserveStale.into());
     }
     // 7
-    let manager_loan_token_account_info = next_account_info(account_info_iter)?;
-    if manager_loan_token_account_info.key != &loan_market_reserve.token_info.account {
-        return Err(LendingError::InvalidManagerTokenAccount.into());
+    let loan_supply_account_info = next_account_info(account_info_iter)?;
+    if loan_supply_account_info.key != &loan_market_reserve.token_info.supply_account {
+        return Err(LendingError::InvalidSupplyTokenAccount.into());
     }
     // 8
     let user_obligation_info = next_account_info(account_info_iter)?;
@@ -1695,7 +1695,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
 
     // prepare instruction and account infos
     let mut flash_loan_instruction_account_infos = vec![
-        manager_loan_token_account_info.clone(),
+        loan_supply_account_info.clone(),
         liquidator_token_account_info.clone(),
         token_program_id.clone(),
     ];
@@ -1723,13 +1723,13 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         }).collect::<Vec<_>>();
 
     // record loan balance before
-    let expect_loan_balance_after = Account::unpack(&manager_loan_token_account_info.try_borrow_data()?)?.amount
+    let expect_loan_balance_after = Account::unpack(&loan_supply_account_info.try_borrow_data()?)?.amount
         .checked_add(flash_loan_total_repay)
         .ok_or(LendingError::MathOverflow)?;
 
     // transfer collateral from manager to liquidator
     spl_token_transfer(TokenTransferParams {
-        source: manager_collateral_token_account_info.clone(),
+        source: collateral_supply_account_info.clone(),
         destination: liquidator_token_account_info.clone(),
         amount: collateral_amount,
         authority: manager_authority_info.clone(),
@@ -1755,7 +1755,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     )?;
 
     // check loan balance after balance
-    let loan_balance_after = Account::unpack(&manager_loan_token_account_info.try_borrow_data()?)?.amount;
+    let loan_balance_after = Account::unpack(&loan_supply_account_info.try_borrow_data()?)?.amount;
     if loan_balance_after < expect_loan_balance_after {
         return Err(LendingError::FlashLoanRepayInsufficient.into());
     }
@@ -1813,9 +1813,9 @@ fn process_flash_loan(
         return Err(LendingError::MarketReserveStale.into());
     }
     // 5
-    let manager_token_account_info = next_account_info(account_info_iter)?;
-    if manager_token_account_info.key != &market_reserve.token_info.account {
-        return Err(LendingError::InvalidManagerTokenAccount.into());
+    let supply_token_account_info = next_account_info(account_info_iter)?;
+    if supply_token_account_info.key != &market_reserve.token_info.supply_account {
+        return Err(LendingError::InvalidSupplyTokenAccount.into());
     }
     // 6
     let receiver_token_account_info = next_account_info(account_info_iter)?;
@@ -1835,7 +1835,7 @@ fn process_flash_loan(
 
     // prepare instruction and account infos
     let mut flash_loan_instruction_account_infos = vec![
-        manager_token_account_info.clone(),
+        supply_token_account_info.clone(),
         receiver_token_account_info.clone(),
         token_program_id.clone(),
     ];
@@ -1864,7 +1864,7 @@ fn process_flash_loan(
 
     // transfer to receiver
     spl_token_transfer(TokenTransferParams {
-        source: manager_token_account_info.clone(),
+        source: supply_token_account_info.clone(),
         destination: receiver_token_account_info.clone(),
         amount: borrow_amount,
         authority: manager_authority_info.clone(),
@@ -1872,7 +1872,7 @@ fn process_flash_loan(
         token_program: token_program_id.clone(),
     })?;
 
-    let expect_balance_after_flash_loan = Account::unpack(&manager_token_account_info.try_borrow_data()?)?.amount
+    let expect_balance_after_flash_loan = Account::unpack(&supply_token_account_info.try_borrow_data()?)?.amount
         .checked_add(flash_loan_total_repay)
         .ok_or(LendingError::MathOverflow)?;
 
@@ -1892,7 +1892,7 @@ fn process_flash_loan(
     )?;
 
     // check balance
-    let balance_after = Account::unpack(&manager_token_account_info.try_borrow_data()?)?.amount;
+    let balance_after = Account::unpack(&supply_token_account_info.try_borrow_data()?)?.amount;
     if balance_after < expect_balance_after_flash_loan {
         return Err(LendingError::FlashLoanRepayInsufficient.into());
     }
@@ -2050,9 +2050,9 @@ fn process_reduce_insurance(
         return Err(LendingError::InvalidMarketReserve.into());
     }
     // 4
-    let manager_token_account_info = next_account_info(account_info_iter)?;
-    if manager_token_account_info.key != &market_reserve.token_info.account {
-        return Err(LendingError::InvalidManagerTokenAccount.into()); 
+    let supply_token_account_info = next_account_info(account_info_iter)?;
+    if supply_token_account_info.key != &market_reserve.token_info.supply_account {
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 5
     let authority_info = next_account_info(account_info_iter)?;
@@ -2075,7 +2075,7 @@ fn process_reduce_insurance(
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
     // transfer
     spl_token_transfer(TokenTransferParams {
-        source: manager_token_account_info.clone(),
+        source: supply_token_account_info.clone(),
         destination: receiver_token_account_info.clone(),
         amount,
         authority: manager_authority_info.clone(),
@@ -2111,6 +2111,14 @@ fn process_inject_case<B: Bit>(
     }
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
+}
+
+fn get_token_decimals(account_info: &AccountInfo) -> Result<u8, ProgramError> {
+    if account_info.key == &native_mint::id() {
+        Ok(native_mint::DECIMALS)
+    } else {
+        Ok(Mint::unpack(&account_info.try_borrow_data()?)?.decimals)
+    }
 }
 
 fn assert_rent_exempt(rent: &Rent, account_info: &AccountInfo) -> ProgramResult {

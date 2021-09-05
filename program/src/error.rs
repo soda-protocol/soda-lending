@@ -35,8 +35,8 @@ pub enum LendingError {
     #[error("Manager authority is invalid")]
     InvalidManagerAuthority,
     ///
-    #[error("Invalid manager token account")]
-    InvalidManagerTokenAccount,
+    #[error("Invalid supply token account")]
+    InvalidSupplyTokenAccount,
     ///
     #[error("Market reserve is invalid")]
     InvalidMarketReserve,
