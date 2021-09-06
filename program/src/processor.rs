@@ -1875,7 +1875,7 @@ fn process_flash_loan(
             accounts: flash_loan_instruction_accounts,
             data: flash_loan_data,
         },
-        &flash_loan_instruction_account_infos,
+        &flash_loan_instruction_account_infos[..],
     )?;
 
     // check balance
