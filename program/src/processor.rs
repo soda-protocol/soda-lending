@@ -1664,10 +1664,11 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     let liquidator_token_account_info = next_account_info(account_info_iter)?;
     // 10/11
     let token_program_id = next_account_info(account_info_iter)?;
-    // 
-    if account_info_iter.peek().is_none() {
-        msg!("Expect flash loan receiver program id at least");
-        return Err(ProgramError::NotEnoughAccountKeys);
+    // 11/12
+    let liquidator_program_id = next_account_info(account_info_iter)?;
+    if liquidator_program_id.key == program_id {
+        msg!("Flash liquidator program can not be lending program");
+        return Err(LendingError::InvalidFlashLoanProgram.into());
     }
 
     // liquidate calculate first
@@ -1694,26 +1695,17 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     MarketReserve::pack(loan_market_reserve, &mut loan_market_reserve_info.try_borrow_mut_data()?)?;
     MarketReserve::pack(collateral_market_reserve, &mut collateral_market_reserve_info.try_borrow_mut_data()?)?;
 
-    // prepare instruction and account infos
+    // 12/13 ~
+    let account_infos = account_info_iter.map(|account_info| account_info.clone());
+    // prepare instruction and account infos    
     let mut flash_loan_instruction_account_infos = vec![
         loan_supply_account_info.clone(),
         liquidator_token_account_info.clone(),
         token_program_id.clone(),
     ];
-    // 11 ~
-    account_info_iter.try_for_each(|account_info| -> ProgramResult {
-        if account_info.key != program_id {
-            flash_loan_instruction_account_infos.push(account_info.clone());
+    flash_loan_instruction_account_infos.extend(account_infos);
 
-            Ok(())
-        } else {
-            msg!("Flash liquidation forbidding using any instruction in lending program");
-            Err(LendingError::InvalidFlashLoanAccountInput.into())
-        }
-    })?;
-    let boundary = flash_loan_instruction_account_infos.len() - 1;
-    let liquidator_program_id = flash_loan_instruction_account_infos[boundary].key;
-    let flash_loan_instruction_accounts = flash_loan_instruction_account_infos[..boundary]
+    let flash_loan_instruction_accounts = flash_loan_instruction_account_infos
         .iter()
         .map(|account_info| {
             AccountMeta {
@@ -1722,6 +1714,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
                 is_writable: account_info.is_writable,  
             }
         }).collect::<Vec<_>>();
+    flash_loan_instruction_account_infos.push(liquidator_program_id.clone());
 
     // record loan balance before
     let expect_loan_balance_after = Account::unpack(&loan_supply_account_info.try_borrow_data()?)?.amount
@@ -1748,7 +1741,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
 
     invoke(
         &Instruction {
-            program_id: *liquidator_program_id,
+            program_id: *liquidator_program_id.key,
             accounts: flash_loan_instruction_accounts,
             data: flash_liquidation_data,
         },
@@ -1822,10 +1815,11 @@ fn process_flash_loan(
     let receiver_token_account_info = next_account_info(account_info_iter)?;
     // 7
     let token_program_id = next_account_info(account_info_iter)?;
-    //
-    if account_info_iter.peek().is_none() {
-        msg!("Expect flash loan receiver program id at least");
-        return Err(ProgramError::NotEnoughAccountKeys);
+    // 8
+    let receiver_program_id = next_account_info(account_info_iter)?;
+    if receiver_program_id.key == program_id {
+        msg!("Flash Loan receiver program can not be lending program");
+        return Err(LendingError::InvalidFlashLoanProgram.into());
     }
 
     // flash loan borrow calculate
@@ -1834,26 +1828,17 @@ fn process_flash_loan(
     // pack
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
 
-    // prepare instruction and account infos
+    // 9 ~
+    let account_infos = account_info_iter.map(|account_info| account_info.clone());
+    // prepare instruction and account infos    
     let mut flash_loan_instruction_account_infos = vec![
         supply_token_account_info.clone(),
         receiver_token_account_info.clone(),
         token_program_id.clone(),
     ];
-    // 8 ~
-    account_info_iter.try_for_each(|account_info| -> ProgramResult {
-        if account_info.key != program_id {
-            flash_loan_instruction_account_infos.push(account_info.clone());
+    flash_loan_instruction_account_infos.extend(account_infos);
 
-            Ok(())
-        } else {
-            msg!("Flash liquidation forbidding using any instruction in lending program");
-            Err(LendingError::InvalidFlashLoanAccountInput.into())
-        }
-    })?;
-    let boundary = flash_loan_instruction_account_infos.len() - 1;
-    let receiver_program_id = flash_loan_instruction_account_infos[boundary].key;
-    let flash_loan_instruction_accounts = flash_loan_instruction_account_infos[..boundary]
+    let flash_loan_instruction_accounts = flash_loan_instruction_account_infos
         .iter()
         .map(|account_info| {
             AccountMeta {
@@ -1862,6 +1847,7 @@ fn process_flash_loan(
                 is_writable: account_info.is_writable,  
             }
         }).collect::<Vec<_>>();
+    flash_loan_instruction_account_infos.push(receiver_program_id.clone());
 
     // transfer to receiver
     spl_token_transfer(TokenTransferParams {
@@ -1885,7 +1871,7 @@ fn process_flash_loan(
 
     invoke(
         &Instruction {
-            program_id: *receiver_program_id,
+            program_id: *receiver_program_id.key,
             accounts: flash_loan_instruction_accounts,
             data: flash_loan_data,
         },

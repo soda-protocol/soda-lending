@@ -72,8 +72,8 @@ pub enum LendingError {
     #[error("Input account must be a signer")]
     InvalidSigner,
     ///
-    #[error("Input flash loan account is not valid")]
-    InvalidFlashLoanAccountInput,
+    #[error("Input flash loan program is invalid")]
+    InvalidFlashLoanProgram,
     /// Math operation overflow
     #[error("Math operation overflow")]
     MathOverflow,
