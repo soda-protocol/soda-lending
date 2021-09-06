@@ -1752,7 +1752,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
             accounts: flash_loan_instruction_accounts,
             data: flash_liquidation_data,
         },
-        &flash_loan_instruction_account_infos,
+        &flash_loan_instruction_account_infos[..],
     )?;
 
     // check loan balance after balance
