@@ -449,7 +449,7 @@ impl UserObligation {
         index: usize,
     ) -> Result<RepaySettle, ProgramError> {
         let (amount, amount_decimal) =
-            calculate_amount_and_decimal(amount, self.loans[index].borrowed_amount_wads.max(Decimal::from(balance)))?;
+            calculate_amount_and_decimal(amount, self.loans[index].borrowed_amount_wads.min(Decimal::from(balance)))?;
 
         self.loans[index].borrowed_amount_wads = self.loans[index].borrowed_amount_wads
             .try_sub(amount_decimal)
@@ -503,12 +503,14 @@ impl UserObligation {
     ) -> Result<u64, ProgramError> {
         let decimals = calculate_decimals(reserve.token_info.decimal)?;
         let (collaterals_borrow_value, loans_value) = self.get_borrow_and_loans_value(other)?;
-        let max_redeem_amount = collaterals_borrow_value
+        let max_redeem_liquidity_amount = collaterals_borrow_value
             .try_sub(loans_value)
             .map_err(|_| LendingError::ObligationNotHealthy)?
             .try_mul(decimals)?
             .try_div(reserve.market_price)?
-            .try_floor_u64()?
+            .try_floor_u64()?;
+        let max_redeem_amount = reserve
+            .exchange_liquidity_to_collateral(max_redeem_liquidity_amount)?
             .min(self.collaterals[index].amount);
 
         let amount = calculate_amount(amount, max_redeem_amount);
