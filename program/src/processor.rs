@@ -1385,6 +1385,7 @@ fn process_repay_loan(
     let user_authority_info = next_account_info(account_info_iter)?;
     // 7
     let user_token_account_info = next_account_info(account_info_iter)?;
+    let user_balance = Account::unpack(&user_token_account_info.try_borrow_data()?)?.amount;
     // 8
     let token_program_id = next_account_info(account_info_iter)?;    
 
@@ -1394,7 +1395,7 @@ fn process_repay_loan(
     // repay in obligation
     let index = user_obligation.find_loan(*market_reserve_info.key)?;
     user_obligation.loans[index].accrue_interest(&market_reserve)?;
-    let settle = user_obligation.repay(amount, index)?;
+    let settle = user_obligation.repay(amount, user_balance, index)?;
     user_obligation.last_update.mark_stale();
     // repay in reserve 
     market_reserve.liquidity_info.repay(settle)?;

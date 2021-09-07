@@ -98,7 +98,9 @@ pub enum LendingError {
     ///
     #[error("COption unpack error")]
     COptionUnpackError,
-
+    ///
+    #[error("Repaying liquidity amount is too much")]
+    RepayTooMuch,
     // 25
     /// Liquidation repay amount too small
     #[error("Liquidation repaying liquidity amount is too small")]

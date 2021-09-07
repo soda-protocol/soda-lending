@@ -155,7 +155,7 @@ pub fn calculate_amount(amount: u64, max: u64) -> u64 {
 }
 
 #[inline(always)]
-fn calculate_amount_pair(amount: u64, max: Decimal) -> Result<(u64, Decimal), ProgramError> {
+fn calculate_amount_and_decimal(amount: u64, max: Decimal) -> Result<(u64, Decimal), ProgramError> {
     if amount == u64::MAX {
         Ok((max.try_ceil_u64()?, max))
     } else {

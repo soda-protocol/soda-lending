@@ -231,23 +231,37 @@ pub struct UserObligation {
 
 impl UserObligation {
     ///
-    fn validate_borrow(&self, other: Option<Self>) -> ProgramResult {
-        let (collaterals_borrow_value, loans_value) = if let Some(other) = other {
+    fn get_borrow_and_loans_value(&self, other: Option<Self>) -> Result<(Decimal, Decimal), ProgramError> {
+        if let Some(other) = other {
             let collaterals_borrow_value = self.collaterals_borrow_value
                 .try_add(other.collaterals_borrow_value)?;
             let loans_value = self.loans_value.try_add(other.loans_value)?;
 
-            (collaterals_borrow_value, loans_value)
+            Ok((collaterals_borrow_value, loans_value))
         } else {
-            (self.collaterals_borrow_value, self.loans_value)
-        };
-
-        if collaterals_borrow_value > loans_value {
-            Ok(())
-        } else {
-            Err(LendingError::ObligationNotHealthy.into())
+            Ok((self.collaterals_borrow_value, self.loans_value))
         }
+
+        // collaterals_borrow_value
+        //     .try_sub(loans_value)
+        //     .map_err(|_| LendingError::ObligationNotHealthy.into())
     }
+    ///
+    // fn calculate_dept_value(&self, other: Option<Self>) -> Result<Decimal, ProgramError> {
+    //     let (collaterals_borrow_value, loans_value) = if let Some(other) = other {
+    //         let collaterals_borrow_value = self.collaterals_borrow_value
+    //             .try_add(other.collaterals_borrow_value)?;
+    //         let loans_value = self.loans_value.try_add(other.loans_value)?;
+
+    //         (collaterals_borrow_value, loans_value)
+    //     } else {
+    //         (self.collaterals_borrow_value, self.loans_value)
+    //     };
+
+    //     collaterals_borrow_value
+    //         .try_sub(loans_value)
+    //         .map_err(|_| LendingError::ObligationNotHealthy.into())
+    // }
     ///
     fn validate_liquidation(&self, other: Option<Self>) -> ProgramResult {
         let (collaterals_liquidation_value, loans_value) = if let Some(other) = other {
@@ -360,16 +374,29 @@ impl UserObligation {
         index: usize,
         reserve: &MarketReserve,
         other: Option<Self>,
-    ) -> ProgramResult {
-        self.loans[index].borrowed_amount_wads = self.loans[index].borrowed_amount_wads
-            .try_add(Decimal::from(amount))?;
+    ) -> Result<u64, ProgramError> {
+        let decimals = calculate_decimals(reserve.token_info.decimal)?;
+        let (collaterals_borrow_value, loans_value) = self.get_borrow_and_loans_value(other)?;
+        let max_borrow_amount = collaterals_borrow_value
+            .try_sub(loans_value)
+            .map_err(|_| LendingError::ObligationNotHealthy)?
+            .try_mul(decimals)?
+            .try_div(reserve.market_price)?
+            .try_floor_u64()?;
+
+        let amount = calculate_amount(amount, max_borrow_amount);
+        if amount > max_borrow_amount {
+            msg!("Borrow too much!");
+            return Err(LendingError::ObligationNotHealthy.into());
+        }
+
+        self.loans[index].borrowed_amount_wads = self.loans[index].borrowed_amount_wads.try_add(Decimal::from(amount))?;
 
         let value = reserve.market_price
             .try_mul(amount)?
-            .try_div(calculate_decimals(reserve.token_info.decimal)?)?;
+            .try_div(decimals)?;
         self.loans_value = self.loans_value.try_add(value)?;
-
-        self.validate_borrow(other)
+        Ok(amount)
     }
     ///
     // need refresh obligation before
@@ -379,9 +406,24 @@ impl UserObligation {
         key: Pubkey,
         reserve: &MarketReserve,
         other: Option<Self>,
-    ) -> ProgramResult {
+    ) -> Result<u64, ProgramError> {
         if self.collaterals.len() + self.loans.len() >= MAX_OBLIGATION_RESERVES {
             return Err(LendingError::ObligationReservesFull.into());
+        }
+
+        let decimals = calculate_decimals(reserve.token_info.decimal)?;
+        let (collaterals_borrow_value, loans_value) = self.get_borrow_and_loans_value(other)?;
+        let max_borrow_amount = collaterals_borrow_value
+            .try_sub(loans_value)
+            .map_err(|_| LendingError::ObligationNotHealthy)?
+            .try_mul(decimals)?
+            .try_div(reserve.market_price)?
+            .try_floor_u64()?;
+
+        let amount = calculate_amount(amount, max_borrow_amount);
+        if amount > max_borrow_amount {
+            msg!("Borrow too much!");
+            return Err(LendingError::ObligationNotHealthy.into());
         }
 
         self.loans.push(Loan{
@@ -393,21 +435,26 @@ impl UserObligation {
 
         let value = reserve.market_price
             .try_mul(amount)?
-            .try_div(calculate_decimals(reserve.token_info.decimal)?)?;
+            .try_div(decimals)?;
         self.loans_value = self.loans_value.try_add(value)?;
 
-        self.validate_borrow(other)
+        Ok(amount)
     }
     ///
     // need accure reserve and obligation interest before
     pub fn repay(
         &mut self,
         amount: u64,
+        balance: u64,
         index: usize,
     ) -> Result<RepaySettle, ProgramError> {
-        let (amount, amount_decimal) = calculate_amount_pair(amount, self.loans[index].borrowed_amount_wads)?;
+        let (amount, amount_decimal) =
+            calculate_amount_and_decimal(amount, self.loans[index].borrowed_amount_wads.max(Decimal::from(balance)))?;
 
-        self.loans[index].borrowed_amount_wads = self.loans[index].borrowed_amount_wads.try_sub(amount_decimal)?;
+        self.loans[index].borrowed_amount_wads = self.loans[index].borrowed_amount_wads
+            .try_sub(amount_decimal)
+            .map_err(|_| LendingError::RepayTooMuch)?;
+
         if self.loans[index].borrowed_amount_wads == Decimal::zero() {
             self.loans.remove(index);
         }
@@ -454,21 +501,31 @@ impl UserObligation {
         reserve: &MarketReserve,
         other: Option<Self>,
     ) -> Result<u64, ProgramError> {
-        let amount = calculate_amount(amount, self.collaterals[index].amount);
+        let decimals = calculate_decimals(reserve.token_info.decimal)?;
+        let (collaterals_borrow_value, loans_value) = self.get_borrow_and_loans_value(other)?;
+        let max_redeem_amount = collaterals_borrow_value
+            .try_sub(loans_value)
+            .map_err(|_| LendingError::ObligationNotHealthy)?
+            .try_mul(decimals)?
+            .try_div(reserve.market_price)?
+            .try_floor_u64()?
+            .min(self.collaterals[index].amount);
 
-        self.collaterals[index].amount = self.collaterals[index].amount
-            .checked_sub(amount)
-            .ok_or(LendingError::ObligationCollateralInsufficient)?;
+        let amount = calculate_amount(amount, max_redeem_amount);
+        if amount > max_redeem_amount {
+            msg!("Redeem too much!");
+            return Err(LendingError::ObligationNotHealthy.into());
+        }
+
+        self.collaterals[index].amount -= amount;
         if self.collaterals[index].amount == 0 {
             self.collaterals.remove(index);
         }
 
         let value = reserve.market_price
             .try_mul(reserve.exchange_collateral_to_liquidity(amount)?)?
-            .try_div(calculate_decimals(reserve.token_info.decimal)?)?;
+            .try_div(decimals)?;
         self.collaterals_borrow_value = self.collaterals_borrow_value.try_sub(value)?;
-
-        self.validate_borrow(other)?;
 
         Ok(amount)
     }
@@ -522,9 +579,12 @@ impl UserObligation {
             .try_sub(out_value)?
             .try_add(in_value)?;
 
-        self.validate_borrow(other)?;
-
-        Ok(out_amount)
+        let (collaterals_borrow_value, loans_value) = self.get_borrow_and_loans_value(other)?;
+        if collaterals_borrow_value >= loans_value {
+            Ok(out_amount)
+        } else {
+            Err(LendingError::ObligationNotHealthy.into())
+        }
     }
     ///
     // need refresh obligation before
@@ -558,9 +618,12 @@ impl UserObligation {
             .try_sub(out_value)?
             .try_add(in_value)?;
 
-        self.validate_borrow(other)?;
-
-        Ok(out_amount)
+        let (collaterals_borrow_value, loans_value) = self.get_borrow_and_loans_value(other)?;
+        if collaterals_borrow_value >= loans_value {
+            Ok(out_amount)
+        } else {
+            Err(LendingError::ObligationNotHealthy.into())
+        }
     }
     ///
     // need refresh obligation before
@@ -621,7 +684,7 @@ impl UserObligation {
             // calculate repay amount
             let max_repay_amount_decimal = self.loans[loan_index].borrowed_amount_wads
                 .try_mul(Rate::from_percent(loan_reserve.liquidity_info.config.close_ratio))?;
-            let (repay_amount, repay_amount_decimal) = calculate_amount_pair(amount, max_repay_amount_decimal)?;
+            let (repay_amount, repay_amount_decimal) = calculate_amount_and_decimal(amount, max_repay_amount_decimal)?;
             if repay_amount_decimal > max_repay_amount_decimal {
                 return Err(LendingError::LiquidationRepayTooMuch.into());
             }
