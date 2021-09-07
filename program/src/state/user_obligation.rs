@@ -116,7 +116,7 @@ pub struct Loan {
     /// Amount of liquidity borrowed plus interest
     pub borrowed_amount_wads: Decimal,
     ///
-    pub close_factor: u8,
+    pub close_ratio: u8,
 }
 
 impl Loan {
@@ -160,7 +160,7 @@ impl Pack for Loan {
             reserve,
             acc_borrow_rate_wads,
             borrowed_amount_wads,
-            close_factor,
+            close_ratio,
             _padding,
         ) = mut_array_refs![
             output,
@@ -174,7 +174,7 @@ impl Pack for Loan {
         reserve.copy_from_slice(self.reserve.as_ref());
         pack_decimal(self.acc_borrow_rate_wads, acc_borrow_rate_wads);
         pack_decimal(self.borrowed_amount_wads, borrowed_amount_wads);
-        *close_factor = self.close_factor.to_le_bytes();
+        *close_ratio = self.close_ratio.to_le_bytes();
     }
 
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -184,7 +184,7 @@ impl Pack for Loan {
             reserve,
             acc_borrow_rate_wads,
             borrowed_amount_wads,
-            close_factor,
+            close_ratio,
             _padding,
         ) = array_refs![
             input,
@@ -199,7 +199,7 @@ impl Pack for Loan {
             reserve: Pubkey::new_from_array(*reserve),
             acc_borrow_rate_wads: unpack_decimal(acc_borrow_rate_wads),
             borrowed_amount_wads: unpack_decimal(borrowed_amount_wads),
-            close_factor: u8::from_le_bytes(*close_factor),
+            close_ratio: u8::from_le_bytes(*close_ratio),
         })
     }
 }
@@ -388,7 +388,7 @@ impl UserObligation {
             reserve: key,
             acc_borrow_rate_wads: reserve.liquidity_info.acc_borrow_rate_wads,
             borrowed_amount_wads: Decimal::from(amount),
-            close_factor: reserve.liquidity_info.config.close_factor,
+            close_ratio: reserve.liquidity_info.config.close_ratio,
         });
 
         let value = reserve.market_price
@@ -604,7 +604,7 @@ impl UserObligation {
                 return Err(LendingError::LiquidationRepayTooSmall.into());
             }
             let max_repay_amount_decimal = self.loans[loan_index].borrowed_amount_wads
-                .try_mul(Rate::from_percent(loan_reserve.liquidity_info.config.close_factor))?;
+                .try_mul(Rate::from_percent(loan_reserve.liquidity_info.config.close_ratio))?;
             if repay_amount_decimal > max_repay_amount_decimal {
                 return Err(LendingError::LiquidationRepayTooMuch.into());
             }
@@ -620,7 +620,7 @@ impl UserObligation {
             // input amount represents loan
             // calculate repay amount
             let max_repay_amount_decimal = self.loans[loan_index].borrowed_amount_wads
-                .try_mul(Rate::from_percent(loan_reserve.liquidity_info.config.close_factor))?;
+                .try_mul(Rate::from_percent(loan_reserve.liquidity_info.config.close_ratio))?;
             let (repay_amount, repay_amount_decimal) = calculate_amount_pair(amount, max_repay_amount_decimal)?;
             if repay_amount_decimal > max_repay_amount_decimal {
                 return Err(LendingError::LiquidationRepayTooMuch.into());
@@ -808,7 +808,7 @@ impl<P: Any + Param + Copy> Operator<P> for UserObligation {
             let loan = self.loans
                 .get_mut(config.index as usize)
                 .ok_or(LendingError::ObligationInvalidLoanIndex)?;
-            loan.close_factor = config.close_factor;
+            loan.close_ratio = config.close_ratio;
 
             return Ok(());
         }
@@ -843,12 +843,12 @@ pub struct IndexedLoanConfig {
     ///
     pub index: u8,
     ///
-    pub close_factor: u8,
+    pub close_ratio: u8,
 }
 
 impl Param for IndexedLoanConfig {
     fn assert_valid(&self) -> ProgramResult {
-        if self.close_factor < 100 {
+        if self.close_ratio < 100 {
             Ok(())
         } else {
             Err(LendingError::InvalidIndexedLoanConfig.into())

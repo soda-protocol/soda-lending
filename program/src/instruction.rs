@@ -301,9 +301,9 @@ impl LendingInstruction {
 
     fn unpack_indexed_loan_config(input: &[u8]) -> Result<(IndexedLoanConfig, &[u8]), ProgramError> {
         let (index, rest) = Self::unpack_u8(input)?;
-        let (close_factor, rest) = Self::unpack_u8(rest)?;
+        let (close_ratio, rest) = Self::unpack_u8(rest)?;
 
-        Ok((IndexedLoanConfig { index, close_factor }, rest))
+        Ok((IndexedLoanConfig { index, close_ratio }, rest))
     }
 
     fn unpack_rate_oracle_config(input: &[u8]) -> Result<(RateOracleConfig, &[u8]), ProgramError> {
@@ -324,7 +324,7 @@ impl LendingInstruction {
     }
 
     fn unpack_liquidity_config(input: &[u8]) -> Result<(LiquidityConfig, &[u8]), ProgramError> {
-        let (close_factor, rest) = Self::unpack_u8(input)?;
+        let (close_ratio, rest) = Self::unpack_u8(input)?;
         let (borrow_tax_rate, rest) = Self::unpack_u8(rest)?;
         let (flash_loan_fee_rate, rest) = Self::unpack_u64(rest)?;
         let (max_deposit, rest) = Self::unpack_u64(rest)?;
@@ -332,7 +332,7 @@ impl LendingInstruction {
 
         Ok((
             LiquidityConfig {
-                close_factor,
+                close_ratio,
                 borrow_tax_rate,
                 flash_loan_fee_rate,
                 max_deposit,
@@ -509,7 +509,7 @@ impl LendingInstruction {
             Self::UpdateIndexedLoanConfig { config } => {
                 buf.push(22);
                 buf.extend_from_slice(&config.index.to_le_bytes());
-                buf.extend_from_slice(&config.close_factor.to_le_bytes());
+                buf.extend_from_slice(&config.close_ratio.to_le_bytes());
             }
             Self::PauseRateOracle => buf.push(23),
             Self::UpdateRateOracleConfig { config } => {
@@ -562,7 +562,7 @@ impl LendingInstruction {
     }
 
     fn pack_liquidity_config(config: LiquidityConfig, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(&config.close_factor.to_le_bytes());
+        buf.extend_from_slice(&config.close_ratio.to_le_bytes());
         buf.extend_from_slice(&config.borrow_tax_rate.to_le_bytes());
         buf.extend_from_slice(&config.flash_loan_fee_rate.to_le_bytes());
         buf.extend_from_slice(&config.max_deposit.to_le_bytes());

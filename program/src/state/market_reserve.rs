@@ -81,7 +81,7 @@ impl CollateralInfo {
 #[derive(Clone, Debug, Copy, Default, PartialEq)]
 pub struct LiquidityConfig {
     ///
-    pub close_factor: u8,
+    pub close_ratio: u8,
     ///
     pub borrow_tax_rate: u8,
     ///
@@ -94,7 +94,7 @@ pub struct LiquidityConfig {
 
 impl Param for LiquidityConfig {
     fn assert_valid(&self) -> ProgramResult {
-        if self.close_factor < 100 &&
+        if self.close_ratio < 100 &&
             self.borrow_tax_rate < 100 &&
             self.flash_loan_fee_rate < WAD &&
             self.max_deposit <= self.max_acc_deposit {
@@ -377,7 +377,7 @@ impl Pack for MarketReserve {
             acc_borrow_rate_wads,
             borrowed_amount_wads,
             insurance_wads,
-            close_factor,
+            close_ratio,
             borrow_tax_rate,
             flash_loan_fee_rate,
             max_deposit,
@@ -438,7 +438,7 @@ impl Pack for MarketReserve {
         pack_decimal(self.liquidity_info.borrowed_amount_wads, borrowed_amount_wads);
         pack_decimal(self.liquidity_info.insurance_wads, insurance_wads);
 
-        *close_factor = self.liquidity_info.config.close_factor.to_le_bytes();
+        *close_ratio = self.liquidity_info.config.close_ratio.to_le_bytes();
         *borrow_tax_rate = self.liquidity_info.config.borrow_tax_rate.to_le_bytes();
         *flash_loan_fee_rate = self.liquidity_info.config.flash_loan_fee_rate.to_le_bytes();
         *max_deposit = self.liquidity_info.config.max_deposit.to_le_bytes();
@@ -469,7 +469,7 @@ impl Pack for MarketReserve {
             acc_borrow_rate_wads,
             borrowed_amount_wads,
             insurance_wads,
-            close_factor,
+            close_ratio,
             borrow_tax_rate,
             flash_loan_fee_rate,
             max_deposit,
@@ -540,7 +540,7 @@ impl Pack for MarketReserve {
                 borrowed_amount_wads: unpack_decimal(borrowed_amount_wads),
                 insurance_wads: unpack_decimal(insurance_wads),
                 config: LiquidityConfig {
-                    close_factor: u8::from_le_bytes(*close_factor),
+                    close_ratio: u8::from_le_bytes(*close_ratio),
                     borrow_tax_rate: u8::from_le_bytes(*borrow_tax_rate),
                     flash_loan_fee_rate: u64::from_le_bytes(*flash_loan_fee_rate),
                     max_deposit: u64::from_le_bytes(*max_deposit),
