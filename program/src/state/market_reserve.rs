@@ -284,40 +284,16 @@ impl MarketReserve {
     }
     ///
     pub fn collateral_to_liquidity_rate(&self) -> Result<Rate, ProgramError> {
-        self.liquidity_info
-            .total_supply()?
-            .try_sub(self.liquidity_info.insurance_wads)?
-            .try_div(Decimal::from(self.collateral_info.total_mint))?
-            .try_into()
+        if self.collateral_info.total_mint == 0 {
+            Ok(Rate::one())
+        } else {
+            self.liquidity_info
+                .total_supply()?
+                .try_sub(self.liquidity_info.insurance_wads)?
+                .try_div(Decimal::from(self.collateral_info.total_mint))?
+                .try_into()
+        }
     }
-
-    // ///
-    // pub fn exchange_liquidity_to_collateral(&self, amount: u64) -> Result<u64, ProgramError> {
-    //     let total_supply = self.liquidity_info.total_supply()?;
-    //     let exchange_rate = if total_supply == Decimal::zero() {
-    //         Rate::one()
-    //     } else {
-    //         Decimal::from(self.collateral_info.total_mint)
-    //             .try_div(total_supply)?
-    //             .try_into()?
-    //     };
-
-    //     Decimal::from(amount)
-    //         .try_mul(exchange_rate)?
-    //         .try_floor_u64()
-    // }
-    // ///
-    // pub fn exchange_collateral_to_liquidity(&self, amount: u64) -> Result<u64, ProgramError> {
-    //     let exchange_rate: Rate = self.liquidity_info
-    //         .total_supply()?
-    //         .try_sub(self.liquidity_info.insurance_wads)?
-    //         .try_div(Decimal::from(self.collateral_info.total_mint))?
-    //         .try_into()?;
-
-    //     Decimal::from(amount)
-    //         .try_mul(exchange_rate)?
-    //         .try_floor_u64()
-    // }
     /// 
     // compounded_interest_rate: c
     // borrowed_amount_wads: m
