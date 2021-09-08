@@ -237,7 +237,7 @@ impl UserObligation {
             (self.collaterals_borrow_value, self.loans_value)
         };
 
-        if collaterals_borrow_value >= loans_value.min(Decimal::from_scaled_val(COLLATERALS_MIN_BORROWABLE_VALUE)) {
+        if collaterals_borrow_value >= loans_value.max(Decimal::from_scaled_val(COLLATERALS_MIN_BORROWABLE_VALUE)) {
             Ok(())
         } else {
             Err(LendingError::ObligationNotHealthy.into())
