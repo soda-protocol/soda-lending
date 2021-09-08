@@ -14,8 +14,8 @@ use solana_program::{
 use std::{convert::TryInto, cmp::Ordering, iter::Iterator, any::Any};
 use typenum::Bit;
 
-/// compute unit comsumed 160000-170000 for 8 
-const MAX_OBLIGATION_RESERVES: usize = 8;
+/// compute unit comsumed 160000-170000 for 8
+const MAX_OBLIGATION_RESERVES: usize = 12;
 
 /// collateral min borrowable value (to avoid dust attack), set 1 dollar as default
 const COLLATERALS_MIN_BORROWABLE_VALUE: u128 = 1_000_000_000_000_000_000;
@@ -44,8 +44,8 @@ impl Collateral {
 
 impl Sealed for Collateral {}
 
-const COLLATERAL_PADDING_LEN: usize = 64;
-const COLLATERAL_LEN: usize = 106;
+const COLLATERAL_PADDING_LEN: usize = 32;
+const COLLATERAL_LEN: usize = 74;
 
 impl Pack for Collateral {
     const LEN: usize = COLLATERAL_LEN;
@@ -142,8 +142,8 @@ impl Loan {
 
 impl Sealed for Loan {}
 
-const LOAN_PADDING_LEN: usize = 64;
-const LOAN_LEN: usize = 129;
+const LOAN_PADDING_LEN: usize = 32;
+const LOAN_LEN: usize = 97;
 
 impl Pack for Loan {
     const LEN: usize = LOAN_LEN;
@@ -655,7 +655,7 @@ impl IsInitialized for UserObligation {
 // const MAX_PADDING_LEN: usize = max(COLLATERAL_LEN, LOAN_LEN);
 const MAX_COLLATERAL_OR_LOAN_LEN: usize = LOAN_LEN;
 const USER_OBLIGATITION_PADDING_LEN: usize = 128;
-const USER_OBLIGATITION_LEN: usize = 1320;
+const USER_OBLIGATITION_LEN: usize = 1452;
 
 impl Pack for UserObligation {
     const LEN: usize = USER_OBLIGATITION_LEN;
