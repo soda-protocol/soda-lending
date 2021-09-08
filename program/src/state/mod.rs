@@ -146,7 +146,7 @@ fn calculate_decimals(decimal: u8) -> Result<u64, ProgramError> {
 }
 
 #[inline(always)]
-pub fn amount_mul_rate(amount: u64, rate: Rate) -> Result<u64, ProgramError> {
+fn amount_mul_rate(amount: u64, rate: Rate) -> Result<u64, ProgramError> {
     Decimal::from(amount)
         .try_mul(rate)?
         .try_floor_u64()

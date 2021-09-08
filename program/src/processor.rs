@@ -10,7 +10,7 @@ use crate::{
         LiquidityConfig, LiquidityInfo, Manager, MarketReserve, Operator,
         Param, Pause, PROGRAM_VERSION, RateOracle, RateOracleConfig,
         ReservePriceOracle, ReserveRateOracle, TokenInfo, UserObligation,
-        amount_mul_rate, calculate_amount,
+        calculate_amount,
     },
 };
 use num_traits::FromPrimitive;
