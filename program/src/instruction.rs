@@ -159,11 +159,14 @@ pub enum LendingInstruction {
         amount: u64,
     },
     /// 31
-    #[cfg(feature = "case-injection")]
+    #[cfg(feature = "general-test")]
     InjectNoBorrow,
     /// 32
-    #[cfg(feature = "case-injection")]
+    #[cfg(feature = "general-test")]
     InjectLiquidation,
+    /// 33
+    #[cfg(feature = "general-test")]
+    CloseObligation,
 }
 
 impl LendingInstruction {
@@ -280,10 +283,12 @@ impl LendingInstruction {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::ReduceInsurance { amount }
             }
-            #[cfg(feature = "case-injection")]
+            #[cfg(feature = "general-test")]
             31 => Self::InjectNoBorrow,
-            #[cfg(feature = "case-injection")]
+            #[cfg(feature = "general-test")]
             32 => Self::InjectLiquidation,
+            #[cfg(feature = "general-test")]
+            33 => Self::CloseObligation,
             _ => {
                 msg!("Instruction cannot be unpacked");
                 return Err(LendingError::InstructionUnpackError.into());
@@ -540,10 +545,12 @@ impl LendingInstruction {
                 buf.push(30);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            #[cfg(feature = "case-injection")]
+            #[cfg(feature = "general-test")]
             Self::InjectNoBorrow => buf.push(31),
-            #[cfg(feature = "case-injection")]
+            #[cfg(feature = "general-test")]
             Self::InjectLiquidation => buf.push(32),
+            #[cfg(feature = "general-test")]
+            Self::CloseObligation => buf.push(33),
         }
         buf
     }
@@ -1431,7 +1438,7 @@ pub fn reduce_insurance(
     }
 }
 
-#[cfg(feature = "case-injection")]
+#[cfg(feature = "general-test")]
 pub fn inject_no_borrow(
     user_obligation_key: Pubkey,
 ) -> Instruction {
@@ -1442,7 +1449,7 @@ pub fn inject_no_borrow(
     }
 }
 
-#[cfg(feature = "case-injection")]
+#[cfg(feature = "general-test")]
 pub fn inject_liquidation(
     user_obligation_key: Pubkey,
 ) -> Instruction {
@@ -1450,5 +1457,20 @@ pub fn inject_liquidation(
         program_id: id(),
         accounts: vec![AccountMeta::new(user_obligation_key, false)],
         data: LendingInstruction::InjectLiquidation.pack(),
+    }
+}
+
+#[cfg(feature = "general-test")]
+pub fn close_obligation(
+    user_obligation_key: Pubkey,
+    dest_account_key: Pubkey,
+) -> Instruction {
+    Instruction {
+        program_id: id(),
+        accounts: vec![
+            AccountMeta::new(user_obligation_key, false),
+            AccountMeta::new(dest_account_key, false),
+        ],
+        data: LendingInstruction::CloseObligation.pack(),
     }
 }

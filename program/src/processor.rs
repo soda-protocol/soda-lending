@@ -29,7 +29,7 @@ use solana_program::{
 };
 use spl_token::{state::{Mint, Account}, check_program_account, native_mint};
 use typenum::{Bit, True, False};
-#[cfg(feature = "case-injection")]
+#[cfg(feature = "general-test")]
 use typenum::{B0, B1};
 
 /// Processes an instruction
@@ -167,15 +167,20 @@ pub fn process_instruction(
             msg!("Instruction: Reduce Insurance: {}", amount);
             process_reduce_insurance(program_id, accounts, amount)
         }
-        #[cfg(feature = "case-injection")]
+        #[cfg(feature = "general-test")]
         LendingInstruction::InjectNoBorrow => {
             msg!("Instruction(Test): Inject No Borrow");
             process_inject_case::<B0>(program_id, accounts)
         }
-        #[cfg(feature = "case-injection")]
+        #[cfg(feature = "general-test")]
         LendingInstruction::InjectLiquidation => {
             msg!("Instruction(Test): Inject Liquidation Reached");
             process_inject_case::<B1>(program_id, accounts)
+        }
+        #[cfg(feature = "general-test")]
+        LendingInstruction::CloseObligation => {
+            msg!("Instruction(Test): Close Obligation");
+            process_close_obligation(program_id, accounts)
         }
     }
 }
@@ -2074,7 +2079,7 @@ fn process_reduce_insurance(
     })
 }
 
-#[cfg(feature = "case-injection")]
+#[cfg(feature = "general-test")]
 fn process_inject_case<B: Bit>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -2101,6 +2106,29 @@ fn process_inject_case<B: Bit>(
     }
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
+}
+
+#[cfg(feature = "general-test")]
+fn process_close_obligation(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    // 1
+    let user_obligation_info = next_account_info(account_info_iter)?;
+    if user_obligation_info.owner != program_id {
+        msg!("User Obligation owner provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
+    }
+    // 2
+    let dest_account_info = next_account_info(account_info_iter)?;
+    let dest_starting_lamports = dest_account_info.lamports();
+    **dest_account_info.try_borrow_mut_lamports()? = dest_starting_lamports
+        .checked_add(user_obligation_info.lamports())
+        .ok_or(LendingError::MathOverflow)?;
+    **user_obligation_info.try_borrow_mut_lamports()? = 0;
+
+    Ok(())
 }
 
 fn get_token_decimals(account_info: &AccountInfo) -> Result<u8, ProgramError> {

@@ -184,7 +184,7 @@ pub enum LendingError {
     #[error("User Obligation friend is invalid")]
     ObligationInvalidFriend,
     ///
-    #[cfg(feature = "case-injection")]
+    #[cfg(feature = "general-test")]
     #[error("Undefined case injection")]
     UndefinedCaseInjection,
 }
