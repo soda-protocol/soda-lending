@@ -284,15 +284,11 @@ impl MarketReserve {
     }
     ///
     pub fn collateral_to_liquidity_rate(&self) -> Result<Rate, ProgramError> {
-        if self.collateral_info.total_mint == 0 {
-            Ok(Rate::one())
-        } else {
-            self.liquidity_info
-                .total_supply()?
-                .try_sub(self.liquidity_info.insurance_wads)?
-                .try_div(Decimal::from(self.collateral_info.total_mint))?
-                .try_into()
-        }
+        self.liquidity_info
+            .total_supply()?
+            .try_sub(self.liquidity_info.insurance_wads)?
+            .try_div(Decimal::from(self.collateral_info.total_mint))?
+            .try_into()
     }
     /// 
     // compounded_interest_rate: c
