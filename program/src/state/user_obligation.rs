@@ -585,8 +585,7 @@ impl UserObligation {
                 .try_div(calculate_decimals(collateral_reserve.token_info.decimal)?)?
                 .try_mul(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_penalty_ratio))?
                 .try_mul(calculate_decimals(loan_reserve.token_info.decimal)?)?
-                .try_div(loan_reserve.market_price)?
-                .try_mul(WAD)?;
+                .try_div(loan_reserve.market_price)?;
 
             // repay amount check
             if repay_amount_decimal == Decimal::zero() {
@@ -622,11 +621,10 @@ impl UserObligation {
             let seize_amount = loan_reserve.market_price
                 .try_mul(repay_amount)?
                 .try_div(calculate_decimals(loan_reserve.token_info.decimal)?)?
-                .try_div(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_penalty_ratio))?
                 .try_mul(calculate_decimals(collateral_reserve.token_info.decimal)?)?
                 .try_div(collateral_reserve.market_price)?
-                .try_mul(WAD)?
                 .try_div(collateral_reserve.collateral_to_liquidity_rate()?)?
+                .try_div(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_penalty_ratio))?
                 .try_floor_u64()?;
 
             // update collaterals
@@ -848,5 +846,5 @@ impl Param for IndexedLoanConfig {
 
 #[cfg(test)]
 mod test {
-
+    
 }
