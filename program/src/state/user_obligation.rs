@@ -356,6 +356,7 @@ impl UserObligation {
         reserve: &MarketReserve,
         other: Option<Self>,
     ) -> Result<u64, ProgramError> {
+        let amount = calculate_amount(amount, reserve.liquidity_info.available);
         let value = reserve.market_price
             .try_mul(amount)?
             .try_div(calculate_decimals(reserve.token_info.decimal)?)?;
@@ -380,6 +381,7 @@ impl UserObligation {
             return Err(LendingError::ObligationReservesFull.into());
         }
 
+        let amount = calculate_amount(amount, reserve.liquidity_info.available);
         let value = reserve.market_price
             .try_mul(amount)?
             .try_div(calculate_decimals(reserve.token_info.decimal)?)?;
