@@ -34,12 +34,14 @@ pub struct CollateralConfig {
     ///
     pub liquidation_value_ratio: u8,
     ///
-    pub liquidation_bonus_ratio: u8,
+    pub liquidation_penalty_ratio: u8,
 }
 
 impl Param for CollateralConfig {
     fn assert_valid(&self) -> ProgramResult {
-        if self.borrow_value_ratio < self.liquidation_value_ratio && self.liquidation_value_ratio < 100 {
+        if self.borrow_value_ratio < self.liquidation_value_ratio
+            && self.liquidation_value_ratio < 100
+            && self.liquidation_penalty_ratio < 100 {
             Ok(())
         } else {
             Err(LendingError::InvalidCollateralConfig.into())
@@ -236,7 +238,9 @@ impl LiquidityInfo {
     ///
     pub fn reduce_insurance(&mut self, amount: u64) -> ProgramResult {
         if amount <= self.flash_loan_fee {
-            self.flash_loan_fee -= amount;
+            self.flash_loan_fee = self.flash_loan_fee
+                .checked_sub(amount)
+                .ok_or(LendingError::MathOverflow)?;
         } else {
             let amount = amount - self.flash_loan_fee;
             self.flash_loan_fee = 0;
@@ -268,32 +272,52 @@ pub struct MarketReserve {
 
 impl MarketReserve {
     ///
-    pub fn exchange_liquidity_to_collateral(&self, amount: u64) -> Result<u64, ProgramError> {
+    pub fn liquidity_to_collateral_rate(&self) -> Result<Rate, ProgramError> {
         let total_supply = self.liquidity_info.total_supply()?;
-        let exchange_rate = if total_supply == Decimal::zero() {
-            Rate::one()
+        if total_supply == Decimal::zero() {
+            Ok(Rate::one())
         } else {
             Decimal::from(self.collateral_info.total_mint)
                 .try_div(total_supply)?
-                .try_into()?
-        };
-
-        Decimal::from(amount)
-            .try_mul(exchange_rate)?
-            .try_floor_u64()
+                .try_into()
+        }
     }
     ///
-    pub fn exchange_collateral_to_liquidity(&self, amount: u64) -> Result<u64, ProgramError> {
-        let exchange_rate: Rate = self.liquidity_info
+    pub fn collateral_to_liquidity_rate(&self) -> Result<Rate, ProgramError> {
+        self.liquidity_info
             .total_supply()?
             .try_sub(self.liquidity_info.insurance_wads)?
             .try_div(Decimal::from(self.collateral_info.total_mint))?
-            .try_into()?;
-
-        Decimal::from(amount)
-            .try_mul(exchange_rate)?
-            .try_floor_u64()
+            .try_into()
     }
+
+    // ///
+    // pub fn exchange_liquidity_to_collateral(&self, amount: u64) -> Result<u64, ProgramError> {
+    //     let total_supply = self.liquidity_info.total_supply()?;
+    //     let exchange_rate = if total_supply == Decimal::zero() {
+    //         Rate::one()
+    //     } else {
+    //         Decimal::from(self.collateral_info.total_mint)
+    //             .try_div(total_supply)?
+    //             .try_into()?
+    //     };
+
+    //     Decimal::from(amount)
+    //         .try_mul(exchange_rate)?
+    //         .try_floor_u64()
+    // }
+    // ///
+    // pub fn exchange_collateral_to_liquidity(&self, amount: u64) -> Result<u64, ProgramError> {
+    //     let exchange_rate: Rate = self.liquidity_info
+    //         .total_supply()?
+    //         .try_sub(self.liquidity_info.insurance_wads)?
+    //         .try_div(Decimal::from(self.collateral_info.total_mint))?
+    //         .try_into()?;
+
+    //     Decimal::from(amount)
+    //         .try_mul(exchange_rate)?
+    //         .try_floor_u64()
+    // }
     /// 
     // compounded_interest_rate: c
     // borrowed_amount_wads: m
@@ -324,7 +348,7 @@ impl MarketReserve {
     }
     ///
     pub fn deposit(&mut self, amount: u64) -> Result<u64, ProgramError> {
-        let mint_amount = self.exchange_liquidity_to_collateral(amount)?;
+        let mint_amount = amount_mul_rate(amount, self.liquidity_to_collateral_rate()?)?;
         self.collateral_info.mint(mint_amount)?;
         self.liquidity_info.deposit(amount)?;
 
@@ -332,7 +356,7 @@ impl MarketReserve {
     }
     ///
     pub fn withdraw(&mut self, amount: u64) -> Result<u64, ProgramError> {
-        let withdraw_amount = self.exchange_collateral_to_liquidity(amount)?;
+        let withdraw_amount = amount_mul_rate(amount, self.collateral_to_liquidity_rate()?)?;
         self.collateral_info.burn(amount)?;
         self.liquidity_info.withdraw(withdraw_amount)?;
 
@@ -369,7 +393,7 @@ impl Pack for MarketReserve {
             total_mint,
             borrow_value_ratio,
             liquidation_value_ratio,
-            liquidation_bonus_ratio,
+            liquidation_penalty_ratio,
             enable,
             rate_oracle,
             available,
@@ -428,7 +452,7 @@ impl Pack for MarketReserve {
 
         *borrow_value_ratio = self.collateral_info.config.borrow_value_ratio.to_le_bytes();
         *liquidation_value_ratio = self.collateral_info.config.liquidation_value_ratio.to_le_bytes();
-        *liquidation_bonus_ratio = self.collateral_info.config.liquidation_bonus_ratio.to_le_bytes();
+        *liquidation_penalty_ratio = self.collateral_info.config.liquidation_penalty_ratio.to_le_bytes();
 
         pack_bool(self.liquidity_info.enable, enable);
         rate_oracle.copy_from_slice(self.liquidity_info.rate_oracle.as_ref());
@@ -461,7 +485,7 @@ impl Pack for MarketReserve {
             total_mint,
             borrow_value_ratio,
             liquidation_value_ratio,
-            liquidation_bonus_ratio,
+            liquidation_penalty_ratio,
             enable,
             rate_oracle,
             available,
@@ -528,7 +552,7 @@ impl Pack for MarketReserve {
                 config: CollateralConfig {
                     borrow_value_ratio: u8::from_le_bytes(*borrow_value_ratio),
                     liquidation_value_ratio: u8::from_le_bytes(*liquidation_value_ratio),
-                    liquidation_bonus_ratio: u8::from_le_bytes(*liquidation_bonus_ratio),
+                    liquidation_penalty_ratio: u8::from_le_bytes(*liquidation_penalty_ratio),
                 },
             },
             liquidity_info: LiquidityInfo {

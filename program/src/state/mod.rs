@@ -146,6 +146,13 @@ fn calculate_decimals(decimal: u8) -> Result<u64, ProgramError> {
 }
 
 #[inline(always)]
+pub fn amount_mul_rate(amount: u64, rate: Rate) -> Result<u64, ProgramError> {
+    Decimal::from(amount)
+        .try_mul(rate)?
+        .try_floor_u64()
+}
+
+#[inline(always)]
 pub fn calculate_amount(amount: u64, max: u64) -> u64 {
     if amount == u64::MAX {
         max

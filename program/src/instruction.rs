@@ -318,9 +318,9 @@ impl LendingInstruction {
     fn unpack_collateral_config(input: &[u8]) -> Result<(CollateralConfig, &[u8]), ProgramError> {
         let (borrow_value_ratio, rest) = Self::unpack_u8(input)?;
         let (liquidation_value_ratio, rest) = Self::unpack_u8(rest)?;
-        let (liquidation_bonus_ratio, rest) = Self::unpack_u8(rest)?;
+        let (liquidation_penalty_ratio, rest) = Self::unpack_u8(rest)?;
 
-        Ok((CollateralConfig { borrow_value_ratio, liquidation_value_ratio, liquidation_bonus_ratio }, rest))
+        Ok((CollateralConfig { borrow_value_ratio, liquidation_value_ratio, liquidation_penalty_ratio }, rest))
     }
 
     fn unpack_liquidity_config(input: &[u8]) -> Result<(LiquidityConfig, &[u8]), ProgramError> {
@@ -558,7 +558,7 @@ impl LendingInstruction {
     fn pack_collateral_config(config: CollateralConfig, buf: &mut Vec<u8>) {
         buf.extend_from_slice(&config.borrow_value_ratio.to_le_bytes());
         buf.extend_from_slice(&config.liquidation_value_ratio.to_le_bytes());
-        buf.extend_from_slice(&config.liquidation_bonus_ratio.to_le_bytes());
+        buf.extend_from_slice(&config.liquidation_penalty_ratio.to_le_bytes());
     }
 
     fn pack_liquidity_config(config: LiquidityConfig, buf: &mut Vec<u8>) {

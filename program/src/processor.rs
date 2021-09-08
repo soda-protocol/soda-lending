@@ -10,7 +10,7 @@ use crate::{
         LiquidityConfig, LiquidityInfo, Manager, MarketReserve, Operator,
         Param, Pause, PROGRAM_VERSION, RateOracle, RateOracleConfig,
         ReservePriceOracle, ReserveRateOracle, TokenInfo, UserObligation,
-        calculate_amount,
+        amount_mul_rate, calculate_amount,
     },
 };
 use num_traits::FromPrimitive;
@@ -524,8 +524,7 @@ fn process_deposit_or_withdraw<B: Bit>(
     market_reserve.last_update.update_slot(clock.slot, true);
 
     if B::BOOL {
-        let user_token_account_balance = Account::unpack(&user_token_account_info.try_borrow_data()?)?.amount;
-        let amount = calculate_amount(amount, user_token_account_balance);
+        let amount = calculate_amount(amount, Account::unpack(&user_token_account_info.try_borrow_data()?)?.amount);
         let mint_amount = market_reserve.deposit(amount)?;
         // pack
         MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
@@ -550,8 +549,7 @@ fn process_deposit_or_withdraw<B: Bit>(
             token_program: token_program_id.clone(),
         })
     } else {
-        let user_sotoken_account_balance = Account::unpack(&user_sotoken_account_info.try_borrow_data()?)?.amount;
-        let amount = calculate_amount(amount, user_sotoken_account_balance);
+        let amount = calculate_amount(amount, Account::unpack(&user_sotoken_account_info.try_borrow_data()?)?.amount);
         let withdraw_amount = market_reserve.withdraw(amount)?;
         // pack
         MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
@@ -941,6 +939,7 @@ fn process_redeem_collateral(
     // redeem in obligation
     let index = user_obligation.find_collateral(*market_reserve_info.key)?;
     let amount = user_obligation.redeem(amount, index, &market_reserve, friend_obligation)?;
+    user_obligation.last_update.mark_stale();
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
     
@@ -1176,25 +1175,18 @@ fn process_replace_collateral(
     // replace
     let in_amount = calculate_amount(amount, user_in_sotoken_account_balance);
     let out_index = user_obligation.find_collateral(*out_market_reserve_info.key)?;
-    let out_amount = if let Ok(in_index) = user_obligation.find_collateral(*in_market_reserve_info.key) {
-        user_obligation.replace_collateral(
-            in_amount,
-            out_index,
-            in_index,
-            &out_market_reserve,
-            &in_market_reserve,
-            friend_obligation,
-        )?
-    } else {
-        user_obligation.replace_collateral_for_new(
-            in_amount,
-            out_index,
-            *in_market_reserve_info.key,
-            &out_market_reserve,
-            &in_market_reserve,
-            friend_obligation,
-        )?
-    };
+    if user_obligation.find_collateral(*in_market_reserve_info.key).is_ok() {
+        return Err(LendingError::ObligationReplaceCollateralExists.into());
+    }
+    let out_amount = user_obligation.replace_collateral(
+        in_amount,
+        out_index,
+        *in_market_reserve_info.key,
+        &out_market_reserve,
+        &in_market_reserve,
+        friend_obligation,
+    )?;
+    user_obligation.last_update.mark_stale();
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
 
@@ -1316,12 +1308,22 @@ fn process_borrow_liquidity(
 
     // borrow
     if let Ok(index) = user_obligation.find_loan(*market_reserve_info.key) {
-        user_obligation.borrow_in(amount, index, &market_reserve, friend_obligation)?
+        user_obligation.borrow_in(
+            amount,
+            index,
+            &market_reserve,
+            friend_obligation,
+        )?
     } else {
-        user_obligation.new_borrow_in(amount, *market_reserve_info.key, &market_reserve, friend_obligation)?
+        user_obligation.new_borrow_in(
+            amount,
+            *market_reserve_info.key,
+            &market_reserve,
+            friend_obligation,
+        )?
     };
+    user_obligation.last_update.mark_stale();
     market_reserve.liquidity_info.borrow_out(amount)?;
-
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;

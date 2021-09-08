@@ -133,8 +133,8 @@ pub enum LendingError {
     #[error("Obligation has dept")]
     ObligationHasDept,
     ///
-    #[error("Obligation liquidation is not available")]
-    ObligationCanNotLiquidate,
+    #[error("Liquidation is not available")]
+    LiquidationNotAvailable,
     ///
     #[error("Obligation reserves are full")]
     ObligationReservesFull,
@@ -153,7 +153,9 @@ pub enum LendingError {
     ///
     #[error("Obligation invalid loan index")]
     ObligationInvalidLoanIndex,
-
+    ///
+    #[error("Obligation replace collateral already exists`")]
+    ObligationReplaceCollateralExists,
     ///
     #[error("Market Reserve is disabled")]
     MarketReserveDisabled,
