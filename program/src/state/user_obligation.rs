@@ -462,29 +462,30 @@ impl UserObligation {
         other: Option<Self>,
     ) -> Result<u64, ProgramError> {
         let amount = calculate_amount(amount, self.collaterals[index].amount);
-        let before_liquidity_amount = amount_mul_rate(self.collaterals[index].amount, reserve.collateral_to_liquidity_rate()?)?;
+        let ctl = reserve.collateral_to_liquidity_rate()?;
+        let borrow_value_ratio = Rate::from_percent(self.collaterals[index].borrow_value_ratio);
+        let before_amount = self.collaterals[index].amount;
         let after_amount = self.collaterals[index].amount
             .checked_sub(amount)
-            .ok_or(LendingError::MathOverflow)?;
-
-        let changed_liquidity_amount = before_liquidity_amount
-            .checked_sub(amount_mul_rate(after_amount, reserve.collateral_to_liquidity_rate()?)?)
-            .ok_or(LendingError::MathOverflow)?;
-        let changed_borrow_value = reserve.market_price
-            .try_mul(changed_liquidity_amount)?
-            .try_div(calculate_decimals(reserve.token_info.decimal)?)?
-            .try_mul(Rate::from_percent(self.collaterals[index].borrow_value_ratio))?;
-
-        self.collaterals_borrow_value = self.collaterals_borrow_value.try_sub(changed_borrow_value)?;
-
-        self.validate_health(other)?;
-
-        // update amount
+            .ok_or(LendingError::ObligationCollateralInsufficient)?;
         if after_amount == 0 {
             self.collaterals.remove(index);
         } else {
             self.collaterals[index].amount = after_amount;
         }
+
+        let changed_liquidity_amount = amount_mul_rate(before_amount, ctl)?
+            .checked_sub(amount_mul_rate(after_amount, ctl)?)
+            .ok_or(LendingError::MathOverflow)?;
+        let changed_borrow_value = reserve.market_price
+            .try_mul(changed_liquidity_amount)?
+            .try_div(calculate_decimals(reserve.token_info.decimal)?)?
+            .try_mul(borrow_value_ratio)?;
+
+        // update value
+        self.collaterals_borrow_value = self.collaterals_borrow_value.try_sub(changed_borrow_value)?;
+
+        self.validate_health(other)?;
 
         Ok(amount)
     }
@@ -522,11 +523,20 @@ impl UserObligation {
         other: Option<Self>,
     ) -> Result<u64, ProgramError> {
         let out_amount = self.collaterals[out_index].amount;
+        let out_borrow_value_ratio = Rate::from_percent(self.collaterals[out_index].borrow_value_ratio);
+
+        self.collaterals.remove(out_index);
+        self.collaterals.push(Collateral {
+            reserve: in_key,
+            amount: in_amount,
+            borrow_value_ratio: in_reserve.collateral_info.config.borrow_value_ratio,
+            liquidation_value_ratio: in_reserve.collateral_info.config.liquidation_value_ratio,
+        });
 
         let out_borrow_value = out_reserve.market_price
             .try_mul(amount_mul_rate(out_amount, out_reserve.collateral_to_liquidity_rate()?)?)?
             .try_div(calculate_decimals(out_reserve.token_info.decimal)?)?
-            .try_mul(Rate::from_percent(self.collaterals[out_index].borrow_value_ratio))?;
+            .try_mul(out_borrow_value_ratio)?;
         let in_borrow_value = in_reserve.market_price
             .try_mul(amount_mul_rate(in_amount, in_reserve.collateral_to_liquidity_rate()?)?)?
             .try_div(calculate_decimals(in_reserve.token_info.decimal)?)?
@@ -537,14 +547,6 @@ impl UserObligation {
             .try_add(in_borrow_value)?;
 
         self.validate_health(other)?;
-
-        self.collaterals.remove(out_index);
-        self.collaterals.push(Collateral {
-            reserve: in_key,
-            amount: in_amount,
-            borrow_value_ratio: in_reserve.collateral_info.config.borrow_value_ratio,
-            liquidation_value_ratio: in_reserve.collateral_info.config.liquidation_value_ratio,
-        });
 
         Ok(out_amount)
     }
