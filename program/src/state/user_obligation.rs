@@ -14,7 +14,7 @@ use solana_program::{
 use std::{convert::TryInto, cmp::Ordering, iter::Iterator, any::Any};
 use typenum::Bit;
 
-/// compute unit comsumed 160000-170000 for 8
+/// compute unit comsumed 160000-170000 for 12
 const MAX_OBLIGATION_RESERVES: usize = 12;
 
 /// collateral min borrowable value (to avoid dust attack), set 1 dollar as default
@@ -622,11 +622,11 @@ impl UserObligation {
             let seize_amount = loan_reserve.market_price
                 .try_mul(repay_amount)?
                 .try_div(calculate_decimals(loan_reserve.token_info.decimal)?)?
+                .try_div(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_penalty_ratio))?
                 .try_mul(calculate_decimals(collateral_reserve.token_info.decimal)?)?
                 .try_div(collateral_reserve.market_price)?
                 .try_mul(WAD)?
                 .try_div(collateral_reserve.collateral_to_liquidity_rate()?)?
-                .try_div(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_penalty_ratio))?
                 .try_floor_u64()?;
 
             // update collaterals
@@ -844,4 +844,9 @@ impl Param for IndexedLoanConfig {
             Err(LendingError::InvalidIndexedLoanConfig.into())
         }
     }
+}
+
+#[cfg(test)]
+mod test {
+
 }
