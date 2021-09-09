@@ -116,6 +116,9 @@ pub enum LendingError {
     #[error("Obligation state needs to be refreshed")]
     ObligationStale,
 
+    ///
+    #[error("Borrow amount is too small")]
+    BorrowTooSmall,
     // 40
     /// Negative interest rate
     #[error("Interest rate is negative")]

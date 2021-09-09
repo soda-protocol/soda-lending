@@ -17,8 +17,8 @@ use typenum::Bit;
 /// compute unit comsumed 160000-170000 for 12
 const MAX_OBLIGATION_RESERVES: usize = 12;
 
-/// collateral min borrowable value (to avoid dust attack), set 1 dollar as default
-const COLLATERALS_MIN_BORROWABLE_VALUE: u128 = 1_000_000_000_000_000_000;
+/// min borrow value (to avoid dust attack), set 1 dollar as default
+const MIN_LOANS_VALUE: u128 = 1_000_000_000_000_000_000;
 
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -237,7 +237,7 @@ impl UserObligation {
             (self.collaterals_borrow_value, self.loans_value)
         };
 
-        if collaterals_borrow_value >= loans_value.max(Decimal::from_scaled_val(COLLATERALS_MIN_BORROWABLE_VALUE)) {
+        if collaterals_borrow_value >= loans_value {
             Ok(())
         } else {
             Err(LendingError::ObligationNotHealthy.into())
@@ -362,6 +362,10 @@ impl UserObligation {
             .try_div(calculate_decimals(reserve.token_info.decimal)?)?;
         self.loans_value = self.loans_value.try_add(value)?;
 
+        if self.loans_value < Decimal::from_scaled_val(MIN_LOANS_VALUE) {
+            return Err(LendingError::BorrowTooSmall.into());
+        }
+        
         self.validate_health(other)?;
 
         self.loans[index].borrowed_amount_wads = self.loans[index].borrowed_amount_wads.try_add(Decimal::from(amount))?;
@@ -386,6 +390,10 @@ impl UserObligation {
             .try_mul(amount)?
             .try_div(calculate_decimals(reserve.token_info.decimal)?)?;
         self.loans_value = self.loans_value.try_add(value)?;
+
+        if self.loans_value < Decimal::from_scaled_val(MIN_LOANS_VALUE) {
+            return Err(LendingError::BorrowTooSmall.into());
+        }
 
         self.validate_health(other)?;
 

@@ -2009,6 +2009,7 @@ fn process_operate_market_reserve<P: Any + Copy + Param>(
 }
 
 // by manager
+#[inline(never)]
 fn process_reduce_insurance(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
