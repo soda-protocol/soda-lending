@@ -569,11 +569,11 @@ impl UserObligation {
 
         if IsCollateral::BOOL {
             // input amount represents collateral
-            let collateral_amount = calculate_amount(amount, self.collaterals[collateral_index].amount);
+            let seize_amount = calculate_amount(amount, self.collaterals[collateral_index].amount);
 
             // update collteral amount
             self.collaterals[collateral_index].amount = self.collaterals[collateral_index].amount
-                .checked_sub(collateral_amount)
+                .checked_sub(seize_amount)
                 .ok_or(LendingError::ObligationCollateralInsufficient)?;
             if self.collaterals[collateral_index].amount == 0 {
                 self.collaterals.remove(collateral_index);
@@ -581,7 +581,7 @@ impl UserObligation {
 
             // calculate repay amount
             let repay_amount_decimal = collateral_reserve.market_price
-                .try_mul(amount_mul_rate(collateral_amount, collateral_reserve.collateral_to_liquidity_rate()?)?)?
+                .try_mul(amount_mul_rate(seize_amount, collateral_reserve.collateral_to_liquidity_rate()?)?)?
                 .try_div(calculate_decimals(collateral_reserve.token_info.decimal)?)?
                 .try_mul(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_penalty_ratio))?
                 .try_mul(calculate_decimals(loan_reserve.token_info.decimal)?)?
@@ -600,7 +600,7 @@ impl UserObligation {
             // update loans
             self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads.try_sub(repay_amount_decimal)?;
 
-            Ok((amount, RepaySettle {
+            Ok((seize_amount, RepaySettle {
                 amount: repay_amount_decimal.try_ceil_u64()?,
                 amount_decimal: repay_amount_decimal,
             }))
