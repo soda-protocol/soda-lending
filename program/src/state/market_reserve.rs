@@ -113,8 +113,6 @@ pub struct LiquidityInfo {
     ///
     pub enable: bool,
     ///
-    pub rate_oracle: Pubkey,
-    ///
     pub available: u64,
     ///
     pub flash_loan_fee: u64,
@@ -268,6 +266,8 @@ pub struct MarketReserve {
     pub collateral_info: CollateralInfo,
     ///
     pub liquidity_info: LiquidityInfo,
+    ///
+    pub rate_model: RateModel,
 }
 
 impl MarketReserve {
@@ -300,11 +300,11 @@ impl MarketReserve {
     // m = m + d_m
     // fee = fee + d_fee
     // -----------------------------------------------------------------
-    pub fn accrue_interest(&mut self, borrow_rate: Rate, slot: Slot) -> ProgramResult {
+    pub fn accrue_interest(&mut self, slot: Slot) -> ProgramResult {
         let elapsed = self.last_update.slots_elapsed(slot)?;
         if elapsed > 0 {
             let compounded_interest_rate = Rate::one()
-                .try_add(borrow_rate)?
+                .try_add(self.rate_model.calculate_borrow_rate(self.liquidity_info.utilization_rate()?)?)?
                 .try_pow(elapsed)?;
             let fee_interest_rate = compounded_interest_rate
                 .try_sub(Rate::one())?
@@ -343,8 +343,8 @@ impl IsInitialized for MarketReserve {
     }
 }
 
-const MARKET_RESERVE_PADDING_LEN: usize = 128;
-const MARKET_RESERVE_LEN: usize = 449;
+const MARKET_RESERVE_PADDING_LEN: usize = 256;
+const MARKET_RESERVE_LEN: usize = 578;
 
 impl Pack for MarketReserve {
     const LEN: usize = MARKET_RESERVE_LEN;
@@ -367,7 +367,6 @@ impl Pack for MarketReserve {
             liquidation_value_ratio,
             liquidation_penalty_ratio,
             enable,
-            rate_oracle,
             available,
             flash_loan_fee,
             acc_borrow_rate_wads,
@@ -378,6 +377,10 @@ impl Pack for MarketReserve {
             flash_loan_fee_rate,
             max_deposit,
             max_acc_deposit,
+            a,
+            c,
+            l_u,
+            k_u,
             _padding,
         ) = mut_array_refs![
             output,
@@ -395,7 +398,6 @@ impl Pack for MarketReserve {
             1,
             1,
             1,
-            PUBKEY_BYTES,
             8,
             8,
             16,
@@ -406,6 +408,10 @@ impl Pack for MarketReserve {
             8,
             8,
             8,
+            8,
+            8,
+            1,
+            16,
             MARKET_RESERVE_PADDING_LEN
         ];
 
@@ -427,7 +433,6 @@ impl Pack for MarketReserve {
         *liquidation_penalty_ratio = self.collateral_info.config.liquidation_penalty_ratio.to_le_bytes();
 
         pack_bool(self.liquidity_info.enable, enable);
-        rate_oracle.copy_from_slice(self.liquidity_info.rate_oracle.as_ref());
         *available = self.liquidity_info.available.to_le_bytes();
         *flash_loan_fee = self.liquidity_info.flash_loan_fee.to_le_bytes();
         pack_decimal(self.liquidity_info.acc_borrow_rate_wads, acc_borrow_rate_wads);
@@ -439,6 +444,11 @@ impl Pack for MarketReserve {
         *flash_loan_fee_rate = self.liquidity_info.config.flash_loan_fee_rate.to_le_bytes();
         *max_deposit = self.liquidity_info.config.max_deposit.to_le_bytes();
         *max_acc_deposit = self.liquidity_info.config.max_acc_deposit.to_le_bytes();
+
+        *a = self.rate_model.a.to_le_bytes();
+        *c = self.rate_model.c.to_le_bytes();
+        *l_u = self.rate_model.l_u.to_le_bytes();
+        *k_u = self.rate_model.k_u.to_le_bytes();
     }
 
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -459,7 +469,6 @@ impl Pack for MarketReserve {
             liquidation_value_ratio,
             liquidation_penalty_ratio,
             enable,
-            rate_oracle,
             available,
             flash_loan_fee,
             acc_borrow_rate_wads,
@@ -470,6 +479,10 @@ impl Pack for MarketReserve {
             flash_loan_fee_rate,
             max_deposit,
             max_acc_deposit,
+            a,
+            c,
+            l_u,
+            k_u,
             _padding,
         ) = array_refs![
             input,
@@ -487,7 +500,6 @@ impl Pack for MarketReserve {
             1,
             1,
             1,
-            PUBKEY_BYTES,
             8,
             8,
             16,
@@ -498,6 +510,10 @@ impl Pack for MarketReserve {
             8,
             8,
             8,
+            8,
+            8,
+            1,
+            16,
             MARKET_RESERVE_PADDING_LEN
         ];
 
@@ -529,7 +545,6 @@ impl Pack for MarketReserve {
             },
             liquidity_info: LiquidityInfo {
                 enable: unpack_bool(enable)?,
-                rate_oracle: Pubkey::new_from_array(*rate_oracle),
                 available: u64::from_le_bytes(*available),
                 flash_loan_fee: u64::from_le_bytes(*flash_loan_fee),
                 acc_borrow_rate_wads: unpack_decimal(acc_borrow_rate_wads),
@@ -543,6 +558,12 @@ impl Pack for MarketReserve {
                     max_acc_deposit: u64::from_le_bytes(*max_acc_deposit),
                 },
             },
+            rate_model: RateModel {
+                a: u64::from_le_bytes(*a),
+                c: u64::from_le_bytes(*c),
+                l_u: u8::from_le_bytes(*l_u),
+                k_u: u128::from_le_bytes(*k_u),
+            }
         })
     }
 }
@@ -565,13 +586,13 @@ impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
             return Ok(());
         }
 
-        if let Some(oracle) = <dyn Any>::downcast_ref::<ReservePriceOracle>(&param) {
-            self.token_info.price_oracle = oracle.0;
+        if let Some(model) = <dyn Any>::downcast_ref::<RateModel>(&param) {
+            self.rate_model = *model;
             return Ok(());
         }
 
-        if let Some(oracle) = <dyn Any>::downcast_ref::<ReserveRateOracle>(&param) {
-            self.liquidity_info.rate_oracle = oracle.0;
+        if let Some(oracle) = <dyn Any>::downcast_ref::<PriceOraclePubkey>(&param) {
+            self.token_info.price_oracle = oracle.0;
             return Ok(());
         }
 
@@ -591,19 +612,9 @@ impl Param for LiquidityControl {
 
 ///
 #[derive(Clone, Debug, Copy)]
-pub struct ReservePriceOracle(pub Pubkey);
+pub struct PriceOraclePubkey(pub Pubkey);
 
-impl Param for ReservePriceOracle {
-    fn assert_valid(&self) -> ProgramResult {
-        Ok(())
-    }
-}
-
-///
-#[derive(Clone, Debug, Copy)]
-pub struct ReserveRateOracle(pub Pubkey);
-
-impl Param for ReserveRateOracle {
+impl Param for PriceOraclePubkey {
     fn assert_valid(&self) -> ProgramResult {
         Ok(())
     }

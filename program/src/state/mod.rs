@@ -4,7 +4,7 @@ mod manager;
 mod last_update;
 mod market_reserve;
 mod user_obligation;
-mod rate_oracle;
+mod rate_model;
 
 use std::convert::TryFrom;
 
@@ -12,7 +12,7 @@ pub use manager::*;
 pub use last_update::*;
 pub use user_obligation::*;
 pub use market_reserve::*;
-pub use rate_oracle::*;
+pub use rate_model::*;
 
 use crate::{
     error::LendingError,

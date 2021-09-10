@@ -44,8 +44,8 @@ pub enum LendingError {
     #[error("Price oracle is invalid")]
     InvalidPriceOracle,
     ///
-    #[error("Rate oracle is invalid")]
-    InvalidRateOracle,
+    #[error("Rate model is invalid")]
+    InvalidRateModel,
     ///
     #[error("Invalid liquidity config")]
     InvalidLiquidityConfig,
@@ -58,9 +58,6 @@ pub enum LendingError {
     ///
     #[error("Invalid indexed loan config")]
     InvalidIndexedLoanConfig,
-    ///
-    #[error("Invalid rate oracle config")]
-    InvalidRateOracleConfig,
     /// Oracle config is invalid
     #[error("Price oracle config is invalid")]
     InvalidPriceOracleConfig,
@@ -177,9 +174,6 @@ pub enum LendingError {
     ///
     #[error("Flash loan repay insufficient")]
     FlashLoanRepayInsufficient,
-    ///
-    #[error("Rate Oracle is not available")]
-    RateOracleNotAvailable,
     ///
     #[error("Invalid soToken mint info")]
     InvalidSoTokenMint,

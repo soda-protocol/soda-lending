@@ -15,7 +15,7 @@ use std::{convert::TryInto, cmp::Ordering, iter::Iterator, any::Any};
 use typenum::Bit;
 
 /// compute unit comsumed 160000-170000 for 12
-const MAX_OBLIGATION_RESERVES: usize = 12;
+const MAX_OBLIGATION_RESERVES: usize = 10;
 
 /// min borrow value (to avoid dust attack), set 1 dollar as default
 const MIN_LOANS_VALUE: u128 = 1_000_000_000_000_000_000;
@@ -661,7 +661,7 @@ impl IsInitialized for UserObligation {
 // const MAX_PADDING_LEN: usize = max(COLLATERAL_LEN, LOAN_LEN);
 const MAX_COLLATERAL_OR_LOAN_LEN: usize = LOAN_LEN;
 const USER_OBLIGATITION_PADDING_LEN: usize = 128;
-const USER_OBLIGATITION_LEN: usize = 1452;
+const USER_OBLIGATITION_LEN: usize = 1258;
 
 impl Pack for UserObligation {
     const LEN: usize = USER_OBLIGATITION_LEN;
