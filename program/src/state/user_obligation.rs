@@ -14,7 +14,7 @@ use solana_program::{
 use std::{convert::TryInto, cmp::Ordering, iter::Iterator, any::Any};
 use typenum::Bit;
 
-/// compute unit comsumed 160000-170000 for 12
+/// compute unit comsumed 160000-170000 for 12, wo choose 10 here
 const MAX_OBLIGATION_RESERVES: usize = 10;
 
 /// min borrow value (to avoid dust attack), set 1 dollar as default
