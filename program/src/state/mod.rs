@@ -1,6 +1,7 @@
 //! State types
 #![allow(missing_docs)]
 mod manager;
+mod francium;
 mod last_update;
 mod market_reserve;
 mod user_obligation;
@@ -9,6 +10,7 @@ mod rate_model;
 use std::convert::TryFrom;
 
 pub use manager::*;
+pub use francium::*;
 pub use last_update::*;
 pub use user_obligation::*;
 pub use market_reserve::*;
