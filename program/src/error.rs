@@ -91,6 +91,12 @@ pub enum LendingError {
     /// Token burn failed
     #[error("Token burn failed")]
     TokenBurnFailed,
+    /// Token approve failed
+    #[error("Token approve failed")]
+    TokenApproveFailed,
+    /// Token approve failed
+    #[error("Token revoke failed")]
+    TokenRevokeFailed,
 
     ///
     #[error("COption unpack error")]
@@ -162,9 +168,6 @@ pub enum LendingError {
     ///
     #[error("Market Reserve deposit too much")]
     MarketReserveDepositTooMuch,
-    ///
-    #[error("Market Reserve accumulative deposit too much")]
-    MarketReserveAccDepositTooMuch,
     ///
     #[error("Market Reserve liquidity available insufficient")]
     MarketReserveInsufficentLiquidity,

@@ -6,10 +6,10 @@ use crate::{
     math::{Decimal, TryDiv, TryMul},
     pyth,
     state::{
-        CollateralConfig, CollateralInfo, LiquidityControl, LastUpdate,
-        LiquidityConfig, LiquidityInfo, Manager, MarketReserve, Operator,
-        Param, PROGRAM_VERSION, RateModel, PriceOraclePubkey, TokenInfo,
-        UserObligation, calculate_amount,
+        CollateralConfig, LiquidityControl, LiquidityConfig,
+        Manager, MarketReserve, Operator, Param, RateModel,
+        PriceOraclePubkey, TokenInfo, UserObligation,
+        calculate_amount,
     },
 };
 use num_traits::FromPrimitive;
@@ -24,7 +24,7 @@ use solana_program::{
     program_option::COption,
     program_pack::{IsInitialized, Pack},
     pubkey::Pubkey,
-    sysvar::{clock::Clock, rent::Rent, Sysvar}
+    sysvar::{clock::Clock, rent::Rent, Sysvar},
 };
 use spl_token::{state::{Mint, Account}, check_program_account, native_mint};
 use typenum::{Bit, True, False};
@@ -166,9 +166,9 @@ pub fn process_instruction(
             process_inject_case::<B1>(program_id, accounts)
         }
         #[cfg(feature = "general-test")]
-        LendingInstruction::CloseObligation => {
-            msg!("Instruction(Test): Close Obligation");
-            process_close_obligation(program_id, accounts)
+        LendingInstruction::CloseLendingAccount => {
+            msg!("Instruction(Test): Close Lending Account");
+            process_close_lending_account(program_id, accounts)
         }
     }
 }
@@ -197,14 +197,13 @@ fn process_init_manager(
     let token_program_id = next_account_info(account_info_iter)?;
     check_program_account(&token_program_id.key)?;
     
-    let manager = Manager{
-        version: PROGRAM_VERSION,
-        bump_seed: Pubkey::find_program_address(&[manager_info.key.as_ref()], program_id).1,
-        owner: *owner_info.key,
+    let manager = Manager::new(
+        Pubkey::find_program_address(&[manager_info.key.as_ref()], program_id).1,
+        *owner_info.key,
         quote_currency,
-        token_program_id: *token_program_id.key,
-        pyth_program_id: *oracle_program_id.key,
-    };
+        *token_program_id.key,
+        *oracle_program_id.key,
+    );
     Manager::pack(manager, &mut manager_info.try_borrow_mut_data()?)
 }
 
@@ -313,33 +312,21 @@ fn process_init_market_reserve(
         return Err(LendingError::InvalidTokenProgram.into()); 
     }
 
-    let market_reserve = MarketReserve {
-        version: PROGRAM_VERSION,
-        last_update: LastUpdate::new(clock.slot),
-        manager: *manager_info.key,
+    let market_reserve = MarketReserve::new(
+        clock.slot,
+        *manager_info.key,
         market_price,
-        token_info: TokenInfo {
+        TokenInfo {
             mint_pubkey: *token_mint_info.key,
             supply_account: *supply_token_account_info.key,
             price_oracle: *pyth_price_info.key,
             decimal: token_decimals,
         },
-        liquidity_info: LiquidityInfo {
-            enable: true,
-            available: 0,
-            flash_loan_fee: 0,
-            acc_borrow_rate_wads: Decimal::one(),
-            borrowed_amount_wads: Decimal::zero(),
-            insurance_wads: Decimal::zero(),
-            config: liquidity_config,
-        },
-        collateral_info: CollateralInfo {
-            sotoken_mint_pubkey: *sotoken_mint_info.key,
-            total_mint: 0,
-            config: collateral_config,
-        },
+        liquidity_config,
+        *sotoken_mint_info.key,
+        collateral_config,
         rate_model,
-    };
+    );
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
 
     // init manager token account
@@ -543,18 +530,11 @@ fn process_init_user_obligation(
     // 5
     let owner_info = next_account_info(account_info_iter)?;
 
-    let user_obligation = UserObligation {
-        version: PROGRAM_VERSION,
-        manager: *manager_info.key,
-        owner: *owner_info.key,
-        last_update: LastUpdate::new(clock.slot),
-        friend: COption::None,
-        collaterals: Vec::new(),
-        collaterals_borrow_value: Decimal::zero(),
-        collaterals_liquidation_value: Decimal::zero(),
-        loans: Vec::new(),
-        loans_value: Decimal::zero(),
-    };
+    let user_obligation = UserObligation::new(
+        clock.slot,
+        *manager_info.key,
+        *owner_info.key,
+    );
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
 }
 
@@ -1597,7 +1577,8 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         None
     };
     // 9/10
-    let liquidator_token_account_info = next_account_info(account_info_iter)?;
+    // swap pool source account, approve target amount to it
+    let swap_authority_info = next_account_info(account_info_iter)?;
     // 10/11
     let token_program_id = next_account_info(account_info_iter)?;
     // 11/12
@@ -1635,8 +1616,9 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     let account_infos = account_info_iter.map(|account_info| account_info.clone());
     // prepare instruction and account infos    
     let mut flash_loan_instruction_account_infos = vec![
+        collateral_supply_account_info.clone(),
         loan_supply_account_info.clone(),
-        liquidator_token_account_info.clone(),
+        swap_authority_info.clone(),
         token_program_id.clone(),
     ];
     flash_loan_instruction_account_infos.extend(account_infos);
@@ -1658,9 +1640,9 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         .ok_or(LendingError::MathOverflow)?;
 
     // transfer collateral from manager to liquidator
-    spl_token_transfer(TokenTransferParams {
+    spl_token_approve(TokenApproveParams {
         source: collateral_supply_account_info.clone(),
-        destination: liquidator_token_account_info.clone(),
+        delegate: swap_authority_info.clone(),
         amount: collateral_amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
@@ -1748,7 +1730,7 @@ fn process_flash_loan(
         return Err(LendingError::InvalidSupplyTokenAccount.into());
     }
     // 6
-    let receiver_token_account_info = next_account_info(account_info_iter)?;
+    let receiver_authority_info = next_account_info(account_info_iter)?;
     // 7
     let token_program_id = next_account_info(account_info_iter)?;
     // 8
@@ -1769,7 +1751,7 @@ fn process_flash_loan(
     // prepare instruction and account infos    
     let mut flash_loan_instruction_account_infos = vec![
         supply_token_account_info.clone(),
-        receiver_token_account_info.clone(),
+        receiver_authority_info.clone(),
         token_program_id.clone(),
     ];
     flash_loan_instruction_account_infos.extend(account_infos);
@@ -1785,10 +1767,10 @@ fn process_flash_loan(
         }).collect::<Vec<_>>();
     flash_loan_instruction_account_infos.push(receiver_program_id.clone());
 
-    // transfer to receiver
-    spl_token_transfer(TokenTransferParams {
+    // approve to receiver
+    spl_token_approve(TokenApproveParams {
         source: supply_token_account_info.clone(),
-        destination: receiver_token_account_info.clone(),
+        delegate: receiver_authority_info.clone(),
         amount: borrow_amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
@@ -1813,6 +1795,13 @@ fn process_flash_loan(
         },
         &flash_loan_instruction_account_infos[..],
     )?;
+
+    spl_token_revoke(TokenRevokeParams {
+        source: supply_token_account_info.clone(),
+        authority: manager_authority_info.clone(),
+        authority_signer_seeds,
+        token_program: token_program_id.clone(),
+    })?;
 
     // check balance
     let balance_after = Account::unpack(&supply_token_account_info.try_borrow_data()?)?.amount;
@@ -2010,24 +1999,24 @@ fn process_inject_case<B: Bit>(
 }
 
 #[cfg(feature = "general-test")]
-fn process_close_obligation(
+fn process_close_lending_account(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     // 1
-    let user_obligation_info = next_account_info(account_info_iter)?;
-    if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+    let source_account_info = next_account_info(account_info_iter)?;
+    if source_account_info.owner != program_id {
+        msg!("Source account owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     // 2
     let dest_account_info = next_account_info(account_info_iter)?;
     let dest_starting_lamports = dest_account_info.lamports();
     **dest_account_info.try_borrow_mut_lamports()? = dest_starting_lamports
-        .checked_add(user_obligation_info.lamports())
+        .checked_add(source_account_info.lamports())
         .ok_or(LendingError::MathOverflow)?;
-    **user_obligation_info.try_borrow_mut_lamports()? = 0;
+    **source_account_info.try_borrow_mut_lamports()? = 0;
 
     Ok(())
 }
@@ -2101,7 +2090,10 @@ fn get_pyth_product_quote_currency(pyth_product: &pyth::Product) -> Result<[u8; 
 }
 
 fn get_pyth_price(pyth_price_info: &AccountInfo, clock: &Clock) -> Result<Decimal, ProgramError> {
+    #[cfg(not(feature = "general-test"))]
     const STALE_AFTER_SLOTS_ELAPSED: u64 = 15;
+    #[cfg(feature = "general-test")]
+    const STALE_AFTER_SLOTS_ELAPSED: u64 = 5;
 
     let pyth_price_data = pyth_price_info.try_borrow_data()?;
     let pyth_price = pyth::load::<pyth::Price>(&pyth_price_data)
@@ -2278,6 +2270,54 @@ fn spl_token_burn(params: TokenBurnParams<'_, '_>) -> ProgramResult {
     result.map_err(|_| LendingError::TokenBurnFailed.into())
 }
 
+/// Issue a spl_token `Approve` instruction.
+#[inline(always)]
+fn spl_token_approve(params: TokenApproveParams<'_, '_>) -> ProgramResult {
+    let TokenApproveParams {
+        source,
+        delegate,
+        authority,
+        token_program,
+        amount,
+        authority_signer_seeds,
+    } = params;
+    let result = invoke_optionally_signed(
+        &spl_token::instruction::approve(
+            token_program.key,
+            source.key,
+            delegate.key,
+            authority.key,
+            &[],
+            amount,
+        )?,
+        &[source, delegate, authority, token_program],
+        authority_signer_seeds,
+    );
+    result.map_err(|_| LendingError::TokenApproveFailed.into())
+}
+
+/// Issue a spl_token `Revoke` instruction.
+#[inline(always)]
+fn spl_token_revoke(params: TokenRevokeParams<'_, '_>) -> ProgramResult {
+    let TokenRevokeParams {
+        source,
+        authority,
+        token_program,
+        authority_signer_seeds,
+    } = params;
+    let result = invoke_optionally_signed(
+        &spl_token::instruction::revoke(
+            token_program.key,
+            source.key,
+            authority.key,
+            &[],
+        )?,
+        &[source, authority, token_program],
+        authority_signer_seeds,
+    );
+    result.map_err(|_| LendingError::TokenRevokeFailed.into())
+}
+
 struct TokenInitializeMintParams<'a: 'b, 'b> {
     mint: AccountInfo<'a>,
     rent: AccountInfo<'a>,
@@ -2316,6 +2356,22 @@ struct TokenBurnParams<'a: 'b, 'b> {
     mint: AccountInfo<'a>,
     source: AccountInfo<'a>,
     amount: u64,
+    authority: AccountInfo<'a>,
+    authority_signer_seeds: &'b [&'b [u8]],
+    token_program: AccountInfo<'a>,
+}
+
+struct TokenApproveParams<'a: 'b, 'b> {
+    source: AccountInfo<'a>,
+    delegate: AccountInfo<'a>,
+    amount: u64,
+    authority: AccountInfo<'a>,
+    authority_signer_seeds: &'b [&'b [u8]],
+    token_program: AccountInfo<'a>,
+}
+
+struct TokenRevokeParams<'a: 'b, 'b> {
+    source: AccountInfo<'a>,
     authority: AccountInfo<'a>,
     authority_signer_seeds: &'b [&'b [u8]],
     token_program: AccountInfo<'a>,

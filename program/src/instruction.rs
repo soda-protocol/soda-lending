@@ -156,7 +156,7 @@ pub enum LendingInstruction {
     InjectLiquidation,
     /// 30
     #[cfg(feature = "general-test")]
-    CloseObligation,
+    CloseLendingAccount,
 }
 
 impl LendingInstruction {
@@ -270,7 +270,7 @@ impl LendingInstruction {
             #[cfg(feature = "general-test")]
             29 => Self::InjectLiquidation,
             #[cfg(feature = "general-test")]
-            30 => Self::CloseObligation,
+            30 => Self::CloseLendingAccount,
             _ => {
                 msg!("Instruction cannot be unpacked");
                 return Err(LendingError::InstructionUnpackError.into());
@@ -315,7 +315,6 @@ impl LendingInstruction {
         let (borrow_tax_rate, rest) = Self::unpack_u8(rest)?;
         let (flash_loan_fee_rate, rest) = Self::unpack_u64(rest)?;
         let (max_deposit, rest) = Self::unpack_u64(rest)?;
-        let (max_acc_deposit, rest) = Self::unpack_u64(rest)?;
 
         Ok((
             LiquidityConfig {
@@ -323,7 +322,6 @@ impl LendingInstruction {
                 borrow_tax_rate,
                 flash_loan_fee_rate,
                 max_deposit,
-                max_acc_deposit,
             }, rest
         ))
     }
@@ -525,7 +523,7 @@ impl LendingInstruction {
             #[cfg(feature = "general-test")]
             Self::InjectLiquidation => buf.push(29),
             #[cfg(feature = "general-test")]
-            Self::CloseObligation => buf.push(30),
+            Self::CloseLendingAccount => buf.push(30),
         }
         buf
     }
@@ -548,7 +546,6 @@ impl LendingInstruction {
         buf.extend_from_slice(&config.borrow_tax_rate.to_le_bytes());
         buf.extend_from_slice(&config.flash_loan_fee_rate.to_le_bytes());
         buf.extend_from_slice(&config.max_deposit.to_le_bytes());
-        buf.extend_from_slice(&config.max_acc_deposit.to_le_bytes());
     }
 }
 
@@ -1384,16 +1381,16 @@ pub fn inject_liquidation(
 }
 
 #[cfg(feature = "general-test")]
-pub fn close_obligation(
-    user_obligation_key: Pubkey,
+pub fn close_lending_account(
+    source_account_key: Pubkey,
     dest_account_key: Pubkey,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
-            AccountMeta::new(user_obligation_key, false),
+            AccountMeta::new(source_account_key, false),
             AccountMeta::new(dest_account_key, false),
         ],
-        data: LendingInstruction::CloseObligation.pack(),
+        data: LendingInstruction::CloseLendingAccount.pack(),
     }
 }

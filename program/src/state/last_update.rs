@@ -5,25 +5,35 @@ use solana_program::{
     program_pack::{Pack, Sealed}
 };
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
-use std::cmp::Ordering;
+use typenum::Unsigned;
+use std::marker::PhantomData;
 
 /// Number of slots to consider stale after
-pub const STALE_AFTER_SLOTS_ELAPSED: u64 = 1;
+// pub const STALE_AFTER_SLOTS_ELAPSED: u64 = 1;
 
 /// Last update state
-#[derive(Clone, Debug, Default)]
-pub struct LastUpdate {
+/// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  Remark  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+/// Considering transaction size limit (1232), we can not pack <refresh-reserves> +
+/// <refresh-obligation> + <liquidate/flash liquidation> to one transaction while
+/// reserves are too many (> 10). So we have no choice but split those instructions
+/// into multi-transactions, which break atomicity. Stale slots eplased confidence
+/// is designed as trait for LastUpdate, to restrict timeliness between related
+/// transactions.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct LastUpdate<U: Unsigned> {
     /// Last slot when updated
     pub slot: Slot,
     /// True when marked stale, false when slot updated
     pub stale: bool,
+    ///
+    _u: PhantomData<U>,
 }
 
-impl Sealed for LastUpdate {}
+impl<U: Unsigned> Sealed for LastUpdate<U> {}
 ///
 pub const LAST_UPDATE_LEN: usize = 9;
 
-impl Pack for LastUpdate {
+impl<U: Unsigned> Pack for LastUpdate<U> {
     const LEN: usize = LAST_UPDATE_LEN;
 
     fn pack_into_slice(&self, output: &mut [u8]) {
@@ -57,14 +67,19 @@ impl Pack for LastUpdate {
         Ok(Self{
             slot: Slot::from_le_bytes(*slot),
             stale: unpack_bool(stale)?,
+            _u: PhantomData,
         })
     }
 }
 
-impl LastUpdate {
+impl<U: Unsigned> LastUpdate<U> {
     /// Create new last update
     pub fn new(slot: Slot) -> Self {
-        Self { slot, stale: true }
+        Self {
+            slot,
+            stale: true,
+            _u: PhantomData,
+        }
     }
 
     /// Return slots elapsed since given slot
@@ -85,18 +100,6 @@ impl LastUpdate {
 
     /// Check if marked stale or last update slot is too long ago
     pub fn is_stale(&self, slot: Slot) -> Result<bool, ProgramError> {
-        Ok(self.stale || self.slots_elapsed(slot)? >= STALE_AFTER_SLOTS_ELAPSED)
-    }
-}
-
-impl PartialEq for LastUpdate {
-    fn eq(&self, other: &Self) -> bool {
-        self.slot == other.slot
-    }
-}
-
-impl PartialOrd for LastUpdate {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        self.slot.partial_cmp(&other.slot)
+        Ok(self.stale || self.slots_elapsed(slot)? > U::U64)
     }
 }

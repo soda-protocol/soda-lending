@@ -6,19 +6,22 @@ use crate::{
 };
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use solana_program::{
+    clock::Slot,
     entrypoint::ProgramResult,
     program_error::ProgramError,
     program_pack::{IsInitialized, Pack, Sealed},
     pubkey::{Pubkey, PUBKEY_BYTES}
 };
 use std::{convert::TryInto, cmp::Ordering, iter::Iterator, any::Any};
-use typenum::Bit;
 
-/// compute unit comsumed 160000-170000 for 12, wo choose 10 here
-const MAX_OBLIGATION_RESERVES: usize = 10;
+/// refresh-obligation comsumed about 150000~160000 compute unit for 11 collateral position, so 11 is safe enough
+const MAX_OBLIGATION_RESERVES: usize = 11;
 
-/// min borrow value (to avoid dust attack), set 1 dollar as default
-const MIN_LOANS_VALUE: u128 = 1_000_000_000_000_000_000;
+/// min borrow value (to avoid dust attack), set 0.1 dollar as default
+const MIN_LOANS_VALUE: u128 = 100_000_000_000_000_000;
+
+/// U10 means 10 slots is confidence-slot for obligation stale (about 4s)
+type StaleEplasedSlots = typenum::U10;
 
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -205,11 +208,11 @@ pub struct UserObligation {
     /// Version of the struct
     pub version: u8,
     ///
+    pub last_update: LastUpdate<StaleEplasedSlots>,
+    ///
     pub manager: Pubkey,
     ///
     pub owner: Pubkey,
-    ///
-    pub last_update: LastUpdate,
     ///
     pub friend: COption<Pubkey>,
     /// 
@@ -225,6 +228,21 @@ pub struct UserObligation {
 }
 
 impl UserObligation {
+    ///
+    pub fn new(slot: Slot, manager: Pubkey, owner: Pubkey) -> Self {
+        Self {
+            version: PROGRAM_VERSION,
+            last_update: LastUpdate::new(slot),
+            manager,
+            owner,
+            friend: COption::None,
+            collaterals: Vec::new(),
+            collaterals_borrow_value: Decimal::zero(),
+            collaterals_liquidation_value: Decimal::zero(),
+            loans: Vec::new(),
+            loans_value: Decimal::zero(),
+        }
+    }
     ///
     fn validate_health(&self, other: Option<Self>) -> ProgramResult {
         let (collaterals_borrow_value, loans_value) = if let Some(other) = other {
@@ -563,7 +581,7 @@ impl UserObligation {
     ///
     // need refresh obligation before
     #[allow(clippy::too_many_arguments)]
-    pub fn liquidate<IsCollateral: Bit>(
+    pub fn liquidate<IsCollateral: typenum::Bit>(
         &mut self,
         amount: u64,
         collateral_index: usize,
@@ -661,7 +679,7 @@ impl IsInitialized for UserObligation {
 // const MAX_PADDING_LEN: usize = max(COLLATERAL_LEN, LOAN_LEN);
 const MAX_COLLATERAL_OR_LOAN_LEN: usize = LOAN_LEN;
 const USER_OBLIGATITION_PADDING_LEN: usize = 128;
-const USER_OBLIGATITION_LEN: usize = 1258;
+const USER_OBLIGATITION_LEN: usize = 1355;
 
 impl Pack for UserObligation {
     const LEN: usize = USER_OBLIGATITION_LEN;
@@ -671,9 +689,9 @@ impl Pack for UserObligation {
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             version,
+            last_update,
             manager,
             owner,
-            last_update,
             friend,
             collaterals_borrow_value,
             collaterals_liquidation_value,
@@ -685,9 +703,9 @@ impl Pack for UserObligation {
         ) = mut_array_refs![
             output,
             1,
-            PUBKEY_BYTES,
-            PUBKEY_BYTES,
             LAST_UPDATE_LEN,
+            PUBKEY_BYTES,
+            PUBKEY_BYTES,
             COPTION_LEN + PUBKEY_BYTES,
             16,
             16,
@@ -699,9 +717,9 @@ impl Pack for UserObligation {
         ];
 
         *version = self.version.to_le_bytes();
+        self.last_update.pack_into_slice(&mut last_update[..]);
         manager.copy_from_slice(self.manager.as_ref());
         owner.copy_from_slice(self.owner.as_ref());
-        self.last_update.pack_into_slice(&mut last_update[..]);
         pack_coption_pubkey(&self.friend, friend);
         pack_decimal(self.collaterals_borrow_value, collaterals_borrow_value);
         pack_decimal(self.collaterals_liquidation_value, collaterals_liquidation_value);
@@ -727,9 +745,9 @@ impl Pack for UserObligation {
         #[allow(clippy::ptr_offset_with_cast)]
         let (
             version,
+            last_update,
             manager,
             owner,
-            last_update,
             friend,
             collaterals_borrow_value,
             collaterals_liquidation_value,
@@ -741,9 +759,9 @@ impl Pack for UserObligation {
         ) = array_refs![
             input,
             1,
-            PUBKEY_BYTES,
-            PUBKEY_BYTES,
             LAST_UPDATE_LEN,
+            PUBKEY_BYTES,
+            PUBKEY_BYTES,
             COPTION_LEN + PUBKEY_BYTES,
             16,
             16,
@@ -850,9 +868,4 @@ impl Param for IndexedLoanConfig {
             Err(LendingError::InvalidIndexedLoanConfig.into())
         }
     }
-}
-
-#[cfg(test)]
-mod test {
-    
 }

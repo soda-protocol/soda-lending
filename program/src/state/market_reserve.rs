@@ -1,6 +1,4 @@
 #![allow(missing_docs)]
-use std::{convert::TryInto, any::Any};
-///
 use super::*;
 use crate::{error::LendingError, math::{Rate, TryDiv, TrySub, WAD}};
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
@@ -12,6 +10,10 @@ use solana_program::{
     program_pack::{IsInitialized, Pack, Sealed}, 
     pubkey::{Pubkey, PUBKEY_BYTES}
 };
+use std::{convert::TryInto, any::Any};
+
+/// U0 means 0 slots is confidence-slot for market reserve stale
+type StaleEplasedSlots = typenum::U0;
 
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -90,16 +92,13 @@ pub struct LiquidityConfig {
     pub flash_loan_fee_rate: u64,
     ///
     pub max_deposit: u64,
-    ///
-    pub max_acc_deposit: u64,
 }
 
 impl Param for LiquidityConfig {
     fn assert_valid(&self) -> ProgramResult {
         if self.close_ratio < 100 &&
             self.borrow_tax_rate < 100 &&
-            self.flash_loan_fee_rate < WAD &&
-            self.max_deposit <= self.max_acc_deposit {
+            self.flash_loan_fee_rate < WAD {
             Ok(())
         } else {
             Err(LendingError::InvalidLiquidityConfig.into())
@@ -147,19 +146,15 @@ impl LiquidityInfo {
         if !self.enable {
             return Err(LendingError::MarketReserveDisabled.into());
         }
-        
-        if amount > self.config.max_deposit {
-            return Err(LendingError::MarketReserveDepositTooMuch.into());
-        }
 
         self.available = self.available
             .checked_add(amount)
             .ok_or(LendingError::MathOverflow)?;
 
-        if self.available <= self.config.max_acc_deposit {
+        if self.total_supply()? <= Decimal::from(self.config.max_deposit) {
             Ok(())
         } else {
-            Err(LendingError::MarketReserveAccDepositTooMuch.into())
+            Err(LendingError::MarketReserveDepositTooMuch.into())
         }
     }
     ///
@@ -255,7 +250,7 @@ pub struct MarketReserve {
     /// Version of the struct
     pub version: u8,
     ///
-    pub last_update: LastUpdate,
+    pub last_update: LastUpdate<StaleEplasedSlots>,
     /// 
     pub manager: Pubkey,
     ///
@@ -271,6 +266,41 @@ pub struct MarketReserve {
 }
 
 impl MarketReserve {
+    ///
+    #[allow(clippy::too_many_arguments)]
+    pub fn new(
+        slot: Slot,
+        manager: Pubkey,
+        market_price: Decimal,
+        token_info: TokenInfo,
+        liquidity_config: LiquidityConfig,
+        sotoken_mint_pubkey: Pubkey,
+        collateral_config: CollateralConfig,
+        rate_model: RateModel,
+    ) -> Self {
+        Self {
+            version: PROGRAM_VERSION,
+            last_update: LastUpdate::new(slot),
+            manager,
+            market_price,
+            token_info,
+            liquidity_info: LiquidityInfo {
+                enable: true,
+                available: 0,
+                flash_loan_fee: 0,
+                acc_borrow_rate_wads: Decimal::one(),
+                borrowed_amount_wads: Decimal::zero(),
+                insurance_wads: Decimal::zero(),
+                config: liquidity_config,
+            },
+            collateral_info: CollateralInfo {
+                sotoken_mint_pubkey,
+                total_mint: 0,
+                config: collateral_config,
+            },
+            rate_model,
+        }
+    }
     ///
     pub fn liquidity_to_collateral_rate(&self) -> Result<Rate, ProgramError> {
         let total_supply = self.liquidity_info.total_supply()?;
@@ -344,7 +374,7 @@ impl IsInitialized for MarketReserve {
 }
 
 const MARKET_RESERVE_PADDING_LEN: usize = 256;
-const MARKET_RESERVE_LEN: usize = 578;
+const MARKET_RESERVE_LEN: usize = 570;
 
 impl Pack for MarketReserve {
     const LEN: usize = MARKET_RESERVE_LEN;
@@ -376,7 +406,6 @@ impl Pack for MarketReserve {
             borrow_tax_rate,
             flash_loan_fee_rate,
             max_deposit,
-            max_acc_deposit,
             a,
             c,
             l_u,
@@ -405,7 +434,6 @@ impl Pack for MarketReserve {
             16,
             1,
             1,
-            8,
             8,
             8,
             8,
@@ -443,7 +471,6 @@ impl Pack for MarketReserve {
         *borrow_tax_rate = self.liquidity_info.config.borrow_tax_rate.to_le_bytes();
         *flash_loan_fee_rate = self.liquidity_info.config.flash_loan_fee_rate.to_le_bytes();
         *max_deposit = self.liquidity_info.config.max_deposit.to_le_bytes();
-        *max_acc_deposit = self.liquidity_info.config.max_acc_deposit.to_le_bytes();
 
         *a = self.rate_model.a.to_le_bytes();
         *c = self.rate_model.c.to_le_bytes();
@@ -478,7 +505,6 @@ impl Pack for MarketReserve {
             borrow_tax_rate,
             flash_loan_fee_rate,
             max_deposit,
-            max_acc_deposit,
             a,
             c,
             l_u,
@@ -507,7 +533,6 @@ impl Pack for MarketReserve {
             16,
             1,
             1,
-            8,
             8,
             8,
             8,
@@ -555,7 +580,6 @@ impl Pack for MarketReserve {
                     borrow_tax_rate: u8::from_le_bytes(*borrow_tax_rate),
                     flash_loan_fee_rate: u64::from_le_bytes(*flash_loan_fee_rate),
                     max_deposit: u64::from_le_bytes(*max_deposit),
-                    max_acc_deposit: u64::from_le_bytes(*max_acc_deposit),
                 },
             },
             rate_model: RateModel {
