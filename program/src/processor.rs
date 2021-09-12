@@ -1578,7 +1578,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     };
     // 9/10
     // swap pool source account, approve target amount to it
-    let swap_authority_info = next_account_info(account_info_iter)?;
+    let liquidator_authority_info = next_account_info(account_info_iter)?;
     // 10/11
     let token_program_id = next_account_info(account_info_iter)?;
     // 11/12
@@ -1618,7 +1618,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     let mut flash_loan_instruction_account_infos = vec![
         collateral_supply_account_info.clone(),
         loan_supply_account_info.clone(),
-        swap_authority_info.clone(),
+        liquidator_authority_info.clone(),
         token_program_id.clone(),
     ];
     flash_loan_instruction_account_infos.extend(account_infos);
@@ -1642,7 +1642,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     // transfer collateral from manager to liquidator
     spl_token_approve(TokenApproveParams {
         source: collateral_supply_account_info.clone(),
-        delegate: swap_authority_info.clone(),
+        delegate: liquidator_authority_info.clone(),
         amount: collateral_amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
