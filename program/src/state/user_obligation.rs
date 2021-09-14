@@ -20,9 +20,6 @@ const MAX_OBLIGATION_RESERVES: usize = 11;
 /// min borrow value (to avoid dust attack), set 0.1 dollar as default
 const MIN_LOANS_VALUE: u128 = 100_000_000_000_000_000;
 
-/// U10 means 10 slots is confidence-slot for obligation stale (about 4s)
-type StaleEplasedSlots = typenum::U10;
-
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Collateral {
@@ -208,7 +205,7 @@ pub struct UserObligation {
     /// Version of the struct
     pub version: u8,
     ///
-    pub last_update: LastUpdate<StaleEplasedSlots>,
+    pub last_update: LastUpdate,
     ///
     pub manager: Pubkey,
     ///

@@ -12,9 +12,6 @@ use solana_program::{
 };
 use std::{convert::TryInto, any::Any};
 
-/// U0 means 0 slots is confidence-slot for market reserve stale
-type StaleEplasedSlots = typenum::U0;
-
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct TokenInfo {
@@ -250,7 +247,7 @@ pub struct MarketReserve {
     /// Version of the struct
     pub version: u8,
     ///
-    pub last_update: LastUpdate<StaleEplasedSlots>,
+    pub last_update: LastUpdate,
     /// 
     pub manager: Pubkey,
     ///

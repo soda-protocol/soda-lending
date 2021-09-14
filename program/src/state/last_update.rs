@@ -5,11 +5,9 @@ use solana_program::{
     program_pack::{Pack, Sealed}
 };
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
-use typenum::Unsigned;
-use std::marker::PhantomData;
 
-/// Number of slots to consider stale after
-// pub const STALE_AFTER_SLOTS_ELAPSED: u64 = 1;
+/// Number of slots to consider stale after, about 4s
+pub const STALE_AFTER_SLOTS_ELAPSED: u64 = 10;
 
 /// Last update state
 /// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  Remark  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -20,20 +18,18 @@ use std::marker::PhantomData;
 /// is designed as trait for LastUpdate, to restrict timeliness between related
 /// transactions.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct LastUpdate<U: Unsigned> {
+pub struct LastUpdate {
     /// Last slot when updated
     pub slot: Slot,
     /// True when marked stale, false when slot updated
     pub stale: bool,
-    ///
-    _u: PhantomData<U>,
 }
 
-impl<U: Unsigned> Sealed for LastUpdate<U> {}
+impl Sealed for LastUpdate {}
 ///
 pub const LAST_UPDATE_LEN: usize = 9;
 
-impl<U: Unsigned> Pack for LastUpdate<U> {
+impl Pack for LastUpdate {
     const LEN: usize = LAST_UPDATE_LEN;
 
     fn pack_into_slice(&self, output: &mut [u8]) {
@@ -67,18 +63,16 @@ impl<U: Unsigned> Pack for LastUpdate<U> {
         Ok(Self{
             slot: Slot::from_le_bytes(*slot),
             stale: unpack_bool(stale)?,
-            _u: PhantomData,
         })
     }
 }
 
-impl<U: Unsigned> LastUpdate<U> {
+impl LastUpdate {
     /// Create new last update
     pub fn new(slot: Slot) -> Self {
         Self {
             slot,
             stale: true,
-            _u: PhantomData,
         }
     }
 
@@ -99,7 +93,11 @@ impl<U: Unsigned> LastUpdate<U> {
     }
 
     /// Check if marked stale or last update slot is too long ago
-    pub fn is_stale(&self, slot: Slot) -> Result<bool, ProgramError> {
-        Ok(self.stale || self.slots_elapsed(slot)? > U::U64)
+    pub fn is_strict_stale(&self, slot: Slot) -> Result<bool, ProgramError> {
+        Ok(self.stale || self.slots_elapsed(slot)? > 0)
+    }
+
+    pub fn is_lax_stale(&self, slot: Slot) -> Result<bool, ProgramError> {
+        Ok(self.stale || self.slots_elapsed(slot)? > STALE_AFTER_SLOTS_ELAPSED)
     }
 }

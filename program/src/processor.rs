@@ -567,7 +567,7 @@ fn process_refresh_user_obligation(
                 msg!("User Obligation manager provided is matched with market reserve provided");
                 return Err(LendingError::InvalidManager.into());
             }
-            if market_reserve.last_update.is_stale(clock.slot)? {
+            if market_reserve.last_update.is_strict_stale(clock.slot)? {
                 Err(LendingError::MarketReserveStale.into())
             } else {
                 Ok((*market_reserve_info.key, market_reserve))
@@ -649,7 +649,7 @@ fn process_unbind_friend(
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
-    if user_obligation.last_update.is_stale(clock.slot)? {
+    if user_obligation.last_update.is_lax_stale(clock.slot)? {
         return Err(LendingError::ObligationStale.into());
     }
     // 3
@@ -659,7 +659,7 @@ fn process_unbind_friend(
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
-    if friend_obligation.last_update.is_stale(clock.slot)? {
+    if friend_obligation.last_update.is_lax_stale(clock.slot)? {
         return Err(LendingError::ObligationStale.into());
     }
     if user_obligation.manager != friend_obligation.manager {
@@ -805,9 +805,6 @@ fn process_redeem_collateral(
         msg!("Market reserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
     }
-    if market_reserve.last_update.is_stale(clock.slot)? {
-        return Err(LendingError::MarketReserveStale.into());
-    }
     // 5
     let sotoken_mint_info = next_account_info(account_info_iter)?;
     if sotoken_mint_info.key != &market_reserve.collateral_info.sotoken_mint_pubkey {
@@ -823,7 +820,7 @@ fn process_redeem_collateral(
     if &user_obligation.manager != manager_info.key {
         return Err(LendingError::InvalidManager.into());
     }
-    if user_obligation.last_update.is_stale(clock.slot)? {
+    if user_obligation.last_update.is_lax_stale(clock.slot)? {
         return Err(LendingError::ObligationStale.into());
     }
 
@@ -834,7 +831,7 @@ fn process_redeem_collateral(
             return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
-        if friend_obligation.last_update.is_stale(clock.slot)? {
+        if friend_obligation.last_update.is_lax_stale(clock.slot)? {
             return Err(LendingError::ObligationStale.into());
         }
 
@@ -1019,9 +1016,6 @@ fn process_replace_collateral(
         msg!("Out market reserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
     }
-    if out_market_reserve.last_update.is_stale(clock.slot)? {
-        return Err(LendingError::MarketReserveStale.into());
-    }
     // 5
     let out_sotoken_mint_info = next_account_info(account_info_iter)?;
     if out_sotoken_mint_info.key != &out_market_reserve.collateral_info.sotoken_mint_pubkey {
@@ -1038,7 +1032,7 @@ fn process_replace_collateral(
         msg!("In market reserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
     }
-    if in_market_reserve.last_update.is_stale(clock.slot)? {
+    if in_market_reserve.last_update.is_strict_stale(clock.slot)? {
         return Err(LendingError::MarketReserveStale.into());
     }
     // 7
@@ -1056,7 +1050,7 @@ fn process_replace_collateral(
     if &user_obligation.manager != manager_info.key {
         return Err(LendingError::InvalidManager.into());
     }
-    if user_obligation.last_update.is_stale(clock.slot)? {
+    if user_obligation.last_update.is_lax_stale(clock.slot)? {
         return Err(LendingError::ObligationStale.into());
     }
 
@@ -1067,7 +1061,7 @@ fn process_replace_collateral(
             return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
-        if friend_obligation.last_update.is_stale(clock.slot)? {
+        if friend_obligation.last_update.is_lax_stale(clock.slot)? {
             return Err(LendingError::ObligationStale.into());
         }
 
@@ -1175,7 +1169,7 @@ fn process_borrow_liquidity(
         msg!("MarketReserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
     }
-    if market_reserve.last_update.is_stale(clock.slot)? {
+    if market_reserve.last_update.is_strict_stale(clock.slot)? {
         return Err(LendingError::MarketReserveStale.into());
     }
     // 5
@@ -1193,7 +1187,7 @@ fn process_borrow_liquidity(
     if &user_obligation.manager != manager_info.key {
         return Err(LendingError::InvalidManager.into());
     }
-    if user_obligation.last_update.is_stale(clock.slot)? {
+    if user_obligation.last_update.is_lax_stale(clock.slot)? {
         return Err(LendingError::ObligationStale.into());
     }
     
@@ -1204,7 +1198,7 @@ fn process_borrow_liquidity(
             return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
-        if friend_obligation.last_update.is_stale(clock.slot)? {
+        if friend_obligation.last_update.is_lax_stale(clock.slot)? {
             return Err(LendingError::ObligationStale.into());
         }
 
@@ -1373,9 +1367,6 @@ fn process_liquidate<IsCollateral: Bit>(
         msg!("Collateral market reserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
     }
-    if collateral_market_reserve.last_update.is_stale(clock.slot)? {
-        return Err(LendingError::MarketReserveStale.into());
-    }
     // 5
     let sotoken_mint_info = next_account_info(account_info_iter)?;
     if sotoken_mint_info.key != &collateral_market_reserve.collateral_info.sotoken_mint_pubkey {
@@ -1392,9 +1383,6 @@ fn process_liquidate<IsCollateral: Bit>(
         msg!("Loan market reserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
     }
-    if loan_market_reserve.last_update.is_stale(clock.slot)? {
-        return Err(LendingError::MarketReserveStale.into());
-    }
     // 7
     let supply_token_account_info = next_account_info(account_info_iter)?;
     if supply_token_account_info.key != &loan_market_reserve.token_info.supply_account {
@@ -1410,7 +1398,7 @@ fn process_liquidate<IsCollateral: Bit>(
     if &user_obligation.manager != manager_info.key {
         return Err(LendingError::InvalidManager.into());
     }
-    if user_obligation.last_update.is_stale(clock.slot)? {
+    if user_obligation.last_update.is_lax_stale(clock.slot)? {
         return Err(LendingError::ObligationStale.into());
     }
 
@@ -1421,7 +1409,7 @@ fn process_liquidate<IsCollateral: Bit>(
             return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
-        if friend_obligation.last_update.is_stale(clock.slot)? {
+        if friend_obligation.last_update.is_lax_stale(clock.slot)? {
             return Err(LendingError::ObligationStale.into());
         }
 
@@ -1522,9 +1510,6 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         msg!("Collateral market reserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
     }
-    if collateral_market_reserve.last_update.is_stale(clock.slot)? {
-        return Err(LendingError::MarketReserveStale.into());
-    }
     // 5
     let collateral_supply_account_info = next_account_info(account_info_iter)?;
     if collateral_supply_account_info.key != &collateral_market_reserve.token_info.supply_account {
@@ -1541,9 +1526,6 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         msg!("Loan market reserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
     }
-    if loan_market_reserve.last_update.is_stale(clock.slot)? {
-        return Err(LendingError::MarketReserveStale.into());
-    }
     // 7
     let loan_supply_account_info = next_account_info(account_info_iter)?;
     if loan_supply_account_info.key != &loan_market_reserve.token_info.supply_account {
@@ -1559,7 +1541,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     if &user_obligation.manager != manager_info.key {
         return Err(LendingError::InvalidManager.into());
     }
-    if user_obligation.last_update.is_stale(clock.slot)? {
+    if user_obligation.last_update.is_lax_stale(clock.slot)? {
         return Err(LendingError::ObligationStale.into());
     }
 
@@ -1570,7 +1552,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
             return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
-        if friend_obligation.last_update.is_stale(clock.slot)? {
+        if friend_obligation.last_update.is_lax_stale(clock.slot)? {
             return Err(LendingError::ObligationStale.into());
         }
 
@@ -1723,7 +1705,7 @@ fn process_flash_loan(
         msg!("Collateral market reserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
     }
-    if market_reserve.last_update.is_stale(clock.slot)? {
+    if market_reserve.last_update.is_strict_stale(clock.slot)? {
         return Err(LendingError::MarketReserveStale.into());
     }
     // 5
