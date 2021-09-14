@@ -2092,7 +2092,7 @@ fn get_pyth_product_quote_currency(pyth_product: &pyth::Product) -> Result<[u8; 
 
 fn get_pyth_price(pyth_price_info: &AccountInfo, clock: &Clock) -> Result<Decimal, ProgramError> {
     #[cfg(not(feature = "general-test"))]
-    const STALE_AFTER_SLOTS_ELAPSED: u64 = 15;
+    const STALE_AFTER_SLOTS_ELAPSED: u64 = 10;
     #[cfg(feature = "general-test")]
     const STALE_AFTER_SLOTS_ELAPSED: u64 = 5;
 
