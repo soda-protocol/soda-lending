@@ -111,17 +111,17 @@ pub fn process_instruction(
             msg!("Instruction: Liquidate by loan amount = {}", amount);
             process_liquidate::<False>(program_id, accounts, amount)
         }
-        LendingInstruction::FlashLiquidationByCollateral { amount } => {
+        LendingInstruction::FlashLiquidationByCollateral { tag, amount } => {
             msg!("Instruction: Flash Liquidation by Collateral: amount = {}", amount);
-            process_flash_liquidation::<True>(program_id, accounts, amount)
+            process_flash_liquidation::<True>(program_id, accounts, tag, amount)
         }
-        LendingInstruction::FlashLiquidationByLoan { amount } => {
+        LendingInstruction::FlashLiquidationByLoan { tag, amount } => {
             msg!("Instruction: Flash Liquidation by Loan: amount = {}", amount);
-            process_flash_liquidation::<False>(program_id, accounts, amount)
+            process_flash_liquidation::<False>(program_id, accounts, tag, amount)
         }
-        LendingInstruction::FlashLoan { amount } => {
+        LendingInstruction::FlashLoan { tag, amount } => {
             msg!("Instruction: Flash Loan: amount = {}", amount);
-            process_flash_loan(program_id, accounts, amount)
+            process_flash_loan(program_id, accounts, tag, amount)
         }
         LendingInstruction::UpdateIndexedCollateralConfig { config } => {
             msg!("Instruction: Update User Obligation Collateral Config");
@@ -1481,6 +1481,7 @@ fn process_liquidate<IsCollateral: Bit>(
 fn process_flash_liquidation<IsCollateral: Bit>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
+    tag: u8,
     amount: u64,
 ) -> ProgramResult {
     if amount == 0 {
@@ -1490,7 +1491,8 @@ fn process_flash_liquidation<IsCollateral: Bit>(
 
     let account_info_iter = &mut accounts.iter().peekable();
     // 1
-    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
+    let clock_info = next_account_info(account_info_iter)?;
+    let clock = &Clock::from_account_info(clock_info)?;
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
@@ -1577,7 +1579,6 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         None
     };
     // 9/10
-    // swap pool source account, approve target amount to it
     let liquidator_authority_info = next_account_info(account_info_iter)?;
     // 10/11
     let token_program_id = next_account_info(account_info_iter)?;
@@ -1612,10 +1613,26 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     MarketReserve::pack(loan_market_reserve, &mut loan_market_reserve_info.try_borrow_mut_data()?)?;
     MarketReserve::pack(collateral_market_reserve, &mut collateral_market_reserve_info.try_borrow_mut_data()?)?;
 
+    // record loan balance before
+    let expect_loan_balance_after = Account::unpack(&loan_supply_account_info.try_borrow_data()?)?.amount
+        .checked_add(flash_loan_total_repay)
+        .ok_or(LendingError::MathOverflow)?;
+
+    // transfer collateral from manager to liquidator
+    spl_token_approve(TokenApproveParams {
+        source: collateral_supply_account_info.clone(),
+        delegate: liquidator_authority_info.clone(),
+        amount: collateral_amount,
+        authority: manager_authority_info.clone(),
+        authority_signer_seeds,
+        token_program: token_program_id.clone(),
+    })?;
+
     // 12/13 ~
     let account_infos = account_info_iter.map(|account_info| account_info.clone());
     // prepare instruction and account infos    
     let mut flash_loan_instruction_account_infos = vec![
+        clock_info.clone(),
         collateral_supply_account_info.clone(),
         loan_supply_account_info.clone(),
         liquidator_authority_info.clone(),
@@ -1634,26 +1651,9 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         }).collect::<Vec<_>>();
     flash_loan_instruction_account_infos.push(liquidator_program_id.clone());
 
-    // record loan balance before
-    let expect_loan_balance_after = Account::unpack(&loan_supply_account_info.try_borrow_data()?)?.amount
-        .checked_add(flash_loan_total_repay)
-        .ok_or(LendingError::MathOverflow)?;
-
-    // transfer collateral from manager to liquidator
-    spl_token_approve(TokenApproveParams {
-        source: collateral_supply_account_info.clone(),
-        delegate: liquidator_authority_info.clone(),
-        amount: collateral_amount,
-        authority: manager_authority_info.clone(),
-        authority_signer_seeds,
-        token_program: token_program_id.clone(),
-    })?;
-
     // do invoke
-    const FLASH_LIQUIDATION_DATA_LEN: usize = 1 + 8 + 8;
-    const FLASH_LIQUIDATION_TAG: u8 = u8::MAX;
-    let mut flash_liquidation_data = Vec::with_capacity(FLASH_LIQUIDATION_DATA_LEN);
-    flash_liquidation_data.push(FLASH_LIQUIDATION_TAG);
+    let mut flash_liquidation_data = Vec::with_capacity(1 + 8 + 8);
+    flash_liquidation_data.push(tag);
     flash_liquidation_data.extend_from_slice(&collateral_amount.to_le_bytes());
     flash_liquidation_data.extend_from_slice(&flash_loan_total_repay.to_le_bytes());
 
@@ -1682,6 +1682,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
 fn process_flash_loan(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
+    tag: u8,
     amount: u64,
 ) -> ProgramResult {
     if amount == 0 {
@@ -1691,7 +1692,8 @@ fn process_flash_loan(
 
     let account_info_iter = &mut accounts.iter().peekable();
     // 1
-    let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
+    let clock_info = next_account_info(account_info_iter)?;
+    let clock = &Clock::from_account_info(clock_info)?;
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
@@ -1746,10 +1748,25 @@ fn process_flash_loan(
     // pack
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
 
+    let expect_balance_after_flash_loan = Account::unpack(&supply_token_account_info.try_borrow_data()?)?.amount
+        .checked_add(flash_loan_fee)
+        .ok_or(LendingError::MathOverflow)?;
+
+    // approve to receiver
+    spl_token_approve(TokenApproveParams {
+        source: supply_token_account_info.clone(),
+        delegate: receiver_authority_info.clone(),
+        amount: borrow_amount,
+        authority: manager_authority_info.clone(),
+        authority_signer_seeds,
+        token_program: token_program_id.clone(),
+    })?;
+
     // 9 ~
     let account_infos = account_info_iter.map(|account_info| account_info.clone());
     // prepare instruction and account infos    
     let mut flash_loan_instruction_account_infos = vec![
+        clock_info.clone(),
         supply_token_account_info.clone(),
         receiver_authority_info.clone(),
         token_program_id.clone(),
@@ -1767,24 +1784,8 @@ fn process_flash_loan(
         }).collect::<Vec<_>>();
     flash_loan_instruction_account_infos.push(receiver_program_id.clone());
 
-    // approve to receiver
-    spl_token_approve(TokenApproveParams {
-        source: supply_token_account_info.clone(),
-        delegate: receiver_authority_info.clone(),
-        amount: borrow_amount,
-        authority: manager_authority_info.clone(),
-        authority_signer_seeds,
-        token_program: token_program_id.clone(),
-    })?;
-
-    let expect_balance_after_flash_loan = Account::unpack(&supply_token_account_info.try_borrow_data()?)?.amount
-        .checked_add(flash_loan_total_repay)
-        .ok_or(LendingError::MathOverflow)?;
-
-    const FLASH_LOAN_DATA_LEN: usize = 1 + 8;
-    const FLASH_LOAN_TAG: u8 = u8::MAX;
-    let mut flash_loan_data = Vec::with_capacity(FLASH_LOAN_DATA_LEN);
-    flash_loan_data.push(FLASH_LOAN_TAG);
+    let mut flash_loan_data = Vec::with_capacity(1 + 8);
+    flash_loan_data.push(tag);
     flash_loan_data.extend_from_slice(&flash_loan_total_repay.to_le_bytes());
 
     invoke(

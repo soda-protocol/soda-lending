@@ -96,15 +96,21 @@ pub enum LendingInstruction {
     /// 17
     FlashLiquidationByCollateral {
         ///
+        tag: u8,
+        ///
         amount: u64,
     },
     /// 18
     FlashLiquidationByLoan {
         ///
+        tag: u8,
+        ///
         amount: u64,
     },
     /// 19
     FlashLoan {
+        ///
+        tag: u8,
         ///
         amount: u64,
     },
@@ -222,16 +228,19 @@ impl LendingInstruction {
                 Self::LiquidateByLoan { amount }
             }
             17 => {
+                let (tag, rest) = Self::unpack_u8(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
-                Self::FlashLiquidationByCollateral { amount }
+                Self::FlashLiquidationByCollateral { tag, amount }
             }
             18 => {
+                let (tag, rest) = Self::unpack_u8(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
-                Self::FlashLiquidationByLoan { amount }
+                Self::FlashLiquidationByLoan { tag, amount }
             }
             19 => {
+                let (tag, rest) = Self::unpack_u8(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
-                Self::FlashLoan { amount }
+                Self::FlashLoan { tag, amount }
             }
             20 => {
                 let (config, _rest) = Self::unpack_indexed_collateral_config(rest)?;
@@ -471,16 +480,19 @@ impl LendingInstruction {
                 buf.push(16);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::FlashLiquidationByCollateral { amount } => {
+            Self::FlashLiquidationByCollateral { tag, amount } => {
                 buf.push(17);
+                buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::FlashLiquidationByLoan { amount } => {
+            Self::FlashLiquidationByLoan { tag, amount } => {
                 buf.push(18);
+                buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::FlashLoan { amount } => {
+            Self::FlashLoan { tag, amount } => {
                 buf.push(19);
+                buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             Self::UpdateIndexedCollateralConfig { config } => {
@@ -1099,6 +1111,7 @@ pub fn flash_liquidation_by_collateral(
     liquidator_token_account_key: Pubkey,
     flash_liquidation_program_accounts: Vec<AccountMeta>,
     amount: u64,
+    tag: u8,
 ) -> Instruction {
     let program_id = id();
     let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
@@ -1127,7 +1140,7 @@ pub fn flash_liquidation_by_collateral(
     Instruction {
         program_id,
         accounts,
-        data: LendingInstruction::FlashLiquidationByCollateral{ amount }.pack(),
+        data: LendingInstruction::FlashLiquidationByCollateral{ tag, amount }.pack(),
     }
 }
 
@@ -1144,6 +1157,7 @@ pub fn flash_liquidation_by_loan(
     liquidator_program_id: Pubkey,
     liquidator_program_accounts: Vec<AccountMeta>,
     amount: u64,
+    tag: u8,
 ) -> Instruction {
     let program_id = id();
     let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
@@ -1173,7 +1187,7 @@ pub fn flash_liquidation_by_loan(
     Instruction {
         program_id,
         accounts,
-        data: LendingInstruction::FlashLiquidationByLoan{ amount }.pack(),
+        data: LendingInstruction::FlashLiquidationByLoan{ tag, amount }.pack(),
     }
 }
 
@@ -1185,6 +1199,7 @@ pub fn flash_loan(
     receiver_authority_key: Pubkey,
     receiver_program_id: Pubkey,
     receiver_program_accounts: Vec<AccountMeta>,
+    tag: u8,
     amount: u64,
 ) -> Instruction {
     let program_id = id();
@@ -1209,7 +1224,7 @@ pub fn flash_loan(
     Instruction {
         program_id,
         accounts,
-        data: LendingInstruction::FlashLiquidationByLoan{ amount }.pack(),
+        data: LendingInstruction::FlashLoan{ tag, amount }.pack(),
     }
 }
 
