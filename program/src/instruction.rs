@@ -1108,8 +1108,9 @@ pub fn flash_liquidation_by_collateral(
     loan_supply_account_key: Pubkey,
     user_obligation_key: Pubkey,
     friend_obligation_key: Option<Pubkey>,
-    liquidator_token_account_key: Pubkey,
-    flash_liquidation_program_accounts: Vec<AccountMeta>,
+    liquidator_authority_key: Pubkey,
+    liquidator_program_id: Pubkey,
+    liquidator_program_accounts: Vec<AccountMeta>,
     amount: u64,
     tag: u8,
 ) -> Instruction {
@@ -1128,14 +1129,15 @@ pub fn flash_liquidation_by_collateral(
         AccountMeta::new(loan_market_reserve_key, false),
         AccountMeta::new(loan_supply_account_key, false),
         AccountMeta::new(user_obligation_key, false),
-        AccountMeta::new(liquidator_token_account_key, false),
+        AccountMeta::new_readonly(liquidator_authority_key, true),
+        AccountMeta::new_readonly(liquidator_program_id, false),
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
     if let Some(friend_obligation_key) = friend_obligation_key {
         accounts.insert(8, AccountMeta::new_readonly(friend_obligation_key, false))
     }
-    accounts.extend(flash_liquidation_program_accounts);
+    accounts.extend(liquidator_program_accounts);
 
     Instruction {
         program_id,
@@ -1174,7 +1176,7 @@ pub fn flash_liquidation_by_loan(
         AccountMeta::new(loan_market_reserve_key, false),
         AccountMeta::new(loan_supply_account_key, false),
         AccountMeta::new(user_obligation_key, false),
-        AccountMeta::new_readonly(liquidator_authority_key, false),
+        AccountMeta::new_readonly(liquidator_authority_key, true),
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(liquidator_program_id, false),
     ];
@@ -1214,7 +1216,7 @@ pub fn flash_loan(
         AccountMeta::new_readonly(manager_authority_key, false),
         AccountMeta::new(market_reserve_key, false),
         AccountMeta::new(supply_token_account_info, false),
-        AccountMeta::new_readonly(receiver_authority_key, false),
+        AccountMeta::new_readonly(receiver_authority_key, true),
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(receiver_program_id, false),
     ];
