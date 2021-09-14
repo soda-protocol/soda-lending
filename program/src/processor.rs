@@ -1038,7 +1038,7 @@ fn process_replace_collateral(
         msg!("In market reserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
     }
-    if in_market_reserve.last_update.is_strict_stale(clock.slot)? {
+    if in_market_reserve.last_update.is_lax_stale(clock.slot)? {
         return Err(LendingError::MarketReserveStale.into());
     }
     // 7
@@ -1175,7 +1175,7 @@ fn process_borrow_liquidity(
         msg!("MarketReserve manager provided is not matched with manager info");
         return Err(LendingError::InvalidMarketReserve.into());
     }
-    if market_reserve.last_update.is_strict_stale(clock.slot)? {
+    if market_reserve.last_update.is_lax_stale(clock.slot)? {
         return Err(LendingError::MarketReserveStale.into());
     }
     // 5
