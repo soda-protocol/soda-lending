@@ -96,15 +96,21 @@ pub enum LendingInstruction {
     /// 17
     FlashLiquidationByCollateral {
         ///
+        tag: u8,
+        ///
         amount: u64,
     },
     /// 18
     FlashLiquidationByLoan {
         ///
+        tag: u8,
+        ///
         amount: u64,
     },
     /// 19
     FlashLoan {
+        ///
+        tag: u8,
         ///
         amount: u64,
     },
@@ -156,7 +162,7 @@ pub enum LendingInstruction {
     InjectLiquidation,
     /// 30
     #[cfg(feature = "general-test")]
-    CloseObligation,
+    CloseLendingAccount,
 }
 
 impl LendingInstruction {
@@ -222,16 +228,19 @@ impl LendingInstruction {
                 Self::LiquidateByLoan { amount }
             }
             17 => {
+                let (tag, rest) = Self::unpack_u8(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
-                Self::FlashLiquidationByCollateral { amount }
+                Self::FlashLiquidationByCollateral { tag, amount }
             }
             18 => {
+                let (tag, rest) = Self::unpack_u8(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
-                Self::FlashLiquidationByLoan { amount }
+                Self::FlashLiquidationByLoan { tag, amount }
             }
             19 => {
+                let (tag, rest) = Self::unpack_u8(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
-                Self::FlashLoan { amount }
+                Self::FlashLoan { tag, amount }
             }
             20 => {
                 let (config, _rest) = Self::unpack_indexed_collateral_config(rest)?;
@@ -270,7 +279,7 @@ impl LendingInstruction {
             #[cfg(feature = "general-test")]
             29 => Self::InjectLiquidation,
             #[cfg(feature = "general-test")]
-            30 => Self::CloseObligation,
+            30 => Self::CloseLendingAccount,
             _ => {
                 msg!("Instruction cannot be unpacked");
                 return Err(LendingError::InstructionUnpackError.into());
@@ -315,7 +324,6 @@ impl LendingInstruction {
         let (borrow_tax_rate, rest) = Self::unpack_u8(rest)?;
         let (flash_loan_fee_rate, rest) = Self::unpack_u64(rest)?;
         let (max_deposit, rest) = Self::unpack_u64(rest)?;
-        let (max_acc_deposit, rest) = Self::unpack_u64(rest)?;
 
         Ok((
             LiquidityConfig {
@@ -323,7 +331,6 @@ impl LendingInstruction {
                 borrow_tax_rate,
                 flash_loan_fee_rate,
                 max_deposit,
-                max_acc_deposit,
             }, rest
         ))
     }
@@ -473,16 +480,19 @@ impl LendingInstruction {
                 buf.push(16);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::FlashLiquidationByCollateral { amount } => {
+            Self::FlashLiquidationByCollateral { tag, amount } => {
                 buf.push(17);
+                buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::FlashLiquidationByLoan { amount } => {
+            Self::FlashLiquidationByLoan { tag, amount } => {
                 buf.push(18);
+                buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::FlashLoan { amount } => {
+            Self::FlashLoan { tag, amount } => {
                 buf.push(19);
+                buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             Self::UpdateIndexedCollateralConfig { config } => {
@@ -525,7 +535,7 @@ impl LendingInstruction {
             #[cfg(feature = "general-test")]
             Self::InjectLiquidation => buf.push(29),
             #[cfg(feature = "general-test")]
-            Self::CloseObligation => buf.push(30),
+            Self::CloseLendingAccount => buf.push(30),
         }
         buf
     }
@@ -548,7 +558,6 @@ impl LendingInstruction {
         buf.extend_from_slice(&config.borrow_tax_rate.to_le_bytes());
         buf.extend_from_slice(&config.flash_loan_fee_rate.to_le_bytes());
         buf.extend_from_slice(&config.max_deposit.to_le_bytes());
-        buf.extend_from_slice(&config.max_acc_deposit.to_le_bytes());
     }
 }
 
@@ -1099,9 +1108,11 @@ pub fn flash_liquidation_by_collateral(
     loan_supply_account_key: Pubkey,
     user_obligation_key: Pubkey,
     friend_obligation_key: Option<Pubkey>,
-    liquidator_token_account_key: Pubkey,
-    flash_liquidation_program_accounts: Vec<AccountMeta>,
+    liquidator_authority_key: Pubkey,
+    liquidator_program_id: Pubkey,
+    liquidator_program_accounts: Vec<AccountMeta>,
     amount: u64,
+    tag: u8,
 ) -> Instruction {
     let program_id = id();
     let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
@@ -1118,19 +1129,20 @@ pub fn flash_liquidation_by_collateral(
         AccountMeta::new(loan_market_reserve_key, false),
         AccountMeta::new(loan_supply_account_key, false),
         AccountMeta::new(user_obligation_key, false),
-        AccountMeta::new(liquidator_token_account_key, false),
+        AccountMeta::new_readonly(liquidator_authority_key, true),
+        AccountMeta::new_readonly(liquidator_program_id, false),
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
     if let Some(friend_obligation_key) = friend_obligation_key {
         accounts.insert(8, AccountMeta::new_readonly(friend_obligation_key, false))
     }
-    accounts.extend(flash_liquidation_program_accounts);
+    accounts.extend(liquidator_program_accounts);
 
     Instruction {
         program_id,
         accounts,
-        data: LendingInstruction::FlashLiquidationByCollateral{ amount }.pack(),
+        data: LendingInstruction::FlashLiquidationByCollateral{ tag, amount }.pack(),
     }
 }
 
@@ -1143,9 +1155,11 @@ pub fn flash_liquidation_by_loan(
     loan_supply_account_key: Pubkey,
     user_obligation_key: Pubkey,
     friend_obligation_key: Option<Pubkey>,
-    liquidator_token_account_key: Pubkey,
-    flash_liquidation_program_accounts: Vec<AccountMeta>,
+    liquidator_authority_key: Pubkey,
+    liquidator_program_id: Pubkey,
+    liquidator_program_accounts: Vec<AccountMeta>,
     amount: u64,
+    tag: u8,
 ) -> Instruction {
     let program_id = id();
     let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
@@ -1162,19 +1176,20 @@ pub fn flash_liquidation_by_loan(
         AccountMeta::new(loan_market_reserve_key, false),
         AccountMeta::new(loan_supply_account_key, false),
         AccountMeta::new(user_obligation_key, false),
-        AccountMeta::new(liquidator_token_account_key, false),
+        AccountMeta::new_readonly(liquidator_authority_key, true),
         AccountMeta::new_readonly(spl_token::id(), false),
+        AccountMeta::new_readonly(liquidator_program_id, false),
     ];
 
     if let Some(friend_obligation_key) = friend_obligation_key {
         accounts.insert(8, AccountMeta::new_readonly(friend_obligation_key, false))
     }
-    accounts.extend(flash_liquidation_program_accounts);
+    accounts.extend(liquidator_program_accounts);
 
     Instruction {
         program_id,
         accounts,
-        data: LendingInstruction::FlashLiquidationByLoan{ amount }.pack(),
+        data: LendingInstruction::FlashLiquidationByLoan{ tag, amount }.pack(),
     }
 }
 
@@ -1183,8 +1198,10 @@ pub fn flash_loan(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
     supply_token_account_info: Pubkey,
-    receiver_token_account_key: Pubkey,
-    flash_loan_program_accounts: Vec<AccountMeta>,
+    receiver_authority_key: Pubkey,
+    receiver_program_id: Pubkey,
+    receiver_program_accounts: Vec<AccountMeta>,
+    tag: u8,
     amount: u64,
 ) -> Instruction {
     let program_id = id();
@@ -1199,16 +1216,17 @@ pub fn flash_loan(
         AccountMeta::new_readonly(manager_authority_key, false),
         AccountMeta::new(market_reserve_key, false),
         AccountMeta::new(supply_token_account_info, false),
-        AccountMeta::new(receiver_token_account_key, false),
+        AccountMeta::new_readonly(receiver_authority_key, true),
         AccountMeta::new_readonly(spl_token::id(), false),
+        AccountMeta::new_readonly(receiver_program_id, false),
     ];
 
-    accounts.extend(flash_loan_program_accounts);
+    accounts.extend(receiver_program_accounts);
 
     Instruction {
         program_id,
         accounts,
-        data: LendingInstruction::FlashLiquidationByLoan{ amount }.pack(),
+        data: LendingInstruction::FlashLoan{ tag, amount }.pack(),
     }
 }
 
@@ -1384,16 +1402,16 @@ pub fn inject_liquidation(
 }
 
 #[cfg(feature = "general-test")]
-pub fn close_obligation(
-    user_obligation_key: Pubkey,
+pub fn close_lending_account(
+    source_account_key: Pubkey,
     dest_account_key: Pubkey,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
-            AccountMeta::new(user_obligation_key, false),
+            AccountMeta::new(source_account_key, false),
             AccountMeta::new(dest_account_key, false),
         ],
-        data: LendingInstruction::CloseObligation.pack(),
+        data: LendingInstruction::CloseLendingAccount.pack(),
     }
 }

@@ -26,6 +26,26 @@ pub struct Manager {
     pub pyth_program_id: Pubkey,
 }
 
+impl Manager {
+    ///
+    pub fn new(
+        bump_seed: u8,
+        owner: Pubkey,
+        quote_currency: [u8; 32],
+        token_program_id: Pubkey,
+        pyth_program_id: Pubkey,
+    ) -> Self {
+        Self {
+            version: PROGRAM_VERSION,
+            bump_seed,
+            owner,
+            quote_currency,
+            token_program_id,
+            pyth_program_id,
+        }
+    }
+}
+
 impl Sealed for Manager {}
 impl IsInitialized for Manager {
     fn is_initialized(&self) -> bool {
