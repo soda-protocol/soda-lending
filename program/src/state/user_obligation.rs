@@ -790,9 +790,9 @@ impl Pack for UserObligation {
 
         Ok(Self{
             version,
+            last_update: LastUpdate::unpack_from_slice(&last_update[..])?,
             manager: Pubkey::new_from_array(*manager),
             owner: Pubkey::new_from_array(*owner),
-            last_update: LastUpdate::unpack_from_slice(&last_update[..])?,
             friend: unpack_coption_pubkey(friend)?,
             collaterals,
             collaterals_borrow_value: unpack_decimal(collaterals_borrow_value),

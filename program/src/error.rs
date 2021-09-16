@@ -36,7 +36,7 @@ pub enum LendingError {
     InvalidManagerAuthority,
     ///
     #[error("Invalid supply token account")]
-    InvalidSupplyTokenAccount,
+    InvalidTokenAccount,
     ///
     #[error("Market reserve is invalid")]
     InvalidMarketReserve,
@@ -183,6 +183,9 @@ pub enum LendingError {
     ///
     #[error("User Obligation friend is invalid")]
     ObligationInvalidFriend,
+    ///
+    #[error("Insufficient unique credit limit")]
+    InsufficientUniqueCreditLimit,
     ///
     #[cfg(feature = "general-test")]
     #[error("Undefined case injection")]

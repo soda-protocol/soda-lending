@@ -23,6 +23,8 @@ pub enum LendingInstruction {
     InitManager {
         ///
         quote_currency: [u8; 32],
+        ///
+        owner: Pubkey,
     },
     /// 1
     InitMarketReserve {
@@ -115,52 +117,74 @@ pub enum LendingInstruction {
         amount: u64,
     },
     /// 20
+    InitUniqueCredit {
+        ///
+        authority: Pubkey,
+        ///
+        amount: u64,
+    },
+    /// 21
+    BorrowLiquidityByUniqueCredit {
+        ///
+        amount: u64,
+    },
+    /// 22
+    RepayLoanByUniqueCredit {
+        ///
+        amount: u64,
+    },
+    /// 23
     UpdateIndexedCollateralConfig {
         ///
         config: IndexedCollateralConfig,
     },
-    /// 21
+    /// 24
     UpdateIndexedLoanConfig {
         ///
         config: IndexedLoanConfig,
     },
-    /// 22
+    /// 25
     ControlMarketReserveLiquidity {
         ///
         enable: bool,
     },
-    /// 23
+    /// 26
     UpdateMarketReserveRateModel{
         ///
         model: RateModel,
     },
-    /// 24
+    /// 27
     UpdateMarketReserveCollateralConfig {
         ///
         config: CollateralConfig,
     },
-    /// 25
+    /// 28
     UpdateMarketReserveLiquidityConfig {
         ///
         config: LiquidityConfig,
     },
-    /// 26
+    /// 29
     UpdateMarketReservePriceOracle {
         ///
         oracle: Pubkey,
     },
-    /// 27
+    /// 30
     ReduceInsurance {
         ///
         amount: u64,
     },
-    /// 28
+    /// 31
+    UpdateUniqueCreditLimit{
+        ///
+        amount: u64,
+    },
+    /// 32
     #[cfg(feature = "general-test")]
     InjectNoBorrow,
-    /// 29
+    /// 33
     #[cfg(feature = "general-test")]
     InjectLiquidation,
-    /// 30
+    /// 34
     #[cfg(feature = "general-test")]
     CloseLendingAccount,
 }
@@ -173,8 +197,9 @@ impl LendingInstruction {
             .ok_or(LendingError::InstructionUnpackError)?;
         Ok(match tag {
             0 => {
-                let (quote_currency, _rest) = Self::unpack_bytes32(rest)?;
-                Self::InitManager { quote_currency }
+                let (quote_currency, rest) = Self::unpack_bytes32(rest)?;
+                let (owner, _rest) = Self::unpack_pubkey(rest)?;
+                Self::InitManager { quote_currency, owner }
             }
             1 => {
                 let (collateral_config, rest) = Self::unpack_collateral_config(rest)?;
@@ -243,43 +268,60 @@ impl LendingInstruction {
                 Self::FlashLoan { tag, amount }
             }
             20 => {
+                let (authority, rest) = Self::unpack_pubkey(rest)?;
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::InitUniqueCredit { authority, amount }
+            }
+            21 => {
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::BorrowLiquidityByUniqueCredit { amount }
+            }
+            22 => {
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::RepayLoanByUniqueCredit { amount }
+            }
+            23 => {
                 let (config, _rest) = Self::unpack_indexed_collateral_config(rest)?;
                 Self::UpdateIndexedCollateralConfig { config }
             }
-            21 => {
+            24 => {
                 let (config, _rest) = Self::unpack_indexed_loan_config(rest)?;
                 Self::UpdateIndexedLoanConfig { config }
             }
-            22 => {
+            25 => {
                 let (enable, _rest) = Self::unpack_bool(rest)?;
                 Self::ControlMarketReserveLiquidity { enable }
             }
-            23 => {
+            26 => {
                 let (model, _rest) = Self::unpack_rate_model(rest)?;
                 Self::UpdateMarketReserveRateModel { model }
             }
-            24 => {
+            27 => {
                 let (config, _rest) = Self::unpack_collateral_config(rest)?;
                 Self::UpdateMarketReserveCollateralConfig { config }
             }
-            25 => {
+            28 => {
                 let (config, _rest) = Self::unpack_liquidity_config(rest)?;
                 Self::UpdateMarketReserveLiquidityConfig { config }
             }
-            26 => {
+            29 => {
                 let (oracle, _rest) = Self::unpack_pubkey(rest)?;
                 Self::UpdateMarketReservePriceOracle { oracle }
             }
-            27 => {
+            30 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::ReduceInsurance { amount }
             }
+            31 => {
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::UpdateUniqueCreditLimit { amount }
+            }
             #[cfg(feature = "general-test")]
-            28 => Self::InjectNoBorrow,
+            32 => Self::InjectNoBorrow,
             #[cfg(feature = "general-test")]
-            29 => Self::InjectLiquidation,
+            33 => Self::InjectLiquidation,
             #[cfg(feature = "general-test")]
-            30 => Self::CloseLendingAccount,
+            34 => Self::CloseLendingAccount,
             _ => {
                 msg!("Instruction cannot be unpacked");
                 return Err(LendingError::InstructionUnpackError.into());
@@ -421,9 +463,10 @@ impl LendingInstruction {
     pub fn pack(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(size_of::<Self>());
         match *self {
-            Self::InitManager { quote_currency } => {
+            Self::InitManager { quote_currency, owner } => {
                 buf.push(0);
                 buf.extend_from_slice(&quote_currency[..]);
+                buf.extend_from_slice(owner.as_ref());
             }
             Self::InitMarketReserve {
                 collateral_config,
@@ -495,47 +538,64 @@ impl LendingInstruction {
                 buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::UpdateIndexedCollateralConfig { config } => {
+            Self::InitUniqueCredit { authority, amount } => {
                 buf.push(20);
+                buf.extend_from_slice(authority.as_ref());
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::BorrowLiquidityByUniqueCredit { amount } => {
+                buf.push(21);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::RepayLoanByUniqueCredit { amount } => {
+                buf.push(22);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::UpdateIndexedCollateralConfig { config } => {
+                buf.push(23);
                 buf.extend_from_slice(&config.index.to_le_bytes());
                 buf.extend_from_slice(&config.borrow_value_ratio.to_le_bytes());
                 buf.extend_from_slice(&config.liquidation_value_ratio.to_le_bytes());
             }
             Self::UpdateIndexedLoanConfig { config } => {
-                buf.push(21);
+                buf.push(24);
                 buf.extend_from_slice(&config.index.to_le_bytes());
                 buf.extend_from_slice(&config.close_ratio.to_le_bytes());
             }
             Self::ControlMarketReserveLiquidity { enable } => {
-                buf.push(22);
+                buf.push(25);
                 buf.extend_from_slice(&(enable as u8).to_le_bytes());
             }
             Self::UpdateMarketReserveRateModel { model } => {
-                buf.push(23);
+                buf.push(26);
                 Self::pack_rate_model(model, &mut buf);
             }
             Self::UpdateMarketReserveCollateralConfig { config } => {
-                buf.push(24);
+                buf.push(27);
                 Self::pack_collateral_config(config, &mut buf);
             }
             Self::UpdateMarketReserveLiquidityConfig { config } => {
-                buf.push(25);
+                buf.push(28);
                 Self::pack_liquidity_config(config, &mut buf);
             }
             Self::UpdateMarketReservePriceOracle { oracle } => {
-                buf.push(26);
+                buf.push(29);
                 buf.extend_from_slice(oracle.as_ref());
             }
             Self::ReduceInsurance { amount } => {
-                buf.push(27);
+                buf.push(30);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::UpdateUniqueCreditLimit { amount } => {
+                buf.push(31);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             #[cfg(feature = "general-test")]
-            Self::InjectNoBorrow => buf.push(28),
+            Self::InjectNoBorrow => buf.push(32),
             #[cfg(feature = "general-test")]
-            Self::InjectLiquidation => buf.push(29),
+            Self::InjectLiquidation => buf.push(33),
             #[cfg(feature = "general-test")]
-            Self::CloseLendingAccount => buf.push(30),
+            Self::CloseLendingAccount => buf.push(34),
         }
         buf
     }
@@ -563,20 +623,19 @@ impl LendingInstruction {
 
 pub fn init_manager(
     manager_key: Pubkey,
-    owner_key: Pubkey,
     oracle_program_id: Pubkey,
     quote_currency: [u8; 32],
+    owner: Pubkey,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
             AccountMeta::new_readonly(sysvar::rent::id(), false),
             AccountMeta::new(manager_key, false),
-            AccountMeta::new_readonly(owner_key, false),
             AccountMeta::new_readonly(oracle_program_id, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
-        data: LendingInstruction::InitManager { quote_currency }.pack(),
+        data: LendingInstruction::InitManager { quote_currency, owner }.pack(),
     }
 }
 
@@ -1227,6 +1286,37 @@ pub fn flash_loan(
         program_id,
         accounts,
         data: LendingInstruction::FlashLoan{ tag, amount }.pack(),
+    }
+}
+
+pub fn init_unique_credit(
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    unique_credit_key: Pubkey,
+    authority_key: Pubkey,
+    credit_authority_key: Pubkey,
+    amount: u64,
+) -> Instruction {
+    let program_id = id();
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
+        &program_id,
+    );
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new_readonly(sysvar::rent::id(), false),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(manager_authority_key, false),
+            AccountMeta::new_readonly(market_reserve_key, false),
+            AccountMeta::new(unique_credit_key, false),
+            AccountMeta::new_readonly(authority_key, true),
+        ],
+        data: LendingInstruction::InitUniqueCredit{
+            authority: credit_authority_key,
+            amount,
+        }.pack(),
     }
 }
 
