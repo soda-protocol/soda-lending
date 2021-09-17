@@ -300,7 +300,9 @@ impl MarketReserve {
     }
     ///
     pub fn liquidity_to_collateral_rate(&self) -> Result<Rate, ProgramError> {
-        let total_supply = self.liquidity_info.total_supply()?;
+        let total_supply = self.liquidity_info
+            .total_supply()?
+            .try_sub(self.liquidity_info.insurance_wads)?;
         if total_supply == Decimal::zero() {
             Ok(Rate::one())
         } else {
