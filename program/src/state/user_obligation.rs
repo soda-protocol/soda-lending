@@ -292,6 +292,7 @@ impl UserObligation {
             .ok_or(LendingError::ObligationCollateralNotFound.into())
     }
     ///
+    #[cfg(feature = "friend")]
     pub fn bind_friend(&mut self, other: Pubkey) -> ProgramResult {
         if self.friend.is_none() {
             self.friend = COption::Some(other);
@@ -303,6 +304,7 @@ impl UserObligation {
     }
     ///
     // need refresh obligation before
+    #[cfg(feature = "friend")]
     pub fn unbind_friend(&mut self) -> ProgramResult {
         if self.collaterals_liquidation_value > self.loans_value {
             self.friend = COption::None;

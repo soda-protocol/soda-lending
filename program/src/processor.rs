@@ -72,10 +72,12 @@ pub fn process_instruction(
             msg!("Instruction: Refresh User Obligation");
             process_refresh_user_obligation(program_id, accounts)
         }
+        #[cfg(feature = "friend")]
         LendingInstruction::BindFriend => {
             msg!("Instruction: Bind Friend");
             process_bind_friend(program_id, accounts)
         }
+        #[cfg(feature = "friend")]
         LendingInstruction::UnbindFriend => {
             msg!("Instruction: Unbind Friend");
             process_unbind_friend(program_id, accounts)
@@ -599,6 +601,7 @@ fn process_refresh_user_obligation(
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
 }
 
+#[cfg(feature = "friend")]
 fn process_bind_friend(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -652,6 +655,7 @@ fn process_bind_friend(
 }
 
 // must after update obligation
+#[cfg(feature = "friend")]
 fn process_unbind_friend(
     program_id: &Pubkey,
     accounts: &[AccountInfo],

@@ -113,6 +113,7 @@ pub enum LendingError {
     LiquidationRepayTooMuch,
     // 30
     ///
+    #[cfg(feature = "friend")]
     #[error("Obligation is already in binding")]
     ObligationAlreadyBindFriend,
     /// Obligation state stale

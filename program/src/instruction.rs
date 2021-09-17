@@ -52,8 +52,10 @@ pub enum LendingInstruction {
     /// 6
     RefreshUserObligation,
     /// 7
+    #[cfg(feature = "friend")]
     BindFriend,
     /// 8
+    #[cfg(feature = "friend")]
     UnbindFriend,
     /// 9
     PledgeCollateral {
@@ -218,7 +220,9 @@ impl LendingInstruction {
             }
             5 => Self::InitUserObligation,
             6 => Self::RefreshUserObligation,
+            #[cfg(feature = "friend")]
             7 => Self::BindFriend,
+            #[cfg(feature = "friend")]
             8 => Self::UnbindFriend,
             9 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
@@ -489,7 +493,9 @@ impl LendingInstruction {
             }
             Self::InitUserObligation => buf.push(5),
             Self::RefreshUserObligation => buf.push(6),
+            #[cfg(feature = "friend")]
             Self::BindFriend => buf.push(7),
+            #[cfg(feature = "friend")]
             Self::UnbindFriend => buf.push(8),
             Self::PledgeCollateral { amount } => {
                 buf.push(9);
@@ -817,6 +823,7 @@ pub fn refresh_user_obligation(
     }
 }
 
+#[cfg(feature = "friend")]
 pub fn bind_friend(
     user_obligation_key: Pubkey,
     friend_obligation_key: Pubkey,
@@ -835,6 +842,7 @@ pub fn bind_friend(
     }
 }
 
+#[cfg(feature = "friend")]
 pub fn unbind_friend(
     user_obligation_key: Pubkey,
     friend_obligation_key: Pubkey,
