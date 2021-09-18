@@ -460,6 +460,7 @@ fn process_deposit_or_withdraw<B: Bit>(
     let user_authority_info = next_account_info(account_info_iter)?;
     // 8
     let user_token_account_info = next_account_info(account_info_iter)?;
+    let user_token_account = Account::unpack(&user_token_account_info.try_borrow_data()?)?;
     // 9
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
     // 10
@@ -470,7 +471,7 @@ fn process_deposit_or_withdraw<B: Bit>(
     market_reserve.last_update.update_slot(clock.slot, true);
 
     if B::BOOL {
-        let amount = calculate_amount(amount, Account::unpack(&user_token_account_info.try_borrow_data()?)?.amount);
+        let amount = calculate_amount(amount, user_token_account.amount.min(user_token_account.delegated_amount));
         let mint_amount = market_reserve.deposit(amount)?;
         // pack
         MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
@@ -756,17 +757,17 @@ fn process_pledge_collateral(
     }
     // 5
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
-    let user_sotoken_account_balance = Account::unpack(&user_sotoken_account_info.try_borrow_data()?)?.amount;
+    let user_sotoken_account = Account::unpack(&user_sotoken_account_info.try_borrow_data()?)?;
     // 6
     let token_program_id = next_account_info(account_info_iter)?;
 
     // handle obligation
-    let amount = calculate_amount(amount, user_sotoken_account_balance);
-    if let Ok(index) = user_obligation.find_collateral(*market_reserve_info.key) {
-        user_obligation.pledge(amount, index)?;
+    let balance = user_sotoken_account.amount.min(user_sotoken_account.delegated_amount);
+    let amount = if let Ok(index) = user_obligation.find_collateral(*market_reserve_info.key) {
+        user_obligation.pledge(balance, amount, index)?
     } else {
-        user_obligation.new_pledge(amount, *market_reserve_info.key, &market_reserve)?;
-    }
+        user_obligation.new_pledge(balance, amount, *market_reserve_info.key, &market_reserve)?
+    };
     user_obligation.last_update.mark_stale();
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
@@ -1109,18 +1110,18 @@ fn process_replace_collateral(
     let user_out_sotoken_account_info = next_account_info(account_info_iter)?;
     // 12/13
     let user_in_sotoken_account_info = next_account_info(account_info_iter)?;
-    let user_in_sotoken_account_balance = Account::unpack(&user_in_sotoken_account_info.try_borrow_data()?)?.amount;
+    let user_in_sotoken_account = Account::unpack(&user_in_sotoken_account_info.try_borrow_data()?)?;
     // 13/14
     let token_program_id = next_account_info(account_info_iter)?;
 
     // replace
-    let in_amount = calculate_amount(amount, user_in_sotoken_account_balance);
     let out_index = user_obligation.find_collateral(*out_market_reserve_info.key)?;
     if user_obligation.find_collateral(*in_market_reserve_info.key).is_ok() {
         return Err(LendingError::ObligationReplaceCollateralExists.into());
     }
-    let out_amount = user_obligation.replace_collateral(
-        in_amount,
+    let (in_amount, out_amount) = user_obligation.replace_collateral(
+        user_in_sotoken_account.amount.min(user_in_sotoken_account.delegated_amount),
+        amount,
         out_index,
         *in_market_reserve_info.key,
         &out_market_reserve,
@@ -2058,6 +2059,7 @@ fn process_repay_loan_by_unique_credit(
         msg!("Source token account owner should not equal to manager authority");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
+    let source_token_account = Account::unpack(&source_token_account_info.try_borrow_data()?)?;
     // 8
     let token_program_id = next_account_info(account_info_iter)?;
 
@@ -2066,7 +2068,7 @@ fn process_repay_loan_by_unique_credit(
     market_reserve.last_update.update_slot(clock.slot, true);
     // repay in obligation
     unique_credit.accrue_interest(&market_reserve)?;
-    let settle = unique_credit.repay(amount)?;
+    let settle = unique_credit.repay(source_token_account.amount.min(source_token_account.delegated_amount), amount)?;
     // repay in reserve
     market_reserve.liquidity_info.repay(settle)?;
     // pack

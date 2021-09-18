@@ -64,7 +64,7 @@ impl UniqueCredit {
         let amount = calculate_amount(amount, reserve.liquidity_info.available);
         self.borrowed_amount_wads = self.borrowed_amount_wads.try_add(Decimal::from(amount))?;
 
-        if self.borrowed_amount_wads <= Decimal::from(self.borrow_limit) {
+        if self.borrowed_amount_wads < Decimal::from(self.borrow_limit) {
             Ok(amount)
         } else {
             Err(LendingError::InsufficientUniqueCreditLimit.into())
@@ -73,9 +73,11 @@ impl UniqueCredit {
 
     pub fn repay(
         &mut self,
+        balance: u64,
         amount: u64,
     ) -> Result<RepaySettle, ProgramError> {
-        let (amount, amount_decimal) = calculate_amount_and_decimal(amount, self.borrowed_amount_wads)?;
+        let (amount, amount_decimal) =
+            calculate_amount_and_decimal(amount, self.borrowed_amount_wads.min(Decimal::from(balance)))?;
         self.borrowed_amount_wads = self.borrowed_amount_wads
             .try_sub(amount_decimal)
             .map_err(|_| LendingError::RepayTooMuch)?;

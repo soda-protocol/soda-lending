@@ -252,7 +252,7 @@ impl UserObligation {
             (self.collaterals_borrow_value, self.loans_value)
         };
 
-        if collaterals_borrow_value >= loans_value {
+        if collaterals_borrow_value > loans_value {
             Ok(())
         } else {
             Err(LendingError::ObligationNotHealthy.into())
@@ -450,25 +450,29 @@ impl UserObligation {
     /// mark stale later
     pub fn pledge(
         &mut self,
+        balance: u64,
         amount: u64,
         index: usize,
-    ) -> ProgramResult {
+    ) -> Result<u64, ProgramError> {
+        let amount = calculate_amount(amount, balance);
         self.collaterals[index].amount = self.collaterals[index].amount
             .checked_add(amount)
             .ok_or(LendingError::MathOverflow)?;
 
-        Ok(())
+        Ok(amount)
     }
     ///
     pub fn new_pledge(
         &mut self,
+        balance: u64,
         amount: u64,
         key: Pubkey,
         reserve: &MarketReserve,
-    ) -> ProgramResult {
+    ) -> Result<u64, ProgramError> {
         if self.collaterals.len() + self.loans.len() >= MAX_OBLIGATION_RESERVES {
             Err(LendingError::ObligationReservesFull.into())
         } else {
+            let amount = calculate_amount(amount, balance);
             self.collaterals.push(Collateral {
                 reserve: key,
                 amount,
@@ -476,7 +480,7 @@ impl UserObligation {
                 liquidation_value_ratio: reserve.collateral_info.config.liquidation_value_ratio,
             });
 
-            Ok(())
+            Ok(amount)
         }
     }
     ///
@@ -542,13 +546,15 @@ impl UserObligation {
     #[allow(clippy::too_many_arguments)]
     pub fn replace_collateral(
         &mut self,
+        balance: u64,
         in_amount: u64,
         out_index: usize,
         in_key: Pubkey,
         out_reserve: &MarketReserve,
         in_reserve: &MarketReserve,
         other: Option<Self>,
-    ) -> Result<u64, ProgramError> {
+    ) -> Result<(u64, u64), ProgramError> {
+        let in_amount = calculate_amount(in_amount, balance);
         let out_amount = self.collaterals[out_index].amount;
         let out_borrow_value_ratio = Rate::from_percent(self.collaterals[out_index].borrow_value_ratio);
 
@@ -575,7 +581,7 @@ impl UserObligation {
 
         self.validate_health(other)?;
 
-        Ok(out_amount)
+        Ok((in_amount, out_amount))
     }
     ///
     // need refresh obligation before
