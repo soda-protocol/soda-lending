@@ -194,3 +194,129 @@ SodatMqSurD1AuSB8MBrYKe29Du25nzqTPGk6xhJyNJ
     - spl token program
 - data
     - Withdraw{ amount }
+
+## instructions for unique credit
+- data struct
+```rust
+pub struct UniqueCredit {
+    /// 
+    pub version: u8,
+    ///
+    pub owner: Pubkey,
+    ///
+    pub reserve: Pubkey,
+    ///
+    pub borrow_limit: u64,
+    ///
+    pub acc_borrow_rate_wads: Decimal,
+    ///
+    pub borrowed_amount_wads: Decimal,
+}
+
+pub struct MarketReserve {
+    ///
+    pub version: u8,
+    ///
+    pub last_update: LastUpdate,
+    /// size: 32 byte (used in instruction)
+    pub manager: Pubkey,
+    ///
+    pub market_price: Decimal,
+    ///
+    pub token_info: TokenInfo,
+    /// size: 43 byte
+    pub collateral_info: CollateralInfo,
+    /// size: 83 byte
+    pub liquidity_info: LiquidityInfo,
+    /// size: 33 byte
+    pub rate_model: RateModel,
+    /// padding size: 256 byte
+}
+
+pub struct TokenInfo {
+    ///
+    pub mint_pubkey: Pubkey,
+    ///
+    pub supply_account: Pubkey,
+    ///
+    pub price_oracle: Pubkey,
+    ///
+    pub decimal: u8,
+}
+```
+
+- borrow_liquidity_by_unique_credit
+    - *soda will approve final amount from `supply_token_account_key` for `authority_key` as delegate*
+```rust
+pub fn borrow_liquidity_by_unique_credit(
+    // data field in MarketReserve
+    manager_key: Pubkey,
+    // market reserve pubkey which created by soda admin
+    market_reserve_key: Pubkey,
+    // data field in TokenInfo
+    supply_token_account_key: Pubkey,
+    // credit pubket which created by soda admin
+    unique_credit_key: Pubkey,
+    // authority of credit owner
+    authority_key: Pubkey,
+    // borrow amount (u64::MAX represents borrow all liquidity from reserve)
+    amount: u64,
+) -> Instruction {
+    let program_id = id();
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
+        &program_id,
+    );
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(manager_authority_key, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new(supply_token_account_key, false),
+            AccountMeta::new(unique_credit_key, false),
+            AccountMeta::new_readonly(authority_key, true),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
+        data: LendingInstruction::BorrowLiquidityByUniqueCredit{ amount }.pack(),
+    }
+}
+```
+- repay_loan_by_unique_credit
+    - *credit owner should approve repaying amount from `source_token_account_key` for `manager_authority_key` as delegate*
+```rust
+pub fn repay_loan_by_unique_credit(
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    supply_token_account_key: Pubkey,
+    unique_credit_key: Pubkey,
+    // repaying token account
+    source_token_account_key: Pubkey,
+    // borrow amount (u64::MAX represents repaying as much as possible,
+    // both considering token account balance and dept amount)
+    amount: u64,
+) -> Instruction {
+    let program_id = id();
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
+        &program_id,
+    );
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(manager_authority_key, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new(supply_token_account_key, false),
+            AccountMeta::new(unique_credit_key, false),
+            AccountMeta::new(source_token_account_key, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
+        data: LendingInstruction::RepayLoanByUniqueCredit{ amount }.pack(),
+    }
+}
+```
