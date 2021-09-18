@@ -1264,7 +1264,7 @@ pub fn flash_liquidation_by_loan(
 pub fn flash_loan(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
-    supply_token_account_info: Pubkey,
+    supply_token_account_key: Pubkey,
     receiver_authority_key: Pubkey,
     receiver_program_id: Pubkey,
     receiver_program_accounts: Vec<AccountMeta>,
@@ -1282,7 +1282,7 @@ pub fn flash_loan(
         AccountMeta::new_readonly(manager_key, false),
         AccountMeta::new_readonly(manager_authority_key, false),
         AccountMeta::new(market_reserve_key, false),
-        AccountMeta::new(supply_token_account_info, false),
+        AccountMeta::new(supply_token_account_key, false),
         AccountMeta::new_readonly(receiver_authority_key, true),
         AccountMeta::new_readonly(spl_token::id(), false),
         AccountMeta::new_readonly(receiver_program_id, false),
@@ -1325,6 +1325,66 @@ pub fn init_unique_credit(
             authority: credit_authority_key,
             amount,
         }.pack(),
+    }
+}
+
+pub fn borrow_liquidity_by_unique_credit(
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    supply_token_account_key: Pubkey,
+    unique_credit_key: Pubkey,
+    authority_key: Pubkey,
+    amount: u64,
+) -> Instruction {
+    let program_id = id();
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
+        &program_id,
+    );
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(manager_authority_key, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new(supply_token_account_key, false),
+            AccountMeta::new(unique_credit_key, false),
+            AccountMeta::new_readonly(authority_key, true),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
+        data: LendingInstruction::BorrowLiquidityByUniqueCredit{ amount }.pack(),
+    }
+}
+
+pub fn repay_loan_by_unique_credit(
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    supply_token_account_key: Pubkey,
+    unique_credit_key: Pubkey,
+    source_token_account_key: Pubkey,
+    amount: u64,
+) -> Instruction {
+    let program_id = id();
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
+        &program_id,
+    );
+
+    Instruction {
+        program_id,
+        accounts: vec![
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(manager_authority_key, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new(supply_token_account_key, false),
+            AccountMeta::new(unique_credit_key, false),
+            AccountMeta::new(source_token_account_key, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
+        data: LendingInstruction::RepayLoanByUniqueCredit{ amount }.pack(),
     }
 }
 

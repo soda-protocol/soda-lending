@@ -1947,18 +1947,12 @@ fn process_borrow_liquidity_by_unique_credit(
         return Err(LendingError::InvalidMarketReserve.into());
     }
     // 5
-    let pyth_price_info = next_account_info(account_info_iter)?;
-    if pyth_price_info.key != &market_reserve.token_info.price_oracle {
-        return Err(LendingError::InvalidPriceOracle.into());
-    }
-    let market_price = get_pyth_price(pyth_price_info, clock)?;
-    // 6
     let supply_token_account_info = next_account_info(account_info_iter)?;
     if supply_token_account_info.key != &market_reserve.token_info.supply_account {
         msg!("Supply token account provided is not matched with market reserve provided");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
-    // 7
+    // 6
     let unique_credit_info = next_account_info(account_info_iter)?;
     if unique_credit_info.owner != program_id {
         msg!("UniqueCredit owner provided is not owned by the lending program");
@@ -1968,7 +1962,7 @@ fn process_borrow_liquidity_by_unique_credit(
     if &unique_credit.reserve != market_reserve_info.key {
         return Err(LendingError::InvalidMarketReserve.into());
     }
-    // 8
+    // 7
     let authority_info = next_account_info(account_info_iter)?;
     if authority_info.key != &unique_credit.owner {
         return Err(LendingError::InvalidAuthority.into());
@@ -1977,11 +1971,10 @@ fn process_borrow_liquidity_by_unique_credit(
         msg!("authority is not a signer");
         return Err(LendingError::InvalidSigner.into());
     }
-    // 9
+    // 8
     let token_program_id = next_account_info(account_info_iter)?;
 
     // update reserve
-    market_reserve.market_price = market_price;
     market_reserve.accrue_interest(clock.slot)?;
     market_reserve.last_update.update_slot(clock.slot, true);
     // borrow in credit
@@ -2043,18 +2036,12 @@ fn process_repay_loan_by_unique_credit(
         return Err(LendingError::InvalidMarketReserve.into());
     }
     // 5
-    let pyth_price_info = next_account_info(account_info_iter)?;
-    if pyth_price_info.key != &market_reserve.token_info.price_oracle {
-        return Err(LendingError::InvalidPriceOracle.into());
-    }
-    let market_price = get_pyth_price(pyth_price_info, clock)?;
-    // 6
     let supply_token_account_info = next_account_info(account_info_iter)?;
     if supply_token_account_info.key != &market_reserve.token_info.supply_account {
         msg!("Supply token account provided is not matched with market reserve provided");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
-    // 7
+    // 6
     let unique_credit_info = next_account_info(account_info_iter)?;
     if unique_credit_info.owner != program_id {
         msg!("UniqueCredit owner provided is not owned by the lending program");
@@ -2064,18 +2051,17 @@ fn process_repay_loan_by_unique_credit(
     if &unique_credit.reserve != market_reserve_info.key {
         return Err(LendingError::InvalidMarketReserve.into());
     }
-    // 8
+    // 7
     let source_token_account_info = next_account_info(account_info_iter)?;
     let source_token_account = Account::unpack(&source_token_account_info.try_borrow_data()?)?;
     if &source_token_account.owner == manager_authority_info.key {
         msg!("Source token account owner should not equal to manager authority");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
-    // 9
+    // 8
     let token_program_id = next_account_info(account_info_iter)?;
 
     // update in reserve
-    market_reserve.market_price = market_price;
     market_reserve.accrue_interest(clock.slot)?;
     market_reserve.last_update.update_slot(clock.slot, true);
     // repay in obligation

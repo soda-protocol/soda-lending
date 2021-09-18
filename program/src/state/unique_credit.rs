@@ -64,11 +64,11 @@ impl UniqueCredit {
         let amount = calculate_amount(amount, reserve.liquidity_info.available);
         self.borrowed_amount_wads = self.borrowed_amount_wads.try_add(Decimal::from(amount))?;
 
-        if self.borrowed_amount_wads > Decimal::from(self.borrow_limit) {
-            return Err(LendingError::InsufficientUniqueCreditLimit.into())
+        if self.borrowed_amount_wads <= Decimal::from(self.borrow_limit) {
+            Ok(amount)
+        } else {
+            Err(LendingError::InsufficientUniqueCreditLimit.into())
         }
-
-        Ok(amount)
     }
 
     pub fn repay(
