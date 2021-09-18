@@ -5,13 +5,12 @@ use crate::{
     math::{Decimal, TryDiv, TryMul},
     pyth,
     state::{
-        CollateralConfig, LiquidityControl, LiquidityConfig,
-        Manager, MarketReserve, Operator, Param, RateModel,
-        PriceOraclePubkey, TokenInfo, UserObligation,
-        UniqueCredit, calculate_amount,
+        CollateralConfig, LiquidityControl, LiquidityConfig, Manager,
+        MarketReserve, Operator, Param, RateModel, PriceOraclePubkey,
+        TokenInfo, UserObligation, UniqueCredit, calculate_amount,
+        get_associated_user_obligation_address, 
     },
 };
-
 use std::{convert::TryInto, any::Any};
 use num_traits::FromPrimitive;
 use solana_program::{
@@ -26,6 +25,7 @@ use solana_program::{
     program_pack::{IsInitialized, Pack},
     pubkey::Pubkey,
     sysvar::{clock::Clock, rent::Rent, Sysvar},
+    system_instruction::{transfer, allocate, assign},
 };
 use spl_token::{state::{Mint, Account}, check_program_account, native_mint};
 use typenum::{Bit, True, False};
@@ -540,20 +540,72 @@ fn process_init_user_obligation(
     }
     Manager::unpack(&manager_info.try_borrow_data()?)?;
     // 4
-    let user_obligation_info = next_account_info(account_info_iter)?;
-    if user_obligation_info.owner != program_id {
-        msg!("UserObligation owner provided is not owned by the lending program");
-        return Err(LendingError::InvalidAccountOwner.into());
-    }
-    assert_rent_exempt(rent, user_obligation_info)?;
-    assert_uninitialized::<UserObligation>(user_obligation_info)?;
+    let authority_info = next_account_info(account_info_iter)?;
     // 5
-    let owner_info = next_account_info(account_info_iter)?;
+    let user_obligation_info = next_account_info(account_info_iter)?;
+    let (associated_obligation_address, bump_seed) = get_associated_user_obligation_address(
+        manager_info.key,
+        authority_info.key,
+        program_id,
+    );
+    if &associated_obligation_address != user_obligation_info.key {
+        msg!("Associated user obligation address does not match seed derivation");
+        return Err(ProgramError::InvalidSeeds);
+    }
+    let associated_obligation_signer_seeds = &[
+        manager_info.key.as_ref(),
+        authority_info.key.as_ref(),
+        &[bump_seed],
+    ];
+    // 6
+    let system_program_info = next_account_info(account_info_iter)?;
+
+    // init user obligation address
+    let required_lamports = rent
+        .minimum_balance(UserObligation::LEN)
+        .max(1)
+        .saturating_sub(user_obligation_info.lamports());
+
+    if required_lamports > 0 {
+        invoke(
+            &transfer(
+                authority_info.key,
+                user_obligation_info.key,
+                required_lamports,
+            ),
+            &[
+                authority_info.clone(),
+                user_obligation_info.clone(),
+                system_program_info.clone(),
+            ],
+        )?;
+    }
+
+    invoke_signed(
+        &allocate(
+            user_obligation_info.key,
+            UserObligation::LEN as u64,
+        ),
+        &[
+            user_obligation_info.clone(),
+            system_program_info.clone(),
+        ],
+        &[&associated_obligation_signer_seeds[..]],
+    )?;
+
+    invoke_signed(
+        &assign(user_obligation_info.key, program_id),
+        &[
+            user_obligation_info.clone(),
+            system_program_info.clone(),
+        ],
+        &[&associated_obligation_signer_seeds[..]],
+    )?;
 
     let user_obligation = UserObligation::new(
         clock.slot,
         *manager_info.key,
-        *owner_info.key,
+        *authority_info.key,
     );
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
 }

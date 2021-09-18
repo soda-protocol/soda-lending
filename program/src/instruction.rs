@@ -12,7 +12,8 @@ use solana_program::{
     msg,
     program_error::ProgramError,
     pubkey::{Pubkey, PUBKEY_BYTES},
-    sysvar
+    sysvar,
+    system_program,
 };
 use std::{convert::{TryInto, TryFrom}, mem::size_of};
 
@@ -785,8 +786,8 @@ pub fn withdraw(
 
 pub fn init_user_obligation(
     manager_key: Pubkey,
+    authority_key: Pubkey,
     user_obligation_key: Pubkey,
-    owner_key: Pubkey,
 ) -> Instruction {
     Instruction {
         program_id: id(),
@@ -794,8 +795,9 @@ pub fn init_user_obligation(
             AccountMeta::new_readonly(sysvar::rent::id(), false),
             AccountMeta::new_readonly(sysvar::clock::id(), false),
             AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(authority_key, true),
             AccountMeta::new(user_obligation_key, false),
-            AccountMeta::new_readonly(owner_key, false),
+            AccountMeta::new_readonly(system_program::id(), false),
         ],
         data: LendingInstruction::InitUserObligation.pack(),
     }

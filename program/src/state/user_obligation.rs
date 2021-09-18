@@ -874,3 +874,18 @@ impl Param for IndexedLoanConfig {
         }
     }
 }
+
+#[inline(always)]
+pub fn get_associated_user_obligation_address(
+    manager_address: &Pubkey,
+    authority_address: &Pubkey,
+    program_id: &Pubkey,
+) -> (Pubkey, u8) {
+    Pubkey::find_program_address(
+        &[
+            manager_address.as_ref(),
+            authority_address.as_ref(),
+        ],
+        program_id,
+    )
+}
