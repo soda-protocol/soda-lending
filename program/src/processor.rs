@@ -11,7 +11,6 @@ use crate::{
         UniqueCredit, calculate_amount,
     },
 };
-
 use std::{convert::TryInto, any::Any};
 use num_traits::FromPrimitive;
 use solana_program::{
@@ -471,7 +470,7 @@ fn process_deposit_or_withdraw<B: Bit>(
     market_reserve.last_update.update_slot(clock.slot, true);
 
     if B::BOOL {
-        let amount = calculate_amount(amount, user_token_account.amount.min(user_token_account.delegated_amount));
+        let amount = calculate_amount(amount, get_available_balance(user_token_account, user_authority_info.key));
         let mint_amount = market_reserve.deposit(amount)?;
         // pack
         MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
@@ -762,7 +761,7 @@ fn process_pledge_collateral(
     let token_program_id = next_account_info(account_info_iter)?;
 
     // handle obligation
-    let balance = user_sotoken_account.amount.min(user_sotoken_account.delegated_amount);
+    let balance = get_available_balance(user_sotoken_account, user_authority_info.key);
     let amount = if let Ok(index) = user_obligation.find_collateral(*market_reserve_info.key) {
         user_obligation.pledge(balance, amount, index)?
     } else {
@@ -1120,7 +1119,7 @@ fn process_replace_collateral(
         return Err(LendingError::ObligationReplaceCollateralExists.into());
     }
     let (in_amount, out_amount) = user_obligation.replace_collateral(
-        user_in_sotoken_account.amount.min(user_in_sotoken_account.delegated_amount),
+        get_available_balance(user_in_sotoken_account, user_authority_info.key),
         amount,
         out_index,
         *in_market_reserve_info.key,
@@ -2341,6 +2340,16 @@ fn process_close_lending_account(
     Ok(())
 }
 
+#[inline(always)]
+fn get_available_balance(account: Account, authority_key: &Pubkey) -> u64 {
+    if &account.owner == authority_key {
+        account.amount
+    } else {
+        account.amount.min(account.delegated_amount)
+    }
+}
+
+#[inline(always)]
 fn get_token_decimals(account_info: &AccountInfo) -> Result<u8, ProgramError> {
     if account_info.key == &native_mint::id() {
         Ok(native_mint::DECIMALS)
