@@ -2341,11 +2341,17 @@ fn process_close_lending_account(
 }
 
 #[inline(always)]
-fn get_available_balance(account: Account, authority_key: &Pubkey) -> u64 {
-    if &account.owner == authority_key {
+fn get_available_balance(account: Account, authority_key: Pubkey) -> u64 {
+    if let COption::Some(delegate) = account.delegate {
+        if delegate == authority_key {
+            return account.amount.min(account.delegated_amount);
+        }
+    }
+
+    if account.owner == authority_key {
         account.amount
     } else {
-        account.amount.min(account.delegated_amount)
+        0
     }
 }
 
