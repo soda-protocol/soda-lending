@@ -220,9 +220,9 @@ pub struct MarketReserve {
     pub last_update: LastUpdate,
     /// size: 32 byte (used in instruction)
     pub manager: Pubkey,
-    ///
+    /// 
     pub market_price: Decimal,
-    ///
+    /// 
     pub token_info: TokenInfo,
     /// size: 43 byte
     pub collateral_info: CollateralInfo,
@@ -245,17 +245,17 @@ pub struct TokenInfo {
 }
 ```
 
-- borrow_liquidity_by_unique_credit
+- borrow liquidity
     - *soda will approve final amount from `supply_token_account_key` for `authority_key` as delegate*
 ```rust
 pub fn borrow_liquidity_by_unique_credit(
-    // data field in MarketReserve
+    // manager pubkey which owns by soda program (should equals to field in MarketReserve)
     manager_key: Pubkey,
-    // market reserve pubkey which created by soda admin
+    // market reserve pubkey which owns by soda program
     market_reserve_key: Pubkey,
-    // data field in TokenInfo
-    supply_token_account_key: Pubkey,
-    // credit pubket which created by soda admin
+    // supply token account of reserve which owns by soda program (should equals to field in TokenInfo)
+    supply_token_account_key: Pubkey, 
+    // credit pubket which owns by soda program (created by soda admin)
     unique_credit_key: Pubkey,
     // authority of credit owner
     authority_key: Pubkey,
@@ -284,7 +284,7 @@ pub fn borrow_liquidity_by_unique_credit(
     }
 }
 ```
-- repay_loan_by_unique_credit
+- repay loan
     - *credit owner should approve repaying amount from `source_token_account_key` for `manager_authority_key` as delegate*
 ```rust
 pub fn repay_loan_by_unique_credit(
