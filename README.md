@@ -245,6 +245,53 @@ pub struct TokenInfo {
 }
 ```
 
+- instruction struct
+```rust
+pub enum LendingInstruction {
+    /// 21
+    BorrowLiquidityByUniqueCredit {
+        amount: u64,
+    },
+    /// 22
+    RepayLoanByUniqueCredit {
+        amount: u64,
+    },
+}
+
+impl LendingInstruction {
+    pub fn unpack(input: &[u8]) -> Result<Self, ProgramError> {
+        let (&tag, rest) = input
+            .split_first()
+            .ok_or(LendingError::InstructionUnpackError)?;
+        Ok(match tag {
+            21 => {
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::BorrowLiquidityByUniqueCredit { amount }
+            }
+            22 => {
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::RepayLoanByUniqueCredit { amount }
+            }
+        }
+    }
+
+    pub fn pack(&self) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(size_of::<Self>());
+        match *self {
+            Self::BorrowLiquidityByUniqueCredit { amount } => {
+                buf.push(21);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::RepayLoanByUniqueCredit { amount } => {
+                buf.push(22);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+        }
+        buf
+    }
+}
+```
+
 - borrow liquidity
     - *soda will approve final amount from `supply_token_account_key` for `authority_key` as delegate*
 ```rust
