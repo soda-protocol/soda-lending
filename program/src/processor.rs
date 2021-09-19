@@ -5,12 +5,14 @@ use crate::{
     math::{Decimal, TryDiv, TryMul},
     pyth,
     state::{
-        CollateralConfig, LiquidityControl, LiquidityConfig, Manager,
-        MarketReserve, Operator, Param, RateModel, PriceOraclePubkey,
-        TokenInfo, UserObligation, UniqueCredit, calculate_amount,
-        get_associated_user_obligation_address, 
+        CollateralConfig, LiquidityControl, LiquidityConfig,
+        Manager, MarketReserve, Operator, Param, RateModel,
+        PriceOraclePubkey, TokenInfo, UserObligation,
+        calculate_amount, get_associated_user_obligation_address, 
     },
 };
+#[cfg(feature = "unique-credit")]
+use crate::state::UniqueCredit;
 use std::{convert::TryInto, any::Any};
 use num_traits::FromPrimitive;
 use solana_program::{
@@ -126,14 +128,17 @@ pub fn process_instruction(
             msg!("Instruction: Flash Loan: amount = {}", amount);
             process_flash_loan(program_id, accounts, tag, amount)
         }
+        #[cfg(feature = "unique-credit")]
         LendingInstruction::InitUniqueCredit { authority, amount } => {
             msg!("Instruction: Init Unique Credit");
             process_init_unique_credit(program_id, accounts, authority, amount)
         }
+        #[cfg(feature = "unique-credit")]
         LendingInstruction::BorrowLiquidityByUniqueCredit { amount } => {
             msg!("Instruction: Borrow Liquidity by Unique Credit: amount = {}", amount);
             process_borrow_liquidity_by_unique_credit(program_id, accounts, amount)
         }
+        #[cfg(feature = "unique-credit")]
         LendingInstruction::RepayLoanByUniqueCredit { amount } => {
             msg!("Instruction: Repay Loan by Unique Credit: amount = {}", amount);
             process_repay_loan_by_unique_credit(program_id, accounts, amount)
@@ -170,6 +175,7 @@ pub fn process_instruction(
             msg!("Instruction: Reduce Insurance: {}", amount);
             process_reduce_insurance(program_id, accounts, amount)
         }
+        #[cfg(feature = "unique-credit")]
         LendingInstruction::UpdateUniqueCreditLimit { amount } => {
             msg!("Instruction: Update Unique Credit Limit: amount = {}", amount);
             process_update_unique_credit_limit(program_id, accounts, amount)
@@ -1897,6 +1903,7 @@ fn process_flash_loan(
 }
 
 // by manager
+#[cfg(feature = "unique-credit")]
 fn process_init_unique_credit(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -1962,6 +1969,7 @@ fn process_init_unique_credit(
 }
 
 #[inline(never)]
+#[cfg(feature = "unique-credit")]
 fn process_borrow_liquidity_by_unique_credit(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -2051,6 +2059,7 @@ fn process_borrow_liquidity_by_unique_credit(
 }
 
 #[inline(never)]
+#[cfg(feature = "unique-credit")]
 fn process_repay_loan_by_unique_credit(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -2294,6 +2303,7 @@ fn process_reduce_insurance(
 }
 
 // by manager
+// #[cfg(feature = "unique-credit")]
 fn process_update_unique_credit_limit(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -2307,16 +2317,16 @@ fn process_update_unique_credit_limit(
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
-    let authority_signer_seeds = &[
-        manager_info.key.as_ref(),
-        &[manager.bump_seed]
-    ];
-    let manager_authority = Pubkey::create_program_address(authority_signer_seeds, program_id)?;
     // 2
-    let manager_authority_info = next_account_info(account_info_iter)?;
-    if manager_authority_info.key != &manager_authority {
-        msg!("Manager authority is not matched with program address derived from manager info");
-        return Err(LendingError::InvalidManagerAuthority.into());
+    let market_reserve_info = next_account_info(account_info_iter)?;
+    if market_reserve_info.owner != program_id {
+        msg!("MarketReserve owner provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
+    }
+    let market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
+    if &market_reserve.manager != manager_info.key {
+        msg!("MarketReserve manager provided is not matched with manager info");
+        return Err(LendingError::InvalidMarketReserve.into());
     }
     // 3
     let unique_credit_info = next_account_info(account_info_iter)?;
@@ -2325,6 +2335,9 @@ fn process_update_unique_credit_limit(
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut unique_credit = UniqueCredit::unpack(&unique_credit_info.try_borrow_data()?)?;
+    if &unique_credit.reserve != market_reserve_info.key {
+        return Err(LendingError::InvalidMarketReserve.into());
+    }
     // 4
     let authority_info = next_account_info(account_info_iter)?;
     if authority_info.key != &manager.owner {

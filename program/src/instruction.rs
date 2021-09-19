@@ -120,6 +120,7 @@ pub enum LendingInstruction {
         amount: u64,
     },
     /// 20
+    #[cfg(feature = "unique-credit")]
     InitUniqueCredit {
         ///
         authority: Pubkey,
@@ -127,11 +128,13 @@ pub enum LendingInstruction {
         amount: u64,
     },
     /// 21
+    #[cfg(feature = "unique-credit")]
     BorrowLiquidityByUniqueCredit {
         ///
         amount: u64,
     },
     /// 22
+    #[cfg(feature = "unique-credit")]
     RepayLoanByUniqueCredit {
         ///
         amount: u64,
@@ -177,6 +180,7 @@ pub enum LendingInstruction {
         amount: u64,
     },
     /// 31
+    #[cfg(feature = "unique-credit")]
     UpdateUniqueCreditLimit{
         ///
         amount: u64,
@@ -272,15 +276,18 @@ impl LendingInstruction {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::FlashLoan { tag, amount }
             }
+            #[cfg(feature = "unique-credit")]
             20 => {
                 let (authority, rest) = Self::unpack_pubkey(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::InitUniqueCredit { authority, amount }
             }
+            #[cfg(feature = "unique-credit")]
             21 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::BorrowLiquidityByUniqueCredit { amount }
             }
+            #[cfg(feature = "unique-credit")]
             22 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::RepayLoanByUniqueCredit { amount }
@@ -317,6 +324,7 @@ impl LendingInstruction {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::ReduceInsurance { amount }
             }
+            #[cfg(feature = "unique-credit")]
             31 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::UpdateUniqueCreditLimit { amount }
@@ -545,15 +553,18 @@ impl LendingInstruction {
                 buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
+            #[cfg(feature = "unique-credit")]
             Self::InitUniqueCredit { authority, amount } => {
                 buf.push(20);
                 buf.extend_from_slice(authority.as_ref());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
+            #[cfg(feature = "unique-credit")]
             Self::BorrowLiquidityByUniqueCredit { amount } => {
                 buf.push(21);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
+            #[cfg(feature = "unique-credit")]
             Self::RepayLoanByUniqueCredit { amount } => {
                 buf.push(22);
                 buf.extend_from_slice(&amount.to_le_bytes());
@@ -593,6 +604,7 @@ impl LendingInstruction {
                 buf.push(30);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
+            #[cfg(feature = "unique-credit")]
             Self::UpdateUniqueCreditLimit { amount } => {
                 buf.push(31);
                 buf.extend_from_slice(&amount.to_le_bytes());
@@ -1299,6 +1311,7 @@ pub fn flash_loan(
     }
 }
 
+#[cfg(feature = "unique-credit")]
 pub fn init_unique_credit(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
@@ -1330,6 +1343,7 @@ pub fn init_unique_credit(
     }
 }
 
+#[cfg(feature = "unique-credit")]
 pub fn borrow_liquidity_by_unique_credit(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
@@ -1360,6 +1374,7 @@ pub fn borrow_liquidity_by_unique_credit(
     }
 }
 
+#[cfg(feature = "unique-credit")]
 pub fn repay_loan_by_unique_credit(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
@@ -1506,6 +1521,26 @@ pub fn update_market_reserve_price_oracle(
             AccountMeta::new_readonly(authority_key, true),
         ],
         data: LendingInstruction::UpdateMarketReservePriceOracle{ oracle }.pack(),
+    }
+}
+
+#[cfg(feature = "unique-credit")]
+pub fn update_unique_credit_limit(
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    unique_credit_key: Pubkey,
+    authority_key: Pubkey,
+    amount: u64,
+) -> Instruction {
+    Instruction {
+        program_id: id(),
+        accounts: vec![
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(market_reserve_key, false),
+            AccountMeta::new(unique_credit_key, false),
+            AccountMeta::new_readonly(authority_key, true),
+        ],
+        data: LendingInstruction::UpdateUniqueCreditLimit{ amount }.pack(),
     }
 }
 
