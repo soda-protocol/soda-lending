@@ -1,6 +1,10 @@
 #![allow(missing_docs)]
 use super::*;
-use crate::{error::LendingError, math::{Rate, TryDiv, TrySub, WAD}};
+use crate::{
+    error::LendingError,
+    math::{Rate, TryDiv, TrySub, WAD},
+    oracle::{OracleInfo, OracleConfig, OracleType},
+};
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 use solana_program::{
     clock::Slot, 
@@ -14,13 +18,11 @@ use std::{convert::TryInto, any::Any};
 
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct TokenInfo {
+pub struct TokenConfig {
     ///
     pub mint_pubkey: Pubkey,
     ///
     pub supply_account: Pubkey,
-    ///
-    pub price_oracle: Pubkey,
     ///
     pub decimal: u8,
 }
@@ -242,7 +244,7 @@ impl LiquidityInfo {
 }
 
 /// Lending market reserve state
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct MarketReserve {
     /// Version of the struct
     pub version: u8,
@@ -251,9 +253,9 @@ pub struct MarketReserve {
     /// 
     pub manager: Pubkey,
     ///
-    pub market_price: Decimal,
+    pub token_config: TokenConfig,
     ///
-    pub token_info: TokenInfo,
+    pub oracle_info: OracleInfo,
     ///
     pub collateral_info: CollateralInfo,
     ///
@@ -268,8 +270,8 @@ impl MarketReserve {
     pub fn new(
         slot: Slot,
         manager: Pubkey,
-        market_price: Decimal,
-        token_info: TokenInfo,
+        token_config: TokenConfig,
+        oracle_config: OracleConfig,
         liquidity_config: LiquidityConfig,
         sotoken_mint_pubkey: Pubkey,
         collateral_config: CollateralConfig,
@@ -279,8 +281,11 @@ impl MarketReserve {
             version: PROGRAM_VERSION,
             last_update: LastUpdate::new(slot),
             manager,
-            market_price,
-            token_info,
+            token_config,
+            oracle_info: OracleInfo {
+                price: Decimal::default(),
+                config: oracle_config,
+            },
             liquidity_info: LiquidityInfo {
                 enable: true,
                 available: 0,
@@ -373,7 +378,7 @@ impl IsInitialized for MarketReserve {
 }
 
 const MARKET_RESERVE_PADDING_LEN: usize = 256;
-const MARKET_RESERVE_LEN: usize = 570;
+const MARKET_RESERVE_LEN: usize = 571;
 
 impl Pack for MarketReserve {
     const LEN: usize = MARKET_RESERVE_LEN;
@@ -385,11 +390,12 @@ impl Pack for MarketReserve {
             version,
             last_update,
             manager,
-            market_price,
             mint_pubkey,
             supply_account,
-            price_oracle,
             decimal,
+            price,
+            oracle,
+            oracle_type,
             sotoken_mint_pubkey,
             total_mint,
             borrow_value_ratio,
@@ -415,9 +421,10 @@ impl Pack for MarketReserve {
             1,
             LAST_UPDATE_LEN,
             PUBKEY_BYTES,
+            PUBKEY_BYTES,
+            PUBKEY_BYTES,
+            1,
             16,
-            PUBKEY_BYTES,
-            PUBKEY_BYTES,
             PUBKEY_BYTES,
             1,
             PUBKEY_BYTES,
@@ -445,12 +452,15 @@ impl Pack for MarketReserve {
         *version = self.version.to_le_bytes();
         self.last_update.pack_into_slice(&mut last_update[..]);
         manager.copy_from_slice(self.manager.as_ref());
-        pack_decimal(self.market_price, market_price);
 
-        mint_pubkey.copy_from_slice(self.token_info.mint_pubkey.as_ref());
-        supply_account.copy_from_slice(self.token_info.supply_account.as_ref());
-        price_oracle.copy_from_slice(self.token_info.price_oracle.as_ref());
-        *decimal = self.token_info.decimal.to_le_bytes();
+        mint_pubkey.copy_from_slice(self.token_config.mint_pubkey.as_ref());
+        supply_account.copy_from_slice(self.token_config.supply_account.as_ref());
+        *decimal = self.token_config.decimal.to_le_bytes();
+
+        pack_decimal(self.oracle_info.price, price);
+        oracle.copy_from_slice(self.oracle_info.config.oracle.as_ref());
+        let oracle_type_u8: u8 = self.oracle_info.config.oracle_type.into();
+        *oracle_type = oracle_type_u8.to_le_bytes();
 
         sotoken_mint_pubkey.copy_from_slice(self.collateral_info.sotoken_mint_pubkey.as_ref());
         *total_mint = self.collateral_info.total_mint.to_le_bytes();
@@ -484,11 +494,12 @@ impl Pack for MarketReserve {
             version,
             last_update,
             manager,
-            market_price,
             mint_pubkey,
             supply_account,
-            price_oracle,
             decimal,
+            price,
+            oracle,
+            oracle_type,
             sotoken_mint_pubkey,
             total_mint,
             borrow_value_ratio,
@@ -514,9 +525,10 @@ impl Pack for MarketReserve {
             1,
             LAST_UPDATE_LEN,
             PUBKEY_BYTES,
+            PUBKEY_BYTES,
+            PUBKEY_BYTES,
+            1,
             16,
-            PUBKEY_BYTES,
-            PUBKEY_BYTES,
             PUBKEY_BYTES,
             1,
             PUBKEY_BYTES,
@@ -551,12 +563,17 @@ impl Pack for MarketReserve {
             version,
             last_update: LastUpdate::unpack_from_slice(&last_update[..])?,
             manager: Pubkey::new_from_array(*manager),
-            market_price: unpack_decimal(market_price),
-            token_info: TokenInfo {
+            token_config: TokenConfig {
                 mint_pubkey: Pubkey::new_from_array(*mint_pubkey),
                 supply_account: Pubkey::new_from_array(*supply_account),
-                price_oracle: Pubkey::new_from_array(*price_oracle),
                 decimal: u8::from_le_bytes(*decimal),
+            },
+            oracle_info: OracleInfo {
+                price: unpack_decimal(price),
+                config: OracleConfig {
+                    oracle: Pubkey::new_from_array(*oracle),
+                    oracle_type: OracleType::from(u8::from_le_bytes(*oracle_type)),
+                },
             },
             collateral_info: CollateralInfo {
                 sotoken_mint_pubkey: Pubkey::new_from_array(*sotoken_mint_pubkey),
@@ -614,8 +631,8 @@ impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
             return Ok(());
         }
 
-        if let Some(oracle) = <dyn Any>::downcast_ref::<PriceOraclePubkey>(&param) {
-            self.token_info.price_oracle = oracle.0;
+        if let Some(config) = <dyn Any>::downcast_ref::<OracleConfig>(&param) {
+            self.oracle_info.config = *config;
             return Ok(());
         }
 
@@ -628,16 +645,6 @@ impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
 pub struct LiquidityControl(pub bool);
 
 impl Param for LiquidityControl {
-    fn assert_valid(&self) -> ProgramResult {
-        Ok(())
-    }
-}
-
-///
-#[derive(Clone, Debug, Copy)]
-pub struct PriceOraclePubkey(pub Pubkey);
-
-impl Param for PriceOraclePubkey {
     fn assert_valid(&self) -> ProgramResult {
         Ok(())
     }

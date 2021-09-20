@@ -2,18 +2,17 @@
 use crate::{
     error::LendingError,
     instruction::LendingInstruction,
-    math::{Decimal, TryDiv, TryMul},
-    pyth,
     state::{
         CollateralConfig, LiquidityControl, LiquidityConfig,
         Manager, MarketReserve, Operator, Param, RateModel,
-        PriceOraclePubkey, TokenInfo, UserObligation,
-        calculate_amount, get_associated_user_obligation_address, 
+        TokenConfig, UserObligation, calculate_amount,
+        get_associated_user_obligation_address, 
     },
+    oracle::OracleConfig,
 };
 #[cfg(feature = "unique-credit")]
 use crate::state::UniqueCredit;
-use std::{convert::TryInto, any::Any};
+use std::any::Any;
 use num_traits::FromPrimitive;
 use solana_program::{
     account_info::{AccountInfo, next_account_info},
@@ -29,7 +28,7 @@ use solana_program::{
     sysvar::{clock::Clock, rent::Rent, Sysvar},
     system_instruction::{transfer, allocate, assign},
 };
-use spl_token::{state::{Mint, Account}, check_program_account, native_mint};
+use spl_token::{state::{Mint, Account}, native_mint};
 use typenum::{Bit, True, False};
 #[cfg(feature = "general-test")]
 use typenum::{B0, B1};
@@ -42,17 +41,25 @@ pub fn process_instruction(
 ) -> ProgramResult {
     let instruction = LendingInstruction::unpack(input)?;
     match instruction {
-        LendingInstruction::InitManager { quote_currency, owner } => {
+        LendingInstruction::InitManager { owner } => {
             msg!("Instruction: Init Lending Manager");
-            process_init_manager(program_id, accounts, quote_currency, owner)
+            process_init_manager(program_id, accounts, owner)
         }
         LendingInstruction::InitMarketReserve {
+            oracle_config,
             collateral_config,
             liquidity_config,
             rate_model,
         } => {
             msg!("Instruction: Init Market Reserve");
-            process_init_market_reserve(program_id, accounts, collateral_config, liquidity_config, rate_model)
+            process_init_market_reserve(
+                program_id,
+                accounts,
+                oracle_config,
+                collateral_config,
+                liquidity_config,
+                rate_model,
+            )
         }
         LendingInstruction::RefreshMarketReserves => {
             msg!("Instruction: Refresh Market Reserves");
@@ -167,9 +174,9 @@ pub fn process_instruction(
             msg!("Instruction: Update Market Reserve Liquidity Config");
             process_operate_market_reserve(program_id, accounts, config)
         }
-        LendingInstruction::UpdateMarketReservePriceOracle { oracle } => {
-            msg!("Instruction: Update Market Reserve Price Oracle");
-            process_operate_market_reserve(program_id, accounts, PriceOraclePubkey(oracle))
+        LendingInstruction::UpdateMarketReserveOracleConfig { config } => {
+            msg!("Instruction: Update Market Reserve Price Oracle Config");
+            process_operate_market_reserve(program_id, accounts, config)
         }
         LendingInstruction::ReduceInsurance { amount } => {
             msg!("Instruction: Reduce Insurance: {}", amount);
@@ -201,7 +208,6 @@ pub fn process_instruction(
 fn process_init_manager(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    quote_currency: [u8; 32],
     owner_pubkey: Pubkey,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
@@ -215,26 +221,20 @@ fn process_init_manager(
     }
     assert_rent_exempt(rent, manager_info)?;
     assert_uninitialized::<Manager>(manager_info)?;
-    // 3
-    let oracle_program_id = next_account_info(account_info_iter)?;
-    // 4
-    let token_program_id = next_account_info(account_info_iter)?;
-    check_program_account(&token_program_id.key)?;
     
     let manager = Manager::new(
         Pubkey::find_program_address(&[manager_info.key.as_ref()], program_id).1,
-        owner_pubkey,
-        quote_currency,
-        *token_program_id.key,
-        *oracle_program_id.key,
+        owner_pubkey
     );
     Manager::pack(manager, &mut manager_info.try_borrow_mut_data()?)
 }
 
 #[inline(never)]
+#[allow(clippy::too_many_arguments)]
 fn process_init_market_reserve(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
+    oracle_config: OracleConfig,
     collateral_config: CollateralConfig,
     liquidity_config: LiquidityConfig,
     rate_model: RateModel,
@@ -277,49 +277,11 @@ fn process_init_market_reserve(
     assert_rent_exempt(rent, market_reserve_info)?;
     assert_uninitialized::<MarketReserve>(market_reserve_info)?;
     // 7
-    let pyth_product_info = next_account_info(account_info_iter)?;
-    if pyth_product_info.owner != &manager.pyth_program_id {
-        msg!("Pyth product account provided is not owned by the pyth program");
-        return Err(LendingError::InvalidPriceOracleConfig.into());
-    }
-    let pyth_product_data = pyth_product_info.try_borrow_data()?;
-    let pyth_product = pyth::load::<pyth::Product>(&pyth_product_data)
-        .map_err(|_| ProgramError::InvalidAccountData)?;
-    if pyth_product.magic != pyth::MAGIC {
-        msg!("Pyth product account provided is not a valid Pyth account");
-        return Err(LendingError::InvalidPriceOracleConfig.into());
-    }
-    if pyth_product.ver != pyth::VERSION_2 {
-        msg!("Pyth product account provided has a different version than expected");
-        return Err(LendingError::InvalidPriceOracleConfig.into());
-    }
-    if pyth_product.atype != pyth::AccountType::Product as u32 {
-        msg!("Pyth product account provided is not a valid Pyth product account");
-        return Err(LendingError::InvalidPriceOracleConfig.into());
-    }
-    let quote_currency = get_pyth_product_quote_currency(pyth_product)?;
-    if manager.quote_currency != quote_currency {
-        msg!("Lending market quote currency does not match the oracle quote currency");
-        return Err(LendingError::InvalidPriceOracleConfig.into());
-    }
-    // 8
-    let pyth_price_info = next_account_info(account_info_iter)?;
-    if pyth_price_info.owner != &manager.pyth_program_id {
-        msg!("Pyth price account provided is not owned by the lending market oracle program");
-        return Err(LendingError::InvalidPriceOracleConfig.into());
-    }
-    let pyth_price_pubkey_bytes: &[u8; 32] = &pyth_price_info.key.to_bytes();
-    if pyth_price_pubkey_bytes != &pyth_product.px_acc.val {
-        msg!("Pyth product price account does not match the Pyth price provided");
-        return Err(LendingError::InvalidPriceOracleConfig.into());
-    }
-    let market_price = get_pyth_price(pyth_price_info, clock)?;
-    // 9
     let token_mint_info = next_account_info(account_info_iter)?;
     let token_decimals = get_token_decimals(token_mint_info)?;
-    // 10
+    // 8
     let sotoken_mint_info = next_account_info(account_info_iter)?;
-    // 11
+    // 9
     let authority_info = next_account_info(account_info_iter)?;
     if authority_info.key != &manager.owner {
         msg!("Only manager owner can create market reserve");
@@ -329,23 +291,18 @@ fn process_init_market_reserve(
         msg!("authority is not a signer");
         return Err(LendingError::InvalidSigner.into());
     }
-    // 12
+    // 10
     let token_program_id = next_account_info(account_info_iter)?;
-    if token_program_id.key != &manager.token_program_id {
-        msg!("token program id provided is not matched with token program id in manager");
-        return Err(LendingError::InvalidTokenProgram.into()); 
-    }
 
     let market_reserve = MarketReserve::new(
         clock.slot,
         *manager_info.key,
-        market_price,
-        TokenInfo {
+        TokenConfig {
             mint_pubkey: *token_mint_info.key,
             supply_account: *supply_token_account_info.key,
-            price_oracle: *pyth_price_info.key,
             decimal: token_decimals,
         },
+        oracle_config,
         liquidity_config,
         *sotoken_mint_info.key,
         collateral_config,
@@ -387,7 +344,7 @@ fn process_refresh_market_reserves(
             // 2 + i * 2
             let market_reserve_info = &accounts_info[0];
             // 3 + i * 2
-            let pyth_price_info = &accounts_info[1];
+            let price_oracle_info = &accounts_info[1];
         
             if market_reserve_info.owner != program_id {
                 msg!("MarketReserve owner provided is not owned by the lending program");
@@ -395,13 +352,12 @@ fn process_refresh_market_reserves(
             }
             let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
         
-            if pyth_price_info.key != &market_reserve.token_info.price_oracle {
+            if price_oracle_info.key != &market_reserve.oracle_info.config.oracle {
                 return Err(LendingError::InvalidPriceOracle.into());
             }
-            let market_price = get_pyth_price(pyth_price_info, clock)?;
         
             // update
-            market_reserve.market_price = market_price;
+            market_reserve.oracle_info.update_price(&price_oracle_info.try_borrow_data()?, clock)?;
             market_reserve.accrue_interest(clock.slot)?;
             market_reserve.last_update.update_slot(clock.slot, false);
             // pack
@@ -458,7 +414,7 @@ fn process_deposit_or_withdraw<B: Bit>(
     }
     // 6
     let supply_token_account_info = next_account_info(account_info_iter)?;
-    if supply_token_account_info.key != &market_reserve.token_info.supply_account {
+    if supply_token_account_info.key != &market_reserve.token_config.supply_account {
         msg!("Supply token account provided is not matched with market reserve provided");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
@@ -1260,7 +1216,7 @@ fn process_borrow_liquidity(
     }
     // 5
     let supply_token_account_info = next_account_info(account_info_iter)?;
-    if supply_token_account_info.key != &market_reserve.token_info.supply_account {
+    if supply_token_account_info.key != &market_reserve.token_config.supply_account {
         msg!("Supply token account provided is not matched with market reserve provided");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
@@ -1363,7 +1319,7 @@ fn process_repay_loan(
     let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     // 3
     let supply_token_account_info = next_account_info(account_info_iter)?;
-    if supply_token_account_info.key != &market_reserve.token_info.supply_account {
+    if supply_token_account_info.key != &market_reserve.token_config.supply_account {
         msg!("Supply token account provided is not matched with market reserve provided");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
@@ -1479,7 +1435,7 @@ fn process_liquidate<IsCollateral: Bit>(
     }
     // 7
     let supply_token_account_info = next_account_info(account_info_iter)?;
-    if supply_token_account_info.key != &loan_market_reserve.token_info.supply_account {
+    if supply_token_account_info.key != &loan_market_reserve.token_config.supply_account {
         msg!("Supply token account provided is not matched with market reserve provided");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
@@ -1610,7 +1566,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     }
     // 5
     let collateral_supply_account_info = next_account_info(account_info_iter)?;
-    if collateral_supply_account_info.key != &collateral_market_reserve.token_info.supply_account {
+    if collateral_supply_account_info.key != &collateral_market_reserve.token_config.supply_account {
         msg!("Collateral supply token account provided is not matched with market reserve provided");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
@@ -1630,7 +1586,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     }
     // 7
     let loan_supply_account_info = next_account_info(account_info_iter)?;
-    if loan_supply_account_info.key != &loan_market_reserve.token_info.supply_account {
+    if loan_supply_account_info.key != &loan_market_reserve.token_config.supply_account {
         msg!("Loan supply token account provided is not matched with market reserve provided");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
@@ -1810,7 +1766,7 @@ fn process_flash_loan(
     }
     // 5
     let supply_token_account_info = next_account_info(account_info_iter)?;
-    if supply_token_account_info.key != &market_reserve.token_info.supply_account {
+    if supply_token_account_info.key != &market_reserve.token_config.supply_account {
         msg!("Supply token account provided is not matched with market reserve provided");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
@@ -1962,6 +1918,7 @@ fn process_init_unique_credit(
 
     let unique_credit = UniqueCredit::new(
         credit_authority,
+        *manager_info.key,
         *market_reserve_info.key,
         borrow_limit,
     );
@@ -2009,7 +1966,7 @@ fn process_borrow_liquidity_by_unique_credit(
     }
     // 5
     let supply_token_account_info = next_account_info(account_info_iter)?;
-    if supply_token_account_info.key != &market_reserve.token_info.supply_account {
+    if supply_token_account_info.key != &market_reserve.token_config.supply_account {
         msg!("Supply token account provided is not matched with market reserve provided");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
@@ -2099,7 +2056,7 @@ fn process_repay_loan_by_unique_credit(
     }
     // 5
     let supply_token_account_info = next_account_info(account_info_iter)?;
-    if supply_token_account_info.key != &market_reserve.token_info.supply_account {
+    if supply_token_account_info.key != &market_reserve.token_config.supply_account {
         msg!("Supply token account provided is not matched with market reserve provided");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
@@ -2268,7 +2225,7 @@ fn process_reduce_insurance(
     }
     // 4
     let supply_token_account_info = next_account_info(account_info_iter)?;
-    if supply_token_account_info.key != &market_reserve.token_info.supply_account {
+    if supply_token_account_info.key != &market_reserve.token_config.supply_account {
         msg!("Supply token account provided is not matched with market reserve provided");
         return Err(LendingError::InvalidTokenAccount.into()); 
     }
@@ -2303,7 +2260,7 @@ fn process_reduce_insurance(
 }
 
 // by manager
-// #[cfg(feature = "unique-credit")]
+#[cfg(feature = "unique-credit")]
 fn process_update_unique_credit_limit(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -2318,27 +2275,16 @@ fn process_update_unique_credit_limit(
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
     // 2
-    let market_reserve_info = next_account_info(account_info_iter)?;
-    if market_reserve_info.owner != program_id {
-        msg!("MarketReserve owner provided is not owned by the lending program");
-        return Err(LendingError::InvalidAccountOwner.into());
-    }
-    let market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
-    if &market_reserve.manager != manager_info.key {
-        msg!("MarketReserve manager provided is not matched with manager info");
-        return Err(LendingError::InvalidMarketReserve.into());
-    }
-    // 3
     let unique_credit_info = next_account_info(account_info_iter)?;
     if unique_credit_info.owner != program_id {
         msg!("UniqueCredit owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut unique_credit = UniqueCredit::unpack(&unique_credit_info.try_borrow_data()?)?;
-    if &unique_credit.reserve != market_reserve_info.key {
-        return Err(LendingError::InvalidMarketReserve.into());
+    if &unique_credit.manager != manager_info.key {
+        return Err(LendingError::InvalidManager.into());
     }
-    // 4
+    // 3
     let authority_info = next_account_info(account_info_iter)?;
     if authority_info.key != &manager.owner {
         msg!("Only manager owner can update unique credit limit");
@@ -2445,97 +2391,6 @@ fn assert_uninitialized<T: Pack + IsInitialized>(account_info: &AccountInfo) -> 
         Err(LendingError::AlreadyInitialized.into())
     } else {
         Ok(())
-    }
-}
-
-fn get_pyth_product_quote_currency(pyth_product: &pyth::Product) -> Result<[u8; 32], ProgramError> {
-    const LEN: usize = 14;
-    const KEY: &[u8; LEN] = b"quote_currency";
-
-    let mut start = 0;
-    while start < pyth::PROD_ATTR_SIZE {
-        let mut length = pyth_product.attr[start] as usize;
-        start += 1;
-
-        if length == LEN {
-            let mut end = start + length;
-            if end > pyth::PROD_ATTR_SIZE {
-                msg!("Pyth product attribute key length too long");
-                return Err(LendingError::InvalidPriceOracleConfig.into());
-            }
-
-            let key = &pyth_product.attr[start..end];
-            if key == KEY {
-                start += length;
-                length = pyth_product.attr[start] as usize;
-                start += 1;
-
-                end = start + length;
-                if length > 32 || end > pyth::PROD_ATTR_SIZE {
-                    msg!("Pyth product quote currency value too long");
-                    return Err(LendingError::InvalidPriceOracleConfig.into());
-                }
-
-                let mut value = [0u8; 32];
-                value[0..length].copy_from_slice(&pyth_product.attr[start..end]);
-                return Ok(value);
-            }
-        }
-
-        start += length;
-        start += 1 + pyth_product.attr[start] as usize;
-    }
-
-    msg!("Pyth product quote currency not found");
-    Err(LendingError::InvalidPriceOracleConfig.into())
-}
-
-fn get_pyth_price(pyth_price_info: &AccountInfo, clock: &Clock) -> Result<Decimal, ProgramError> {
-    #[cfg(not(feature = "general-test"))]
-    const STALE_AFTER_SLOTS_ELAPSED: u64 = 10;
-    #[cfg(feature = "general-test")]
-    const STALE_AFTER_SLOTS_ELAPSED: u64 = 5;
-
-    let pyth_price_data = pyth_price_info.try_borrow_data()?;
-    let pyth_price = pyth::load::<pyth::Price>(&pyth_price_data)
-        .map_err(|_| ProgramError::InvalidAccountData)?;
-
-    if pyth_price.ptype != pyth::PriceType::Price {
-        msg!("Oracle price type is invalid");
-        return Err(LendingError::InvalidPriceOracleConfig.into());
-    }
-
-    let slots_elapsed = clock.slot
-        .checked_sub(pyth_price.valid_slot)
-        .ok_or(LendingError::MathOverflow)?;
-    if slots_elapsed >= STALE_AFTER_SLOTS_ELAPSED {
-        msg!("Oracle price is stale");
-        return Err(LendingError::InvalidPriceOracleConfig.into());
-    }
-
-    let price: u64 = pyth_price.agg.price.try_into().map_err(|_| {
-        msg!("Oracle price cannot be negative");
-        LendingError::InvalidPriceOracleConfig
-    })?;
-
-    if pyth_price.expo >= 0 {
-        let exponent = pyth_price.expo
-            .try_into()
-            .map_err(|_| LendingError::MathOverflow)?;
-        let zeros = 10u64
-            .checked_pow(exponent)
-            .ok_or(LendingError::MathOverflow)?;
-        Decimal::from(price).try_mul(zeros)
-    } else {
-        let exponent = pyth_price.expo
-            .checked_abs()
-            .ok_or(LendingError::MathOverflow)?
-            .try_into()
-            .map_err(|_| LendingError::MathOverflow)?;
-        let decimals = 10u64
-            .checked_pow(exponent)
-            .ok_or(LendingError::MathOverflow)?;
-        Decimal::from(price).try_div(decimals)
     }
 }
 

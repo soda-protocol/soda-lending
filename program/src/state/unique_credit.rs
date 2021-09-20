@@ -14,6 +14,8 @@ pub struct UniqueCredit {
     ///
     pub owner: Pubkey,
     ///
+    pub manager: Pubkey,
+    ///
     pub reserve: Pubkey,
     ///
     pub borrow_limit: u64,
@@ -26,12 +28,14 @@ pub struct UniqueCredit {
 impl UniqueCredit {
     pub fn new(
         owner: Pubkey,
+        manager: Pubkey,
         reserve: Pubkey,
         borrow_limit: u64,
     ) -> Self {
         Self {
             version: PROGRAM_VERSION,
             owner,
+            manager,
             reserve,
             borrow_limit,
             acc_borrow_rate_wads: Decimal::one(),
@@ -97,7 +101,7 @@ impl IsInitialized for UniqueCredit {
 }
 
 const UNIQUE_CREDIT_PADDING_LEN: usize = 256;
-const UNIQUE_CREDIT_LEN: usize = 361;
+const UNIQUE_CREDIT_LEN: usize = 393;
 
 impl Pack for UniqueCredit {
     const LEN: usize = UNIQUE_CREDIT_LEN;
@@ -108,6 +112,7 @@ impl Pack for UniqueCredit {
         let (
             version,
             owner,
+            manager,
             reserve,
             borrow_limit,
             acc_borrow_rate_wads,
@@ -118,6 +123,7 @@ impl Pack for UniqueCredit {
             1,
             PUBKEY_BYTES,
             PUBKEY_BYTES,
+            PUBKEY_BYTES,
             8,
             16,
             16,
@@ -126,6 +132,7 @@ impl Pack for UniqueCredit {
 
         *version = self.version.to_le_bytes();
         owner.copy_from_slice(self.owner.as_ref());
+        manager.copy_from_slice(self.manager.as_ref());
         reserve.copy_from_slice(self.reserve.as_ref());
         *borrow_limit = self.borrow_limit.to_le_bytes();
         pack_decimal(self.acc_borrow_rate_wads, acc_borrow_rate_wads);
@@ -138,6 +145,7 @@ impl Pack for UniqueCredit {
         let (
             version,
             owner,
+            manager,
             reserve,
             borrow_limit,
             acc_borrow_rate_wads,
@@ -146,6 +154,7 @@ impl Pack for UniqueCredit {
         ) = array_refs![
             input,
             1,
+            PUBKEY_BYTES,
             PUBKEY_BYTES,
             PUBKEY_BYTES,
             8,
@@ -163,6 +172,7 @@ impl Pack for UniqueCredit {
         Ok(Self{
             version,
             owner: Pubkey::new_from_array(*owner),
+            manager: Pubkey::new_from_array(*manager),
             reserve: Pubkey::new_from_array(*reserve),
             borrow_limit: u64::from_le_bytes(*borrow_limit),
             acc_borrow_rate_wads: unpack_decimal(acc_borrow_rate_wads),

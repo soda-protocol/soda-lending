@@ -6,6 +6,7 @@ use crate::{
         IndexedCollateralConfig, IndexedLoanConfig,
         LiquidityConfig, CollateralConfig, RateModel,
     },
+    oracle::{OracleConfig, OracleType},
 };
 use solana_program::{
     instruction::{AccountMeta, Instruction},
@@ -15,7 +16,7 @@ use solana_program::{
     sysvar,
     system_program,
 };
-use std::{convert::{TryInto, TryFrom}, mem::size_of};
+use std::{convert::TryInto, mem::size_of};
 
 /// Instructions supported by the lending program.
 #[derive(Clone, Debug, PartialEq)]
@@ -23,12 +24,12 @@ pub enum LendingInstruction {
     /// 0
     InitManager {
         ///
-        quote_currency: [u8; 32],
-        ///
         owner: Pubkey,
     },
     /// 1
     InitMarketReserve {
+        ///
+        oracle_config: OracleConfig,
         ///
         collateral_config: CollateralConfig,
         ///
@@ -170,9 +171,9 @@ pub enum LendingInstruction {
         config: LiquidityConfig,
     },
     /// 29
-    UpdateMarketReservePriceOracle {
+    UpdateMarketReserveOracleConfig {
         ///
-        oracle: Pubkey,
+        config: OracleConfig,
     },
     /// 30
     ReduceInsurance {
@@ -204,15 +205,15 @@ impl LendingInstruction {
             .ok_or(LendingError::InstructionUnpackError)?;
         Ok(match tag {
             0 => {
-                let (quote_currency, rest) = Self::unpack_bytes32(rest)?;
                 let (owner, _rest) = Self::unpack_pubkey(rest)?;
-                Self::InitManager { quote_currency, owner }
+                Self::InitManager { owner }
             }
             1 => {
+                let (oracle_config, rest) = Self::unpack_oracle_config(rest)?;
                 let (collateral_config, rest) = Self::unpack_collateral_config(rest)?;
                 let (liquidity_config, rest) = Self::unpack_liquidity_config(rest)?;
                 let (rate_model, _rest) = Self::unpack_rate_model(rest)?;
-                Self::InitMarketReserve { collateral_config, liquidity_config, rate_model }
+                Self::InitMarketReserve { oracle_config, collateral_config, liquidity_config, rate_model }
             }
             2 => Self::RefreshMarketReserves,
             3 => {
@@ -317,8 +318,8 @@ impl LendingInstruction {
                 Self::UpdateMarketReserveLiquidityConfig { config }
             }
             29 => {
-                let (oracle, _rest) = Self::unpack_pubkey(rest)?;
-                Self::UpdateMarketReservePriceOracle { oracle }
+                let (config, _rest) = Self::unpack_oracle_config(rest)?;
+                Self::UpdateMarketReserveOracleConfig { config }
             }
             30 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
@@ -364,6 +365,13 @@ impl LendingInstruction {
         let (k_u, rest) = Self::unpack_u128(rest)?;
 
         Ok((RateModel { a, c, l_u, k_u }, rest))
+    }
+
+    fn unpack_oracle_config(input: &[u8]) -> Result<(OracleConfig, &[u8]), ProgramError> {
+        let (oracle, rest) = Self::unpack_pubkey(input)?;
+        let (oracle_type, rest) = Self::unpack_u8(rest)?;
+        
+        Ok((OracleConfig { oracle, oracle_type: OracleType::from(oracle_type) }, rest))
     }
 
     fn unpack_collateral_config(input: &[u8]) -> Result<(CollateralConfig, &[u8]), ProgramError> {
@@ -458,35 +466,22 @@ impl LendingInstruction {
         }
     }
 
-    fn unpack_bytes32(input: &[u8]) -> Result<([u8; 32], &[u8]), ProgramError> {
-        if input.len() < 32 {
-            msg!("32 bytes cannot be unpacked");
-            return Err(LendingError::InstructionUnpackError.into());
-        }
-        let (bytes, rest) = input.split_at(32);
-
-        Ok((
-            *<&[u8; 32]>::try_from(bytes)
-                .map_err(|_| LendingError::InstructionUnpackError)?,
-            rest
-        ))
-    }
-
     /// Packs a [LendingInstruction](enum.LendingInstruction.html) into a byte buffer.
     pub fn pack(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(size_of::<Self>());
         match *self {
-            Self::InitManager { quote_currency, owner } => {
+            Self::InitManager { owner } => {
                 buf.push(0);
-                buf.extend_from_slice(&quote_currency[..]);
                 buf.extend_from_slice(owner.as_ref());
             }
             Self::InitMarketReserve {
+                oracle_config,
                 collateral_config,
                 liquidity_config,
                 rate_model,
             } => {
                 buf.push(1);
+                Self::pack_oracle_config(oracle_config, &mut buf);
                 Self::pack_collateral_config(collateral_config, &mut buf);
                 Self::pack_liquidity_config(liquidity_config, &mut buf);
                 Self::pack_rate_model(rate_model, &mut buf);
@@ -596,9 +591,9 @@ impl LendingInstruction {
                 buf.push(28);
                 Self::pack_liquidity_config(config, &mut buf);
             }
-            Self::UpdateMarketReservePriceOracle { oracle } => {
+            Self::UpdateMarketReserveOracleConfig { config } => {
                 buf.push(29);
-                buf.extend_from_slice(oracle.as_ref());
+                Self::pack_oracle_config(config, &mut buf);
             }
             Self::ReduceInsurance { amount } => {
                 buf.push(30);
@@ -626,6 +621,12 @@ impl LendingInstruction {
         buf.extend_from_slice(&model.k_u.to_le_bytes());
     }
 
+    fn pack_oracle_config(config: OracleConfig, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(&config.oracle.as_ref());
+        let oracle_type_u8: u8 = config.oracle_type.into();
+        buf.extend_from_slice(&oracle_type_u8.to_le_bytes());
+    }
+
     fn pack_collateral_config(config: CollateralConfig, buf: &mut Vec<u8>) {
         buf.extend_from_slice(&config.borrow_value_ratio.to_le_bytes());
         buf.extend_from_slice(&config.liquidation_value_ratio.to_le_bytes());
@@ -642,8 +643,6 @@ impl LendingInstruction {
 
 pub fn init_manager(
     manager_key: Pubkey,
-    oracle_program_id: Pubkey,
-    quote_currency: [u8; 32],
     owner: Pubkey,
 ) -> Instruction {
     Instruction {
@@ -651,10 +650,8 @@ pub fn init_manager(
         accounts: vec![
             AccountMeta::new_readonly(sysvar::rent::id(), false),
             AccountMeta::new(manager_key, false),
-            AccountMeta::new_readonly(oracle_program_id, false),
-            AccountMeta::new_readonly(spl_token::id(), false),
         ],
-        data: LendingInstruction::InitManager { quote_currency, owner }.pack(),
+        data: LendingInstruction::InitManager { owner }.pack(),
     }
 }
 
@@ -663,11 +660,10 @@ pub fn init_market_reserve(
     manager_key: Pubkey,
     supply_token_account_key: Pubkey,
     market_reserve_key: Pubkey,
-    pyth_product_key: Pubkey,
-    pyth_price_key: Pubkey,
     token_mint_key: Pubkey,
     sotoken_mint_key: Pubkey,
     authority_key: Pubkey,
+    oracle_config: OracleConfig,
     collateral_config: CollateralConfig,
     liquidity_config: LiquidityConfig,
     rate_model: RateModel,
@@ -687,14 +683,13 @@ pub fn init_market_reserve(
             AccountMeta::new_readonly(manager_authority_key, false),
             AccountMeta::new(supply_token_account_key, false),
             AccountMeta::new(market_reserve_key, false),
-            AccountMeta::new_readonly(pyth_product_key, false),
-            AccountMeta::new_readonly(pyth_price_key, false),
             AccountMeta::new_readonly(token_mint_key, false),
             AccountMeta::new(sotoken_mint_key, false),
             AccountMeta::new_readonly(authority_key, true),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::InitMarketReserve{
+            oracle_config,
             collateral_config,
             liquidity_config,
             rate_model,
@@ -710,10 +705,10 @@ pub fn refresh_market_reserves(
     accounts.extend(
         updating_keys
             .into_iter()
-            .map(|(market_reserve_key, pyth_price_key)|
+            .map(|(market_reserve_key, price_oracle_key)|
                 vec![
                     AccountMeta::new(market_reserve_key, false),
-                    AccountMeta::new_readonly(pyth_price_key, false),
+                    AccountMeta::new_readonly(price_oracle_key, false),
                 ]
             )
             .flatten()
@@ -1507,11 +1502,11 @@ pub fn update_market_reserve_liquidity_config(
     }
 }
 
-pub fn update_market_reserve_price_oracle(
+pub fn update_market_reserve_oracle_config(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
     authority_key: Pubkey,
-    oracle: Pubkey,
+    config: OracleConfig,
 ) -> Instruction {
     Instruction {
         program_id: id(),
@@ -1520,7 +1515,7 @@ pub fn update_market_reserve_price_oracle(
             AccountMeta::new(market_reserve_key, false),
             AccountMeta::new_readonly(authority_key, true),
         ],
-        data: LendingInstruction::UpdateMarketReservePriceOracle{ oracle }.pack(),
+        data: LendingInstruction::UpdateMarketReserveOracleConfig{ config }.pack(),
     }
 }
 

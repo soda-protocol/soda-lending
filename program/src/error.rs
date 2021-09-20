@@ -58,9 +58,6 @@ pub enum LendingError {
     ///
     #[error("Invalid indexed loan config")]
     InvalidIndexedLoanConfig,
-    /// Oracle config is invalid
-    #[error("Price oracle config is invalid")]
-    InvalidPriceOracleConfig,
     // 10
     /// Invalid amount, must be greater than zero
     #[error("Input amount is invalid")]

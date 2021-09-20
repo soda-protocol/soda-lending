@@ -36,9 +36,9 @@ pub struct Collateral {
 impl Collateral {
     ///
     fn calculate_collateral_value(&self, reserve: &MarketReserve) -> Result<Decimal, ProgramError> {
-        reserve.market_price
+        reserve.oracle_info.price
             .try_mul(amount_mul_rate(self.amount, reserve.collateral_to_liquidity_rate()?)?)?
-            .try_div(calculate_decimals(reserve.token_info.decimal)?)
+            .try_div(calculate_decimals(reserve.token_config.decimal)?)
     }
 }
 
@@ -134,9 +134,9 @@ impl Loan {
     }
     ///
     fn calculate_loan_value(&self, reserve: &MarketReserve) -> Result<Decimal, ProgramError> {
-        reserve.market_price
+        reserve.oracle_info.price
             .try_mul(self.borrowed_amount_wads.try_ceil_u64()?)?
-            .try_div(calculate_decimals(reserve.token_info.decimal)?)
+            .try_div(calculate_decimals(reserve.token_config.decimal)?)
     }
 }
 
@@ -374,9 +374,9 @@ impl UserObligation {
         other: Option<Self>,
     ) -> Result<u64, ProgramError> {
         let amount = calculate_amount(amount, reserve.liquidity_info.available);
-        let value = reserve.market_price
+        let value = reserve.oracle_info.price
             .try_mul(amount)?
-            .try_div(calculate_decimals(reserve.token_info.decimal)?)?;
+            .try_div(calculate_decimals(reserve.token_config.decimal)?)?;
         self.loans_value = self.loans_value.try_add(value)?;
 
         if self.loans_value < Decimal::from_scaled_val(MIN_LOANS_VALUE) {
@@ -403,9 +403,9 @@ impl UserObligation {
         }
 
         let amount = calculate_amount(amount, reserve.liquidity_info.available);
-        let value = reserve.market_price
+        let value = reserve.oracle_info.price
             .try_mul(amount)?
-            .try_div(calculate_decimals(reserve.token_info.decimal)?)?;
+            .try_div(calculate_decimals(reserve.token_config.decimal)?)?;
         self.loans_value = self.loans_value.try_add(value)?;
 
         if self.loans_value < Decimal::from_scaled_val(MIN_LOANS_VALUE) {
@@ -508,9 +508,9 @@ impl UserObligation {
         let changed_liquidity_amount = amount_mul_rate(before_amount, ctl)?
             .checked_sub(amount_mul_rate(after_amount, ctl)?)
             .ok_or(LendingError::MathOverflow)?;
-        let changed_borrow_value = reserve.market_price
+        let changed_borrow_value = reserve.oracle_info.price
             .try_mul(changed_liquidity_amount)?
-            .try_div(calculate_decimals(reserve.token_info.decimal)?)?
+            .try_div(calculate_decimals(reserve.token_config.decimal)?)?
             .try_mul(borrow_value_ratio)?;
 
         // update value
@@ -566,13 +566,13 @@ impl UserObligation {
             liquidation_value_ratio: in_reserve.collateral_info.config.liquidation_value_ratio,
         });
 
-        let out_borrow_value = out_reserve.market_price
+        let out_borrow_value = out_reserve.oracle_info.price
             .try_mul(amount_mul_rate(out_amount, out_reserve.collateral_to_liquidity_rate()?)?)?
-            .try_div(calculate_decimals(out_reserve.token_info.decimal)?)?
+            .try_div(calculate_decimals(out_reserve.token_config.decimal)?)?
             .try_mul(out_borrow_value_ratio)?;
-        let in_borrow_value = in_reserve.market_price
+        let in_borrow_value = in_reserve.oracle_info.price
             .try_mul(amount_mul_rate(in_amount, in_reserve.collateral_to_liquidity_rate()?)?)?
-            .try_div(calculate_decimals(in_reserve.token_info.decimal)?)?
+            .try_div(calculate_decimals(in_reserve.token_config.decimal)?)?
             .try_mul(Rate::from_percent(in_reserve.collateral_info.config.borrow_value_ratio))?;
 
         self.collaterals_borrow_value = self.collaterals_borrow_value
@@ -611,12 +611,12 @@ impl UserObligation {
             }
 
             // calculate repay amount
-            let repay_amount_decimal = collateral_reserve.market_price
+            let repay_amount_decimal = collateral_reserve.oracle_info.price
                 .try_mul(amount_mul_rate(seize_amount, collateral_reserve.collateral_to_liquidity_rate()?)?)?
-                .try_div(calculate_decimals(collateral_reserve.token_info.decimal)?)?
+                .try_div(calculate_decimals(collateral_reserve.token_config.decimal)?)?
                 .try_mul(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_penalty_ratio))?
-                .try_mul(calculate_decimals(loan_reserve.token_info.decimal)?)?
-                .try_div(loan_reserve.market_price)?;
+                .try_mul(calculate_decimals(loan_reserve.token_config.decimal)?)?
+                .try_div(loan_reserve.oracle_info.price)?;
 
             // repay amount check
             if repay_amount_decimal == Decimal::zero() {
@@ -649,11 +649,11 @@ impl UserObligation {
             self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads.try_sub(repay_amount_decimal)?;
 
             // calculate seize amount
-            let seize_amount = loan_reserve.market_price
+            let seize_amount = loan_reserve.oracle_info.price
                 .try_mul(repay_amount)?
-                .try_div(calculate_decimals(loan_reserve.token_info.decimal)?)?
-                .try_mul(calculate_decimals(collateral_reserve.token_info.decimal)?)?
-                .try_div(collateral_reserve.market_price)?
+                .try_div(calculate_decimals(loan_reserve.token_config.decimal)?)?
+                .try_mul(calculate_decimals(collateral_reserve.token_config.decimal)?)?
+                .try_div(collateral_reserve.oracle_info.price)?
                 .try_div(collateral_reserve.collateral_to_liquidity_rate()?)?
                 .try_div(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_penalty_ratio))?
                 .try_floor_u64()?;

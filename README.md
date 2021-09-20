@@ -223,7 +223,7 @@ pub struct MarketReserve {
     /// 
     pub market_price: Decimal,
     /// 
-    pub token_info: TokenInfo,
+    pub token_config: TokenConfig,
     /// size: 43 byte
     pub collateral_info: CollateralInfo,
     /// size: 83 byte
@@ -233,7 +233,7 @@ pub struct MarketReserve {
     /// padding size: 256 byte
 }
 
-pub struct TokenInfo {
+pub struct TokenConfig {
     ///
     pub mint_pubkey: Pubkey,
     ///
@@ -253,7 +253,7 @@ pub fn borrow_liquidity_by_unique_credit(
     manager_key: Pubkey,
     // market reserve pubkey which owns by soda program
     market_reserve_key: Pubkey,
-    // supply token account of reserve which owns by soda program (should equals to field in TokenInfo)
+    // supply token account of reserve which owns by soda program (should equals to field in TokenConfig)
     supply_token_account_key: Pubkey, 
     // credit pubket which owns by soda program (created by soda admin)
     unique_credit_key: Pubkey,

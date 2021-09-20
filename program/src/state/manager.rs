@@ -15,15 +15,8 @@ pub struct Manager {
     pub version: u8,
     /// Bump seed for derived authority address
     pub bump_seed: u8,
-    /// Owner authority which can add new reserves
+    /// Admin authority
     pub owner: Pubkey,
-    /// Currency market prices are quoted in
-    /// e.g. "USD" null padded (`*b"USD\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0"`) or a SPL token mint pubkey
-    pub quote_currency: [u8; 32],
-    /// Token program id
-    pub token_program_id: Pubkey,
-    ///
-    pub pyth_program_id: Pubkey,
 }
 
 impl Manager {
@@ -31,17 +24,11 @@ impl Manager {
     pub fn new(
         bump_seed: u8,
         owner: Pubkey,
-        quote_currency: [u8; 32],
-        token_program_id: Pubkey,
-        pyth_program_id: Pubkey,
     ) -> Self {
         Self {
             version: PROGRAM_VERSION,
             bump_seed,
             owner,
-            quote_currency,
-            token_program_id,
-            pyth_program_id,
         }
     }
 }
@@ -54,7 +41,7 @@ impl IsInitialized for Manager {
 }
 
 const MANAGER_PADDING_LEN: usize = 128;
-const MANAGER_LEN: usize = 258;
+const MANAGER_LEN: usize = 162;
 
 impl Pack for Manager {
     const LEN: usize = MANAGER_LEN;
@@ -66,17 +53,11 @@ impl Pack for Manager {
             version,
             bump_seed,
             owner,
-            quote_currency,
-            token_program_id,
-            pyth_program_id,
             _padding,
         ) = mut_array_refs![
             output,
             1,
             1,
-            PUBKEY_BYTES,
-            32,
-            PUBKEY_BYTES,
             PUBKEY_BYTES,
             MANAGER_PADDING_LEN
         ];
@@ -84,9 +65,6 @@ impl Pack for Manager {
         *version = self.version.to_le_bytes();
         *bump_seed = self.bump_seed.to_le_bytes();
         owner.copy_from_slice(self.owner.as_ref());
-        quote_currency.copy_from_slice(&self.quote_currency[..]);
-        token_program_id.copy_from_slice(self.token_program_id.as_ref());
-        pyth_program_id.copy_from_slice(self.pyth_program_id.as_ref());
     }
 
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -96,17 +74,11 @@ impl Pack for Manager {
             version,
             bump_seed,
             owner,
-            quote_currency,
-            token_program_id,
-            pyth_program_id,
             _padding,
         ) = array_refs![
             input,
             1,
             1,
-            PUBKEY_BYTES,
-            32,
-            PUBKEY_BYTES,
             PUBKEY_BYTES,
             MANAGER_PADDING_LEN
         ];
@@ -121,9 +93,6 @@ impl Pack for Manager {
             version,
             bump_seed: u8::from_le_bytes(*bump_seed),
             owner: Pubkey::new_from_array(*owner),
-            quote_currency: *quote_currency,
-            token_program_id: Pubkey::new_from_array(*token_program_id),
-            pyth_program_id: Pubkey::new_from_array(*pyth_program_id),
         })
     }
 }

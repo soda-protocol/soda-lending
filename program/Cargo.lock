@@ -2146,6 +2146,8 @@ dependencies = [
  "arrayref",
  "assert_matches",
  "base64 0.13.0",
+ "borsh",
+ "borsh-derive",
  "bytemuck",
  "log",
  "num-derive",
