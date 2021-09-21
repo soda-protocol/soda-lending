@@ -6,7 +6,6 @@ use crate::{
         CollateralConfig, LiquidityControl, LiquidityConfig,
         Manager, MarketReserve, Operator, Param, RateModel,
         TokenConfig, UserObligation, calculate_amount,
-        get_associated_user_obligation_address, 
     },
     oracle::OracleConfig,
 };
@@ -26,7 +25,6 @@ use solana_program::{
     program_pack::{IsInitialized, Pack},
     pubkey::Pubkey,
     sysvar::{clock::Clock, rent::Rent, Sysvar},
-    system_instruction::{transfer, allocate, assign},
 };
 use spl_token::{state::{Mint, Account}, native_mint};
 use typenum::{Bit, True, False};
@@ -41,9 +39,9 @@ pub fn process_instruction(
 ) -> ProgramResult {
     let instruction = LendingInstruction::unpack(input)?;
     match instruction {
-        LendingInstruction::InitManager { owner } => {
+        LendingInstruction::InitManager => {
             msg!("Instruction: Init Lending Manager");
-            process_init_manager(program_id, accounts, owner)
+            process_init_manager(program_id, accounts)
         }
         LendingInstruction::InitMarketReserve {
             oracle_config,
@@ -208,7 +206,6 @@ pub fn process_instruction(
 fn process_init_manager(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
-    owner_pubkey: Pubkey,
 ) -> ProgramResult {
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -221,10 +218,16 @@ fn process_init_manager(
     }
     assert_rent_exempt(rent, manager_info)?;
     assert_uninitialized::<Manager>(manager_info)?;
+    // 3
+    let authority_info = next_account_info(account_info_iter)?;
+    if !authority_info.is_signer {
+        msg!("authority is not a signer");
+        return Err(LendingError::InvalidSigner.into());
+    }
     
     let manager = Manager::new(
         Pubkey::find_program_address(&[manager_info.key.as_ref()], program_id).1,
-        owner_pubkey
+        *authority_info.key,
     );
     Manager::pack(manager, &mut manager_info.try_borrow_mut_data()?)
 }
@@ -252,7 +255,7 @@ fn process_init_market_reserve(
     // 3
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -382,7 +385,7 @@ fn process_deposit_or_withdraw<B: Bit>(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -497,72 +500,24 @@ fn process_init_user_obligation(
     // 3
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     Manager::unpack(&manager_info.try_borrow_data()?)?;
     // 4
-    let authority_info = next_account_info(account_info_iter)?;
-    // 5
     let user_obligation_info = next_account_info(account_info_iter)?;
-    let (associated_obligation_address, bump_seed) = get_associated_user_obligation_address(
-        manager_info.key,
-        authority_info.key,
-        program_id,
-    );
-    if &associated_obligation_address != user_obligation_info.key {
-        msg!("Associated user obligation address does not match seed derivation");
-        return Err(ProgramError::InvalidSeeds);
+    if user_obligation_info.owner != program_id {
+        msg!("UserObligation owner provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
     }
-    let associated_obligation_signer_seeds = &[
-        manager_info.key.as_ref(),
-        authority_info.key.as_ref(),
-        &[bump_seed],
-    ];
-    // 6
-    let system_program_info = next_account_info(account_info_iter)?;
-
-    // init user obligation address
-    let required_lamports = rent
-        .minimum_balance(UserObligation::LEN)
-        .max(1)
-        .saturating_sub(user_obligation_info.lamports());
-
-    if required_lamports > 0 {
-        invoke(
-            &transfer(
-                authority_info.key,
-                user_obligation_info.key,
-                required_lamports,
-            ),
-            &[
-                authority_info.clone(),
-                user_obligation_info.clone(),
-                system_program_info.clone(),
-            ],
-        )?;
+    assert_rent_exempt(rent, user_obligation_info)?;
+    assert_uninitialized::<UserObligation>(user_obligation_info)?;
+    // 5
+    let authority_info = next_account_info(account_info_iter)?;
+    if !authority_info.is_signer {
+        msg!("authority is not a signer");
+        return Err(LendingError::InvalidSigner.into());
     }
-
-    invoke_signed(
-        &allocate(
-            user_obligation_info.key,
-            UserObligation::LEN as u64,
-        ),
-        &[
-            user_obligation_info.clone(),
-            system_program_info.clone(),
-        ],
-        &[&associated_obligation_signer_seeds[..]],
-    )?;
-
-    invoke_signed(
-        &assign(user_obligation_info.key, program_id),
-        &[
-            user_obligation_info.clone(),
-            system_program_info.clone(),
-        ],
-        &[&associated_obligation_signer_seeds[..]],
-    )?;
 
     let user_obligation = UserObligation::new(
         clock.slot,
@@ -815,7 +770,7 @@ fn process_redeem_collateral(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -925,7 +880,7 @@ fn process_redeem_collateral_without_loan(
     // 1
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -1029,7 +984,7 @@ fn process_replace_collateral(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -1185,7 +1140,7 @@ fn process_borrow_liquidity(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -1385,7 +1340,7 @@ fn process_liquidate<IsCollateral: Bit>(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -1535,7 +1490,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -1738,7 +1693,7 @@ fn process_flash_loan(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -1872,7 +1827,7 @@ fn process_init_unique_credit(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -1938,7 +1893,7 @@ fn process_borrow_liquidity_by_unique_credit(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -2028,7 +1983,7 @@ fn process_repay_loan_by_unique_credit(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -2114,7 +2069,7 @@ fn process_operate_user_obligation<P: Any + Copy + Param>(
     // 1
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -2155,7 +2110,7 @@ fn process_operate_market_reserve<P: Any + Copy + Param>(
     // 1
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -2197,7 +2152,7 @@ fn process_reduce_insurance(
     // 1
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -2270,7 +2225,7 @@ fn process_update_unique_credit_limit(
     // 1
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager ower provided is not owned by the lending program");
+        msg!("Manager owner provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;

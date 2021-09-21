@@ -14,7 +14,6 @@ use solana_program::{
     program_error::ProgramError,
     pubkey::{Pubkey, PUBKEY_BYTES},
     sysvar,
-    system_program,
 };
 use std::{convert::TryInto, mem::size_of};
 
@@ -22,10 +21,7 @@ use std::{convert::TryInto, mem::size_of};
 #[derive(Clone, Debug, PartialEq)]
 pub enum LendingInstruction {
     /// 0
-    InitManager {
-        ///
-        owner: Pubkey,
-    },
+    InitManager,
     /// 1
     InitMarketReserve {
         ///
@@ -204,10 +200,7 @@ impl LendingInstruction {
             .split_first()
             .ok_or(LendingError::InstructionUnpackError)?;
         Ok(match tag {
-            0 => {
-                let (owner, _rest) = Self::unpack_pubkey(rest)?;
-                Self::InitManager { owner }
-            }
+            0 => Self::InitManager,
             1 => {
                 let (oracle_config, rest) = Self::unpack_oracle_config(rest)?;
                 let (collateral_config, rest) = Self::unpack_collateral_config(rest)?;
@@ -470,10 +463,7 @@ impl LendingInstruction {
     pub fn pack(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(size_of::<Self>());
         match *self {
-            Self::InitManager { owner } => {
-                buf.push(0);
-                buf.extend_from_slice(owner.as_ref());
-            }
+            Self::InitManager => buf.push(0),
             Self::InitMarketReserve {
                 oracle_config,
                 collateral_config,
@@ -643,15 +633,16 @@ impl LendingInstruction {
 
 pub fn init_manager(
     manager_key: Pubkey,
-    owner: Pubkey,
+    authority_key: Pubkey,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
             AccountMeta::new_readonly(sysvar::rent::id(), false),
             AccountMeta::new(manager_key, false),
+            AccountMeta::new_readonly(authority_key, true),
         ],
-        data: LendingInstruction::InitManager { owner }.pack(),
+        data: LendingInstruction::InitManager.pack(),
     }
 }
 
@@ -793,8 +784,8 @@ pub fn withdraw(
 
 pub fn init_user_obligation(
     manager_key: Pubkey,
-    authority_key: Pubkey,
     user_obligation_key: Pubkey,
+    authority_key: Pubkey,
 ) -> Instruction {
     Instruction {
         program_id: id(),
@@ -802,9 +793,8 @@ pub fn init_user_obligation(
             AccountMeta::new_readonly(sysvar::rent::id(), false),
             AccountMeta::new_readonly(sysvar::clock::id(), false),
             AccountMeta::new_readonly(manager_key, false),
-            AccountMeta::new_readonly(authority_key, true),
             AccountMeta::new(user_obligation_key, false),
-            AccountMeta::new_readonly(system_program::id(), false),
+            AccountMeta::new_readonly(authority_key, true),
         ],
         data: LendingInstruction::InitUserObligation.pack(),
     }
