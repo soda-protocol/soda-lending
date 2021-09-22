@@ -295,7 +295,7 @@ fn process_init_market_reserve(
         return Err(LendingError::InvalidSigner.into());
     }
     // 10
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     let market_reserve = MarketReserve::new(
         clock.slot,
@@ -319,7 +319,7 @@ fn process_init_market_reserve(
         mint: token_mint_info.clone(),
         owner: manager_authority_info.clone(),
         rent: rent_info.clone(),
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })?;
 
     // init sotoken mint
@@ -328,7 +328,7 @@ fn process_init_market_reserve(
         rent: rent_info.clone(),
         authority: manager_authority_info.key,
         decimals: token_decimals,
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })
 }
 
@@ -429,7 +429,7 @@ fn process_deposit_or_withdraw<B: Bit>(
     // 9
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
     // 10
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // update in reserve
     market_reserve.accrue_interest(clock.slot)?;
@@ -448,7 +448,7 @@ fn process_deposit_or_withdraw<B: Bit>(
             amount,
             authority: user_authority_info.clone(),
             authority_signer_seeds: &[],
-            token_program: token_program_id.clone(),
+            token_program: token_program_info.clone(),
         })?;
 
         // mint to user
@@ -458,7 +458,7 @@ fn process_deposit_or_withdraw<B: Bit>(
             amount: mint_amount,
             authority: manager_authority_info.clone(),
             authority_signer_seeds,
-            token_program: token_program_id.clone(),
+            token_program: token_program_info.clone(),
         })
     } else {
         let amount = calculate_amount(amount, Account::unpack(&user_sotoken_account_info.try_borrow_data()?)?.amount);
@@ -473,7 +473,7 @@ fn process_deposit_or_withdraw<B: Bit>(
             amount,
             authority: user_authority_info.clone(),
             authority_signer_seeds: &[],
-            token_program: token_program_id.clone(),
+            token_program: token_program_info.clone(),
         })?;
     
         // transfer from manager to user
@@ -483,7 +483,7 @@ fn process_deposit_or_withdraw<B: Bit>(
             amount: withdraw_amount,
             authority: manager_authority_info.clone(),
             authority_signer_seeds,
-            token_program: token_program_id.clone(),
+            token_program: token_program_info.clone(),
         })
     }
 }
@@ -728,7 +728,7 @@ fn process_pledge_collateral(
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
     let user_sotoken_account = Account::unpack(&user_sotoken_account_info.try_borrow_data()?)?;
     // 6
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // handle obligation
     let balance = get_available_balance(user_sotoken_account, *user_authority_info.key);
@@ -748,7 +748,7 @@ fn process_pledge_collateral(
         amount,
         authority: user_authority_info.clone(),
         authority_signer_seeds: &[],
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })
 }
 
@@ -845,7 +845,7 @@ fn process_redeem_collateral(
     // 8/9
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
     // 9/10
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // redeem in obligation
     let index = user_obligation.find_collateral(*market_reserve_info.key)?;
@@ -861,7 +861,7 @@ fn process_redeem_collateral(
         amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })
 }
 
@@ -946,7 +946,7 @@ fn process_redeem_collateral_without_loan(
     // 7/8
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
     // 8/9
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // redeem in obligation
     let index = user_obligation.find_collateral(*market_reserve_info.key)?;
@@ -962,7 +962,7 @@ fn process_redeem_collateral_without_loan(
         amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })
 }
 
@@ -1081,7 +1081,7 @@ fn process_replace_collateral(
     let user_in_sotoken_account_info = next_account_info(account_info_iter)?;
     let user_in_sotoken_account = Account::unpack(&user_in_sotoken_account_info.try_borrow_data()?)?;
     // 13/14
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // replace
     let out_index = user_obligation.find_collateral(*out_market_reserve_info.key)?;
@@ -1108,7 +1108,7 @@ fn process_replace_collateral(
         amount: out_amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })?;
 
     // burn from user
@@ -1118,7 +1118,7 @@ fn process_replace_collateral(
         amount: in_amount,
         authority: user_authority_info.clone(),
         authority_signer_seeds: &[],
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })
 }
 
@@ -1216,7 +1216,7 @@ fn process_borrow_liquidity(
     // 8/9
     let user_token_account_info = next_account_info(account_info_iter)?;
     // 9/10
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // borrow
     if let Ok(index) = user_obligation.find_loan(*market_reserve_info.key) {
@@ -1247,7 +1247,7 @@ fn process_borrow_liquidity(
         amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })
 }
 
@@ -1295,7 +1295,7 @@ fn process_repay_loan(
     let user_token_account_info = next_account_info(account_info_iter)?;
     let user_balance = Account::unpack(&user_token_account_info.try_borrow_data()?)?.amount;
     // 7
-    let token_program_id = next_account_info(account_info_iter)?;    
+    let token_program_info = next_account_info(account_info_iter)?;    
 
     // accrue interest
     market_reserve.accrue_interest(clock.slot)?;
@@ -1318,7 +1318,7 @@ fn process_repay_loan(
         amount: settle.amount,
         authority: user_authority_info.clone(),
         authority_signer_seeds: &[],
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })
 }
 
@@ -1430,7 +1430,7 @@ fn process_liquidate<IsCollateral: Bit>(
     // 11/12
     let liquidator_sotoken_account_info = next_account_info(account_info_iter)?;
     // 12/13
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // liquidate
     let collateral_index = user_obligation.find_collateral(*collateral_market_reserve_info.key)?;
@@ -1456,7 +1456,7 @@ fn process_liquidate<IsCollateral: Bit>(
         amount: settle.amount,
         authority: liquidator_authority_info.clone(),
         authority_signer_seeds: &[],
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })?;
 
     // mint to user
@@ -1466,7 +1466,7 @@ fn process_liquidate<IsCollateral: Bit>(
         amount: so_token_amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })
 }
 
@@ -1577,10 +1577,10 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     // 9/10
     let liquidator_authority_info = next_account_info(account_info_iter)?;
     // 10/11
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
     // 11/12
-    let liquidator_program_id = next_account_info(account_info_iter)?;
-    if liquidator_program_id.key == program_id {
+    let liquidator_program_info = next_account_info(account_info_iter)?;
+    if liquidator_program_info.key == program_id {
         msg!("Flash liquidator program can not be lending program");
         return Err(LendingError::InvalidFlashLoanProgram.into());
     }
@@ -1621,7 +1621,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         amount: collateral_amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })?;
 
     // 12/13 ~
@@ -1632,7 +1632,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         collateral_supply_account_info.clone(),
         loan_supply_account_info.clone(),
         liquidator_authority_info.clone(),
-        token_program_id.clone(),
+        token_program_info.clone(),
     ];
     flash_loan_instruction_account_infos.extend(account_infos);
 
@@ -1645,7 +1645,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
                 is_writable: account_info.is_writable,  
             }
         }).collect::<Vec<_>>();
-    flash_loan_instruction_account_infos.push(liquidator_program_id.clone());
+    flash_loan_instruction_account_infos.push(liquidator_program_info.clone());
 
     // do invoke
     let mut flash_liquidation_data = Vec::with_capacity(1 + 8 + 8);
@@ -1655,7 +1655,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
 
     invoke(
         &Instruction {
-            program_id: *liquidator_program_id.key,
+            program_id: *liquidator_program_info.key,
             accounts: flash_loan_instruction_accounts,
             data: flash_liquidation_data,
         },
@@ -1728,10 +1728,10 @@ fn process_flash_loan(
     // 6
     let receiver_authority_info = next_account_info(account_info_iter)?;
     // 7
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
     // 8
-    let receiver_program_id = next_account_info(account_info_iter)?;
-    if receiver_program_id.key == program_id {
+    let receiver_program_info = next_account_info(account_info_iter)?;
+    if receiver_program_info.key == program_id {
         msg!("Flash Loan receiver program can not be lending program");
         return Err(LendingError::InvalidFlashLoanProgram.into());
     }
@@ -1756,7 +1756,7 @@ fn process_flash_loan(
         amount: borrow_amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })?;
 
     // 9 ~
@@ -1766,7 +1766,7 @@ fn process_flash_loan(
         clock_info.clone(),
         supply_token_account_info.clone(),
         receiver_authority_info.clone(),
-        token_program_id.clone(),
+        token_program_info.clone(),
     ];
     flash_loan_instruction_account_infos.extend(account_infos);
 
@@ -1779,7 +1779,7 @@ fn process_flash_loan(
                 is_writable: account_info.is_writable,  
             }
         }).collect::<Vec<_>>();
-    flash_loan_instruction_account_infos.push(receiver_program_id.clone());
+    flash_loan_instruction_account_infos.push(receiver_program_info.clone());
 
     let mut flash_loan_data = Vec::with_capacity(1 + 8);
     flash_loan_data.push(tag);
@@ -1787,7 +1787,7 @@ fn process_flash_loan(
 
     invoke(
         &Instruction {
-            program_id: *receiver_program_id.key,
+            program_id: *receiver_program_info.key,
             accounts: flash_loan_instruction_accounts,
             data: flash_loan_data,
         },
@@ -1798,7 +1798,7 @@ fn process_flash_loan(
         source: supply_token_account_info.clone(),
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })?;
 
     // check balance
@@ -1945,7 +1945,7 @@ fn process_borrow_liquidity_by_unique_credit(
         return Err(LendingError::InvalidSigner.into());
     }
     // 8
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // update reserve
     market_reserve.accrue_interest(clock.slot)?;
@@ -1966,7 +1966,7 @@ fn process_borrow_liquidity_by_unique_credit(
         amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })
 }
 
@@ -2034,7 +2034,7 @@ fn process_repay_loan_by_unique_credit(
     }
     let source_token_account = Account::unpack(&source_token_account_info.try_borrow_data()?)?;
     // 8
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // update in reserve
     market_reserve.accrue_interest(clock.slot)?;
@@ -2055,7 +2055,7 @@ fn process_repay_loan_by_unique_credit(
         amount: settle.amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })
 }
 
@@ -2197,7 +2197,7 @@ fn process_reduce_insurance(
     // 6
     let receiver_token_account_info = next_account_info(account_info_iter)?;
     // 7
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // reduce insurance
     market_reserve.liquidity_info.reduce_insurance(amount)?;
@@ -2210,7 +2210,7 @@ fn process_reduce_insurance(
         amount,
         authority: manager_authority_info.clone(),
         authority_signer_seeds,
-        token_program: token_program_id.clone(),
+        token_program: token_program_info.clone(),
     })
 }
 
