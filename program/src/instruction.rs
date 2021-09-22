@@ -1,7 +1,8 @@
 //! Instruction types
 #![allow(missing_docs)]
 use crate::{
-    id, error::LendingError,
+    id,
+    error::LendingError,
     state::{
         IndexedCollateralConfig, IndexedLoanConfig,
         LiquidityConfig, CollateralConfig, RateModel,
