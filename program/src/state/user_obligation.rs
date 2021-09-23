@@ -716,7 +716,7 @@ impl Pack for UserObligation {
         ];
 
         *version = self.version.to_le_bytes();
-        self.last_update.pack_into_slice(&mut last_update[..]);
+        self.last_update.pack_into_slice(last_update);
         manager.copy_from_slice(self.manager.as_ref());
         owner.copy_from_slice(self.owner.as_ref());
         pack_coption_pubkey(&self.friend, friend);
@@ -792,7 +792,7 @@ impl Pack for UserObligation {
 
         Ok(Self{
             version,
-            last_update: LastUpdate::unpack_from_slice(&last_update[..])?,
+            last_update: LastUpdate::unpack_from_slice(last_update)?,
             manager: Pubkey::new_from_array(*manager),
             owner: Pubkey::new_from_array(*owner),
             friend: unpack_coption_pubkey(friend)?,

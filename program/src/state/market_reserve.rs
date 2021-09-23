@@ -450,7 +450,7 @@ impl Pack for MarketReserve {
         ];
 
         *version = self.version.to_le_bytes();
-        self.last_update.pack_into_slice(&mut last_update[..]);
+        self.last_update.pack_into_slice(last_update);
         manager.copy_from_slice(self.manager.as_ref());
 
         mint_pubkey.copy_from_slice(self.token_config.mint_pubkey.as_ref());
@@ -561,7 +561,7 @@ impl Pack for MarketReserve {
 
         Ok(Self {
             version,
-            last_update: LastUpdate::unpack_from_slice(&last_update[..])?,
+            last_update: LastUpdate::unpack_from_slice(last_update)?,
             manager: Pubkey::new_from_array(*manager),
             token_config: TokenConfig {
                 mint_pubkey: Pubkey::new_from_array(*mint_pubkey),

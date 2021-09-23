@@ -97,10 +97,10 @@ fn pack_coption_struct<T: Pack>(src: &COption<T>, dst: &mut [u8]) {
     let (tag, data) = dst.split_at_mut(COPTION_LEN);
     match src {
         COption::Some(t) => {
-            tag.copy_from_slice(&COPTION_SOME_TAG[..]);
+            tag.copy_from_slice(&COPTION_SOME_TAG);
             t.pack_into_slice(data);
         }
-        COption::None => tag.copy_from_slice(&COPTION_NONE_TAG[..]),
+        COption::None => tag.copy_from_slice(&COPTION_NONE_TAG),
     }
 }
 
