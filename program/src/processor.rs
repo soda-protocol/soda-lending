@@ -43,12 +43,12 @@ pub fn process_instruction(
             msg!("Instruction: Init Lending Manager");
             process_init_manager(program_id, accounts)
         }
-        LendingInstruction::InitMarketReserve {
+        LendingInstruction::InitMarketReserve(
             oracle_config,
             collateral_config,
             liquidity_config,
             rate_model,
-        } => {
+        ) => {
             msg!("Instruction: Init Market Reserve");
             process_init_market_reserve(
                 program_id,
@@ -63,11 +63,11 @@ pub fn process_instruction(
             msg!("Instruction: Refresh Market Reserves");
             process_refresh_market_reserves(program_id, accounts)
         }
-        LendingInstruction::Deposit { amount } => {
+        LendingInstruction::Deposit(amount) => {
             msg!("Instruction: Deposit: {}", amount);
             process_deposit_or_withdraw::<True>(program_id, accounts, amount)
         }
-        LendingInstruction::Withdraw { amount } => {
+        LendingInstruction::Withdraw (amount) => {
             msg!("Instruction: Withdraw: {}", amount);
             process_deposit_or_withdraw::<False>(program_id, accounts, amount)
         }
@@ -89,59 +89,59 @@ pub fn process_instruction(
             msg!("Instruction: Unbind Friend");
             process_unbind_friend(program_id, accounts)
         }
-        LendingInstruction::PledgeCollateral { amount } => {
+        LendingInstruction::PledgeCollateral(amount) => {
             msg!("Instruction: Pledge Collateral: {}", amount);
             process_pledge_collateral(program_id, accounts, amount)
         }
-        LendingInstruction::DepositAndPledge { amount } => {
+        LendingInstruction::DepositAndPledge(amount) => {
             msg!("Instruction: Deposit Liquidity and Pledge: {}", amount);
             process_deposit_and_pledge(program_id, accounts, amount)
         }
-        LendingInstruction::RedeemCollateral { amount } => {
+        LendingInstruction::RedeemCollateral(amount) => {
             msg!("Instruction: Redeem Collateral: {}", amount);
             process_redeem_collateral(program_id, accounts, amount)
         }
-        LendingInstruction::RedeemAndWithdraw { amount } => {
+        LendingInstruction::RedeemAndWithdraw(amount) => {
             msg!("Instruction: Redeem Collateral and Withdraw: {}", amount);
             process_redeem_and_withdraw::<True>(program_id, accounts, amount)
         }
-        LendingInstruction::RedeemCollateralWithoutLoan { amount } => {
+        LendingInstruction::RedeemCollateralWithoutLoan(amount) => {
             msg!("Instruction: Redeem Collateral Without Loan: {}", amount);
             process_redeem_collateral_without_loan(program_id, accounts, amount)
         }
-        LendingInstruction::RedeemWithoutLoanAndWithdraw { amount } => {
+        LendingInstruction::RedeemWithoutLoanAndWithdraw(amount) => {
             msg!("Instruction: Redeem Collateral Without Loan And Withdraw: {}", amount);
             process_redeem_and_withdraw::<False>(program_id, accounts, amount)
         }
-        LendingInstruction::ReplaceCollateral { amount } => {
+        LendingInstruction::ReplaceCollateral(amount) => {
             msg!("Instruction: Replace Collateral: amount = {},", amount);
             process_replace_collateral(program_id, accounts, amount)
         }
-        LendingInstruction::BorrowLiquidity { amount } => {
+        LendingInstruction::BorrowLiquidity(amount) => {
             msg!("Instruction: Borrow Liquidity: {}", amount);
             process_borrow_liquidity(program_id, accounts, amount)
         }
-        LendingInstruction::RepayLoan { amount } => {
+        LendingInstruction::RepayLoan(amount) => {
             msg!("Instruction: Repay Loan: {}", amount);
             process_repay_loan(program_id, accounts, amount)
         }
-        LendingInstruction::LiquidateByCollateral { amount } => {
+        LendingInstruction::LiquidateByCollateral(amount) => {
             msg!("Instruction: Liquidate by collateral amount = {}", amount);
             process_liquidate::<True>(program_id, accounts, amount)
         }
-        LendingInstruction::LiquidateByLoan { amount } => {
+        LendingInstruction::LiquidateByLoan(amount) => {
             msg!("Instruction: Liquidate by loan amount = {}", amount);
             process_liquidate::<False>(program_id, accounts, amount)
         }
-        LendingInstruction::FlashLiquidationByCollateral { tag, amount } => {
+        LendingInstruction::FlashLiquidationByCollateral(tag, amount) => {
             msg!("Instruction: Flash Liquidation by Collateral: amount = {}", amount);
             process_flash_liquidation::<True>(program_id, accounts, tag, amount)
         }
-        LendingInstruction::FlashLiquidationByLoan { tag, amount } => {
+        LendingInstruction::FlashLiquidationByLoan(tag, amount) => {
             msg!("Instruction: Flash Liquidation by Loan: amount = {}", amount);
             process_flash_liquidation::<False>(program_id, accounts, tag, amount)
         }
-        LendingInstruction::FlashLoan { tag, amount } => {
+        LendingInstruction::FlashLoan(tag, amount) => {
             msg!("Instruction: Flash Loan: amount = {}", amount);
             process_flash_loan(program_id, accounts, tag, amount)
         }
@@ -151,49 +151,49 @@ pub fn process_instruction(
             process_init_unique_credit(program_id, accounts, authority, amount)
         }
         #[cfg(feature = "unique-credit")]
-        LendingInstruction::BorrowLiquidityByUniqueCredit { amount } => {
+        LendingInstruction::BorrowLiquidityByUniqueCredit(amount) => {
             msg!("Instruction: Borrow Liquidity by Unique Credit: amount = {}", amount);
             process_borrow_liquidity_by_unique_credit(program_id, accounts, amount)
         }
         #[cfg(feature = "unique-credit")]
-        LendingInstruction::RepayLoanByUniqueCredit { amount } => {
+        LendingInstruction::RepayLoanByUniqueCredit(amount) => {
             msg!("Instruction: Repay Loan by Unique Credit: amount = {}", amount);
             process_repay_loan_by_unique_credit(program_id, accounts, amount)
         }
-        LendingInstruction::UpdateIndexedCollateralConfig { config } => {
+        LendingInstruction::UpdateIndexedCollateralConfig(config) => {
             msg!("Instruction: Update User Obligation Collateral Config");
             process_operate_user_obligation(program_id, accounts, config)
         }
-        LendingInstruction::UpdateIndexedLoanConfig { config } => {
+        LendingInstruction::UpdateIndexedLoanConfig(config) => {
             msg!("Instruction: Update User Obligation Loan Config");
             process_operate_user_obligation(program_id, accounts, config)
         }
-        LendingInstruction::ControlMarketReserveLiquidity { enable } => {
+        LendingInstruction::ControlMarketReserveLiquidity(enable) => {
             msg!("Instruction: Control Market Reserve Liquidity");
             process_operate_market_reserve(program_id, accounts, LiquidityControl(enable))
         }
-        LendingInstruction::UpdateMarketReserveRateModel { model } => {
+        LendingInstruction::UpdateMarketReserveRateModel(model) => {
             msg!("Instruction: Updae Rate Model");
             process_operate_market_reserve(program_id, accounts, model)
         }
-        LendingInstruction::UpdateMarketReserveCollateralConfig { config } => {
+        LendingInstruction::UpdateMarketReserveCollateralConfig(config) => {
             msg!("Instruction: Update Market Reserve Collateral Config");
             process_operate_market_reserve(program_id, accounts, config)
         }
-        LendingInstruction::UpdateMarketReserveLiquidityConfig { config } => {
+        LendingInstruction::UpdateMarketReserveLiquidityConfig(config) => {
             msg!("Instruction: Update Market Reserve Liquidity Config");
             process_operate_market_reserve(program_id, accounts, config)
         }
-        LendingInstruction::UpdateMarketReserveOracleConfig { config } => {
+        LendingInstruction::UpdateMarketReserveOracleConfig(config) => {
             msg!("Instruction: Update Market Reserve Price Oracle Config");
             process_operate_market_reserve(program_id, accounts, config)
         }
-        LendingInstruction::ReduceInsurance { amount } => {
+        LendingInstruction::ReduceInsurance(amount) => {
             msg!("Instruction: Reduce Insurance: {}", amount);
             process_reduce_insurance(program_id, accounts, amount)
         }
         #[cfg(feature = "unique-credit")]
-        LendingInstruction::UpdateUniqueCreditLimit { amount } => {
+        LendingInstruction::UpdateUniqueCreditLimit(amount) => {
             msg!("Instruction: Update Unique Credit Limit: amount = {}", amount);
             process_update_unique_credit_limit(program_id, accounts, amount)
         }
