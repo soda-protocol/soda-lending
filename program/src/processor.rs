@@ -146,7 +146,7 @@ pub fn process_instruction(
             process_flash_loan(program_id, accounts, tag, amount)
         }
         #[cfg(feature = "unique-credit")]
-        LendingInstruction::InitUniqueCredit { authority, amount } => {
+        LendingInstruction::InitUniqueCredit(authority, amount) => {
             msg!("Instruction: Init Unique Credit");
             process_init_unique_credit(program_id, accounts, authority, amount)
         }

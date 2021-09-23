@@ -5,6 +5,7 @@ mod last_update;
 mod market_reserve;
 mod user_obligation;
 mod rate_model;
+#[cfg(feature = "unique-credit")]
 mod unique_credit;
 
 use std::convert::TryFrom;
@@ -14,6 +15,7 @@ pub use last_update::*;
 pub use user_obligation::*;
 pub use market_reserve::*;
 pub use rate_model::*;
+#[cfg(feature = "unique-credit")]
 pub use unique_credit::*;
 
 use crate::{
