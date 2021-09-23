@@ -16,6 +16,7 @@ use solana_program::{
     pubkey::{Pubkey, PUBKEY_BYTES},
     sysvar,
 };
+use typenum::Bit;
 use std::{convert::TryInto, mem::size_of};
 
 /// Instructions supported by the lending program.
@@ -62,62 +63,77 @@ pub enum LendingInstruction {
         amount: u64,
     },
     /// 10
-    RedeemCollateral {
+    DepositAndPledge {
         ///
         amount: u64,
     },
     /// 11
-    RedeemCollateralWithoutLoan {
+    RedeemCollateral {
         ///
         amount: u64,
     },
     /// 12
-    ReplaceCollateral {
+    RedeemAndWithdraw {
         ///
         amount: u64,
     },
     /// 13
-    BorrowLiquidity {
+    RedeemCollateralWithoutLoan {
         ///
         amount: u64,
     },
     /// 14
-    RepayLoan {
+    RedeemWithoutLoanAndWithdraw {
         ///
         amount: u64,
     },
     /// 15
-    LiquidateByCollateral {
+    ReplaceCollateral {
         ///
         amount: u64,
     },
     /// 16
-    LiquidateByLoan {
+    BorrowLiquidity {
         ///
         amount: u64,
     },
     /// 17
+    RepayLoan {
+        ///
+        amount: u64,
+    },
+    /// 18
+    LiquidateByCollateral {
+        ///
+        amount: u64,
+    },
+    /// 19
+    LiquidateByLoan {
+        ///
+        amount: u64,
+    },
+    /// 20
     FlashLiquidationByCollateral {
         ///
         tag: u8,
         ///
         amount: u64,
     },
-    /// 18
+    /// 21
     FlashLiquidationByLoan {
         ///
         tag: u8,
         ///
         amount: u64,
     },
-    /// 19
+    /// 22
     FlashLoan {
         ///
         tag: u8,
         ///
         amount: u64,
     },
-    /// 20
+    /// 23
     #[cfg(feature = "unique-credit")]
     InitUniqueCredit {
         ///
@@ -125,71 +141,71 @@ pub enum LendingInstruction {
         ///
         amount: u64,
     },
-    /// 21
+    /// 24
     #[cfg(feature = "unique-credit")]
     BorrowLiquidityByUniqueCredit {
         ///
         amount: u64,
     },
-    /// 22
+    /// 25
     #[cfg(feature = "unique-credit")]
     RepayLoanByUniqueCredit {
         ///
         amount: u64,
     },
-    /// 23
+    /// 26
     UpdateIndexedCollateralConfig {
         ///
         config: IndexedCollateralConfig,
     },
-    /// 24
+    /// 27
     UpdateIndexedLoanConfig {
         ///
         config: IndexedLoanConfig,
     },
-    /// 25
+    /// 28
     ControlMarketReserveLiquidity {
         ///
         enable: bool,
     },
-    /// 26
+    /// 29
     UpdateMarketReserveRateModel{
         ///
         model: RateModel,
     },
-    /// 27
+    /// 30
     UpdateMarketReserveCollateralConfig {
         ///
         config: CollateralConfig,
     },
-    /// 28
+    /// 31
     UpdateMarketReserveLiquidityConfig {
         ///
         config: LiquidityConfig,
     },
-    /// 29
+    /// 32
     UpdateMarketReserveOracleConfig {
         ///
         config: OracleConfig,
     },
-    /// 30
+    /// 33
     ReduceInsurance {
         ///
         amount: u64,
     },
-    /// 31
+    /// 34
     #[cfg(feature = "unique-credit")]
     UpdateUniqueCreditLimit{
         ///
         amount: u64,
     },
-    /// 32
+    /// 35
     #[cfg(feature = "general-test")]
     InjectNoBorrow,
-    /// 33
+    /// 36
     #[cfg(feature = "general-test")]
     InjectLiquidation,
-    /// 34
+    /// 37
     #[cfg(feature = "general-test")]
     CloseLendingAccount,
 }
@@ -230,106 +246,118 @@ impl LendingInstruction {
             }
             10 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
-                Self::RedeemCollateral { amount }
+                Self::DepositAndPledge { amount }
             }
             11 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
-                Self::RedeemCollateralWithoutLoan { amount }
+                Self::RedeemCollateral { amount }
             }
             12 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
-                Self::ReplaceCollateral { amount }
+                Self::RedeemAndWithdraw { amount }
             }
             13 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
-                Self::BorrowLiquidity { amount }
+                Self::RedeemCollateralWithoutLoan { amount }
             }
             14 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
-                Self::RepayLoan { amount }
+                Self::RedeemWithoutLoanAndWithdraw { amount }
             }
             15 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
-                Self::LiquidateByCollateral { amount }
+                Self::ReplaceCollateral { amount }
             }
             16 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
-                Self::LiquidateByLoan { amount }
+                Self::BorrowLiquidity { amount }
             }
             17 => {
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::RepayLoan { amount }
+            }
+            18 => {
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::LiquidateByCollateral { amount }
+            }
+            19 => {
+                let (amount, _rest) = Self::unpack_u64(rest)?;
+                Self::LiquidateByLoan { amount }
+            }
+            20 => {
                 let (tag, rest) = Self::unpack_u8(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::FlashLiquidationByCollateral { tag, amount }
             }
-            18 => {
+            21 => {
                 let (tag, rest) = Self::unpack_u8(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::FlashLiquidationByLoan { tag, amount }
             }
-            19 => {
+            22 => {
                 let (tag, rest) = Self::unpack_u8(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::FlashLoan { tag, amount }
             }
             #[cfg(feature = "unique-credit")]
-            20 => {
+            23 => {
                 let (authority, rest) = Self::unpack_pubkey(rest)?;
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::InitUniqueCredit { authority, amount }
             }
             #[cfg(feature = "unique-credit")]
-            21 => {
+            24 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::BorrowLiquidityByUniqueCredit { amount }
             }
             #[cfg(feature = "unique-credit")]
-            22 => {
+            25 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::RepayLoanByUniqueCredit { amount }
             }
-            23 => {
+            26 => {
                 let (config, _rest) = Self::unpack_indexed_collateral_config(rest)?;
                 Self::UpdateIndexedCollateralConfig { config }
             }
-            24 => {
+            27 => {
                 let (config, _rest) = Self::unpack_indexed_loan_config(rest)?;
                 Self::UpdateIndexedLoanConfig { config }
             }
-            25 => {
+            28 => {
                 let (enable, _rest) = Self::unpack_bool(rest)?;
                 Self::ControlMarketReserveLiquidity { enable }
             }
-            26 => {
+            29 => {
                 let (model, _rest) = Self::unpack_rate_model(rest)?;
                 Self::UpdateMarketReserveRateModel { model }
             }
-            27 => {
+            30 => {
                 let (config, _rest) = Self::unpack_collateral_config(rest)?;
                 Self::UpdateMarketReserveCollateralConfig { config }
             }
-            28 => {
+            31 => {
                 let (config, _rest) = Self::unpack_liquidity_config(rest)?;
                 Self::UpdateMarketReserveLiquidityConfig { config }
             }
-            29 => {
+            32 => {
                 let (config, _rest) = Self::unpack_oracle_config(rest)?;
                 Self::UpdateMarketReserveOracleConfig { config }
             }
-            30 => {
+            33 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::ReduceInsurance { amount }
             }
             #[cfg(feature = "unique-credit")]
-            31 => {
+            34 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::UpdateUniqueCreditLimit { amount }
             }
             #[cfg(feature = "general-test")]
-            32 => Self::InjectNoBorrow,
+            35 => Self::InjectNoBorrow,
             #[cfg(feature = "general-test")]
-            33 => Self::InjectLiquidation,
+            36 => Self::InjectLiquidation,
             #[cfg(feature = "general-test")]
-            34 => Self::CloseLendingAccount,
+            37 => Self::CloseLendingAccount,
             _ => {
                 msg!("Instruction cannot be unpacked");
                 return Err(LendingError::InstructionUnpackError.into());
@@ -496,111 +524,123 @@ impl LendingInstruction {
                 buf.push(9);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::RedeemCollateral { amount } => {
+            Self::DepositAndPledge { amount } => {
                 buf.push(10);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::RedeemCollateralWithoutLoan { amount } => {
+            Self::RedeemCollateral { amount } => {
                 buf.push(11);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::ReplaceCollateral { amount } => {
+            Self::RedeemAndWithdraw { amount } => {
                 buf.push(12);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::BorrowLiquidity { amount } => {
+            Self::RedeemCollateralWithoutLoan { amount } => {
                 buf.push(13);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::RepayLoan { amount } => {
+            Self::RedeemWithoutLoanAndWithdraw { amount } => {
                 buf.push(14);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::LiquidateByCollateral { amount } => {
+            Self::ReplaceCollateral { amount } => {
                 buf.push(15);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::LiquidateByLoan { amount } => {
+            Self::BorrowLiquidity { amount } => {
                 buf.push(16);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::FlashLiquidationByCollateral { tag, amount } => {
+            Self::RepayLoan { amount } => {
                 buf.push(17);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::LiquidateByCollateral { amount } => {
+                buf.push(18);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::LiquidateByLoan { amount } => {
+                buf.push(19);
+                buf.extend_from_slice(&amount.to_le_bytes());
+            }
+            Self::FlashLiquidationByCollateral { tag, amount } => {
+                buf.push(20);
                 buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             Self::FlashLiquidationByLoan { tag, amount } => {
-                buf.push(18);
+                buf.push(21);
                 buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             Self::FlashLoan { tag, amount } => {
-                buf.push(19);
+                buf.push(22);
                 buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             #[cfg(feature = "unique-credit")]
             Self::InitUniqueCredit { authority, amount } => {
-                buf.push(20);
+                buf.push(23);
                 buf.extend_from_slice(authority.as_ref());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             #[cfg(feature = "unique-credit")]
             Self::BorrowLiquidityByUniqueCredit { amount } => {
-                buf.push(21);
+                buf.push(24);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             #[cfg(feature = "unique-credit")]
             Self::RepayLoanByUniqueCredit { amount } => {
-                buf.push(22);
+                buf.push(25);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             Self::UpdateIndexedCollateralConfig { config } => {
-                buf.push(23);
+                buf.push(26);
                 buf.extend_from_slice(&config.index.to_le_bytes());
                 buf.extend_from_slice(&config.borrow_value_ratio.to_le_bytes());
                 buf.extend_from_slice(&config.liquidation_value_ratio.to_le_bytes());
             }
             Self::UpdateIndexedLoanConfig { config } => {
-                buf.push(24);
+                buf.push(27);
                 buf.extend_from_slice(&config.index.to_le_bytes());
                 buf.extend_from_slice(&config.close_ratio.to_le_bytes());
             }
             Self::ControlMarketReserveLiquidity { enable } => {
-                buf.push(25);
+                buf.push(28);
                 buf.extend_from_slice(&(enable as u8).to_le_bytes());
             }
             Self::UpdateMarketReserveRateModel { model } => {
-                buf.push(26);
+                buf.push(29);
                 Self::pack_rate_model(model, &mut buf);
             }
             Self::UpdateMarketReserveCollateralConfig { config } => {
-                buf.push(27);
+                buf.push(30);
                 Self::pack_collateral_config(config, &mut buf);
             }
             Self::UpdateMarketReserveLiquidityConfig { config } => {
-                buf.push(28);
+                buf.push(31);
                 Self::pack_liquidity_config(config, &mut buf);
             }
             Self::UpdateMarketReserveOracleConfig { config } => {
-                buf.push(29);
+                buf.push(32);
                 Self::pack_oracle_config(config, &mut buf);
             }
             Self::ReduceInsurance { amount } => {
-                buf.push(30);
+                buf.push(33);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             #[cfg(feature = "unique-credit")]
             Self::UpdateUniqueCreditLimit { amount } => {
-                buf.push(31);
+                buf.push(34);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
             #[cfg(feature = "general-test")]
-            Self::InjectNoBorrow => buf.push(32),
+            Self::InjectNoBorrow => buf.push(35),
             #[cfg(feature = "general-test")]
-            Self::InjectLiquidation => buf.push(33),
+            Self::InjectLiquidation => buf.push(36),
             #[cfg(feature = "general-test")]
-            Self::CloseLendingAccount => buf.push(34),
+            Self::CloseLendingAccount => buf.push(37),
         }
         buf
     }
@@ -714,7 +754,7 @@ pub fn refresh_market_reserves(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn deposit(
+pub fn deposit_or_withdraw<IsDeposit: Bit>(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
     sotoken_mint_key: Pubkey,
@@ -744,42 +784,11 @@ pub fn deposit(
             AccountMeta::new(user_sotoken_account_key, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
-        data: LendingInstruction::Deposit { amount }.pack(),
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn withdraw(
-    manager_key: Pubkey,
-    market_reserve_key: Pubkey,
-    sotoken_mint_key: Pubkey,
-    supply_token_account_key: Pubkey,
-    user_authority_key: Pubkey,
-    user_token_account_key: Pubkey,
-    user_sotoken_account_key: Pubkey,
-    amount: u64,
-) -> Instruction {
-    let program_id = id();
-    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
-        &[manager_key.as_ref()],
-        &program_id,
-    );
-
-    Instruction {
-        program_id,
-        accounts: vec![
-            AccountMeta::new_readonly(sysvar::clock::id(), false),
-            AccountMeta::new_readonly(manager_key, false),
-            AccountMeta::new_readonly(manager_authority_key, false),
-            AccountMeta::new(market_reserve_key, false),
-            AccountMeta::new(sotoken_mint_key, false),
-            AccountMeta::new(supply_token_account_key, false),
-            AccountMeta::new_readonly(user_authority_key, true),
-            AccountMeta::new(user_token_account_key, false),
-            AccountMeta::new(user_sotoken_account_key, false),
-            AccountMeta::new_readonly(spl_token::id(), false),
-        ],
-        data: LendingInstruction::Withdraw { amount }.pack(),
+        data: if IsDeposit::BOOL {
+            LendingInstruction::Deposit { amount }
+        } else {
+            LendingInstruction::Withdraw { amount }
+        }.pack()
     }
 }
 
@@ -886,6 +895,30 @@ pub fn pledge_collateral(
 }
 
 #[allow(clippy::too_many_arguments)]
+pub fn deposit_and_pledge(
+    market_reserve_key: Pubkey,
+    supply_token_account_key: Pubkey,
+    user_obligation_key: Pubkey,
+    user_authority_key: Pubkey,
+    user_token_account_info: Pubkey,
+    amount: u64,
+) -> Instruction {
+    Instruction {
+        program_id: id(),
+        accounts: vec![
+            AccountMeta::new_readonly(sysvar::clock::id(), false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new(supply_token_account_key, false),
+            AccountMeta::new(user_obligation_key, false),
+            AccountMeta::new_readonly(user_authority_key, true),
+            AccountMeta::new(user_token_account_info, false),
+            AccountMeta::new_readonly(spl_token::id(), false),
+        ],
+        data: LendingInstruction::DepositAndPledge{ amount }.pack(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
 pub fn redeem_collateral(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
@@ -922,6 +955,50 @@ pub fn redeem_collateral(
         program_id,
         accounts,
         data: LendingInstruction::RedeemCollateral{ amount }.pack(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn redeem_and_withdraw<WithLoan: Bit>(
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    supply_token_account_key: Pubkey,
+    user_obligation_key: Pubkey,
+    friend_obligation_key: Option<Pubkey>,
+    user_authority_key: Pubkey,
+    user_token_account_info: Pubkey,
+    amount: u64,
+) -> Instruction {
+    let program_id = id();
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
+        &program_id,
+    );
+
+    let mut accounts = vec![
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(manager_key, false),
+        AccountMeta::new_readonly(manager_authority_key, false),
+        AccountMeta::new(market_reserve_key, false),
+        AccountMeta::new(supply_token_account_key, false),
+        AccountMeta::new(user_obligation_key, false),
+        AccountMeta::new_readonly(user_authority_key, true),
+        AccountMeta::new(user_token_account_info, false),
+        AccountMeta::new_readonly(spl_token::id(), false),
+    ];
+
+    if let Some(friend_obligation_key) = friend_obligation_key {
+        accounts.insert(6, AccountMeta::new_readonly(friend_obligation_key, false))
+    }
+
+    Instruction {
+        program_id,
+        accounts,
+        data: if WithLoan::BOOL {
+            LendingInstruction::RedeemAndWithdraw{ amount }
+        } else {
+            LendingInstruction::RedeemWithoutLoanAndWithdraw{ amount }
+        }.pack(),
     }
 }
 
@@ -1075,7 +1152,7 @@ pub fn repay_loan(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn liquidate_by_collateral(
+pub fn liquidate<IsCollateral: Bit>(
     manager_key: Pubkey,
     collateral_market_reserve_key: Pubkey,
     sotoken_mint_key: Pubkey,
@@ -1116,105 +1193,16 @@ pub fn liquidate_by_collateral(
     Instruction {
         program_id,
         accounts,
-        data: LendingInstruction::LiquidateByCollateral{ amount }.pack(),
+        data: if IsCollateral::BOOL {
+            LendingInstruction::LiquidateByCollateral{ amount }
+        } else {
+            LendingInstruction::LiquidateByLoan{ amount }
+        }.pack(),
     }
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn liquidate_by_loan(
-    manager_key: Pubkey,
-    collateral_market_reserve_key: Pubkey,
-    sotoken_mint_key: Pubkey,
-    loan_market_reserve_key: Pubkey,
-    supply_token_account_key: Pubkey,
-    user_obligation_key: Pubkey,
-    friend_obligation_key: Option<Pubkey>,
-    liquidator_authority_key: Pubkey,
-    liquidator_token_account_key: Pubkey,
-    liquidator_sotoken_account_key: Pubkey,
-    amount: u64,
-) -> Instruction {
-    let program_id = id();
-    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
-        &[manager_key.as_ref()],
-        &program_id,
-    );
-
-    let mut accounts = vec![
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
-        AccountMeta::new_readonly(manager_key, false),
-        AccountMeta::new_readonly(manager_authority_key, false),
-        AccountMeta::new_readonly(collateral_market_reserve_key, false),
-        AccountMeta::new(sotoken_mint_key, false),
-        AccountMeta::new(loan_market_reserve_key, false),
-        AccountMeta::new(supply_token_account_key, false),
-        AccountMeta::new(user_obligation_key, false),
-        AccountMeta::new_readonly(liquidator_authority_key, true),
-        AccountMeta::new(liquidator_token_account_key, false),
-        AccountMeta::new(liquidator_sotoken_account_key, false),
-        AccountMeta::new_readonly(spl_token::id(), false),
-    ];
-
-    if let Some(friend_obligation_key) = friend_obligation_key {
-        accounts.insert(8, AccountMeta::new_readonly(friend_obligation_key, false))
-    }
-
-    Instruction {
-        program_id,
-        accounts,
-        data: LendingInstruction::LiquidateByLoan{ amount }.pack(),
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn flash_liquidation_by_collateral(
-    manager_key: Pubkey,
-    collateral_market_reserve_key: Pubkey,
-    collateral_supply_account_key: Pubkey,
-    loan_market_reserve_key: Pubkey,
-    loan_supply_account_key: Pubkey,
-    user_obligation_key: Pubkey,
-    friend_obligation_key: Option<Pubkey>,
-    liquidator_authority_key: Pubkey,
-    liquidator_program_id: Pubkey,
-    liquidator_program_accounts: Vec<AccountMeta>,
-    amount: u64,
-    tag: u8,
-) -> Instruction {
-    let program_id = id();
-    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
-        &[manager_key.as_ref()],
-        &program_id,
-    );
-
-    let mut accounts = vec![
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
-        AccountMeta::new_readonly(manager_key, false),
-        AccountMeta::new_readonly(manager_authority_key, false),
-        AccountMeta::new(collateral_market_reserve_key, false),
-        AccountMeta::new(collateral_supply_account_key, false),
-        AccountMeta::new(loan_market_reserve_key, false),
-        AccountMeta::new(loan_supply_account_key, false),
-        AccountMeta::new(user_obligation_key, false),
-        AccountMeta::new_readonly(liquidator_authority_key, true),
-        AccountMeta::new_readonly(liquidator_program_id, false),
-        AccountMeta::new_readonly(spl_token::id(), false),
-    ];
-
-    if let Some(friend_obligation_key) = friend_obligation_key {
-        accounts.insert(8, AccountMeta::new_readonly(friend_obligation_key, false))
-    }
-    accounts.extend(liquidator_program_accounts);
-
-    Instruction {
-        program_id,
-        accounts,
-        data: LendingInstruction::FlashLiquidationByCollateral{ tag, amount }.pack(),
-    }
-}
-
-#[allow(clippy::too_many_arguments)]
-pub fn flash_liquidation_by_loan(
+pub fn flash_liquidation<IsCollateral: Bit>(
     manager_key: Pubkey,
     collateral_market_reserve_key: Pubkey,
     collateral_supply_account_key: Pubkey,
@@ -1256,7 +1244,11 @@ pub fn flash_liquidation_by_loan(
     Instruction {
         program_id,
         accounts,
-        data: LendingInstruction::FlashLiquidationByLoan{ tag, amount }.pack(),
+        data: if IsCollateral::BOOL {
+            LendingInstruction::FlashLiquidationByCollateral{ tag, amount }
+        } else {
+            LendingInstruction::FlashLiquidationByLoan{ tag, amount }
+        }.pack(),
     }
 }
 
