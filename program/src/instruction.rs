@@ -99,13 +99,13 @@ pub enum LendingInstruction {
     #[cfg(feature = "unique-credit")]
     UpdateUniqueCreditLimit(u64),
     /// 35
-    #[cfg(feature = "general-test")]
+    #[cfg(feature = "devnet")]
     InjectNoBorrow,
     /// 36
-    #[cfg(feature = "general-test")]
+    #[cfg(feature = "devnet")]
     InjectLiquidation,
     /// 37
-    #[cfg(feature = "general-test")]
+    #[cfg(feature = "devnet")]
     CloseLendingAccount,
 }
 
@@ -251,11 +251,11 @@ impl LendingInstruction {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::UpdateUniqueCreditLimit(amount)
             }
-            #[cfg(feature = "general-test")]
+            #[cfg(feature = "devnet")]
             35 => Self::InjectNoBorrow,
-            #[cfg(feature = "general-test")]
+            #[cfg(feature = "devnet")]
             36 => Self::InjectLiquidation,
-            #[cfg(feature = "general-test")]
+            #[cfg(feature = "devnet")]
             37 => Self::CloseLendingAccount,
             _ => {
                 msg!("Instruction cannot be unpacked");
@@ -534,11 +534,11 @@ impl LendingInstruction {
                 buf.push(34);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            #[cfg(feature = "general-test")]
+            #[cfg(feature = "devnet")]
             Self::InjectNoBorrow => buf.push(35),
-            #[cfg(feature = "general-test")]
+            #[cfg(feature = "devnet")]
             Self::InjectLiquidation => buf.push(36),
-            #[cfg(feature = "general-test")]
+            #[cfg(feature = "devnet")]
             Self::CloseLendingAccount => buf.push(37),
         }
         buf
@@ -1443,7 +1443,7 @@ pub fn reduce_insurance(
     }
 }
 
-#[cfg(feature = "general-test")]
+#[cfg(feature = "devnet")]
 pub fn inject_no_borrow(
     user_obligation_key: Pubkey,
 ) -> Instruction {
@@ -1454,7 +1454,7 @@ pub fn inject_no_borrow(
     }
 }
 
-#[cfg(feature = "general-test")]
+#[cfg(feature = "devnet")]
 pub fn inject_liquidation(
     user_obligation_key: Pubkey,
 ) -> Instruction {
@@ -1465,7 +1465,7 @@ pub fn inject_liquidation(
     }
 }
 
-#[cfg(feature = "general-test")]
+#[cfg(feature = "devnet")]
 pub fn close_lending_account(
     source_account_key: Pubkey,
     dest_account_key: Pubkey,

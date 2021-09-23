@@ -28,7 +28,7 @@ use solana_program::{
 };
 use spl_token::{state::{Mint, Account}, native_mint};
 use typenum::{Bit, True, False};
-#[cfg(feature = "general-test")]
+#[cfg(feature = "devnet")]
 use typenum::{B0, B1};
 
 /// Processes an instruction
@@ -197,17 +197,17 @@ pub fn process_instruction(
             msg!("Instruction: Update Unique Credit Limit: amount = {}", amount);
             process_update_unique_credit_limit(program_id, accounts, amount)
         }
-        #[cfg(feature = "general-test")]
+        #[cfg(feature = "devnet")]
         LendingInstruction::InjectNoBorrow => {
             msg!("Instruction(Test): Inject No Borrow");
             process_inject_case::<B0>(program_id, accounts)
         }
-        #[cfg(feature = "general-test")]
+        #[cfg(feature = "devnet")]
         LendingInstruction::InjectLiquidation => {
             msg!("Instruction(Test): Inject Liquidation Reached");
             process_inject_case::<B1>(program_id, accounts)
         }
-        #[cfg(feature = "general-test")]
+        #[cfg(feature = "devnet")]
         LendingInstruction::CloseLendingAccount => {
             msg!("Instruction(Test): Close Lending Account");
             process_close_lending_account(program_id, accounts)
@@ -2480,7 +2480,7 @@ fn process_update_unique_credit_limit(
     UniqueCredit::pack(unique_credit, &mut unique_credit_info.try_borrow_mut_data()?)
 }
 
-#[cfg(feature = "general-test")]
+#[cfg(feature = "devnet")]
 fn process_inject_case<B: Bit>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -2509,7 +2509,7 @@ fn process_inject_case<B: Bit>(
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
 }
 
-#[cfg(feature = "general-test")]
+#[cfg(feature = "devnet")]
 fn process_close_lending_account(
     program_id: &Pubkey,
     accounts: &[AccountInfo],

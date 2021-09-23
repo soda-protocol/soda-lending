@@ -179,7 +179,7 @@ pub enum LendingError {
     #[error("Insufficient unique credit limit")]
     InsufficientUniqueCreditLimit,
     ///
-    #[cfg(feature = "general-test")]
+    #[cfg(feature = "devnet")]
     #[error("Undefined case injection")]
     UndefinedCaseInjection,
 }

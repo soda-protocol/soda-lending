@@ -81,9 +81,9 @@ pub struct Config {
 }
 
 pub fn get_chainlink_price(data: &[u8], clock: &Clock) -> Result<Decimal, ProgramError> {
-    #[cfg(feature = "general-test")]
+    #[cfg(feature = "devnet")]
     const STALE_AFTER_SECS_ELAPSED: i64 = 4;
-    #[cfg(not(feature = "general-test"))]
+    #[cfg(not(feature = "devnet"))]
     const STALE_AFTER_SECS_ELAPSED: i64 = 2;
 
     let aggregator = try_from_slice_unchecked::<Aggregator>(&data[..4096])?;

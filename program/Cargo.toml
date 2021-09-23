@@ -32,7 +32,7 @@ default = []
 no-entrypoint = []
 test-bpf = []
 friend = []
-general-test = []
+devnet = []
 unique-credit = []
 
 [lib]
