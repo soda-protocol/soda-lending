@@ -125,12 +125,6 @@ pub enum LendingError {
     #[error("Interest rate is negative")]
     NegativeInterestRate,
     ///
-    #[error("Obligation collaterals not matched")]
-    ObligationCollateralsNotMatched,
-    ///
-    #[error("Obligation loans not matched")]
-    ObligationLoansNotMatched,
-    ///
     #[error("Obligation collaterals are not healthy")]
     ObligationNotHealthy,
     ///

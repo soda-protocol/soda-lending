@@ -11,7 +11,7 @@ use crate::{
 };
 #[cfg(feature = "unique-credit")]
 use crate::state::UniqueCredit;
-use std::any::Any;
+use std::{any::Any, collections::HashMap};
 use num_traits::FromPrimitive;
 use solana_program::{
     account_info::{AccountInfo, next_account_info},
@@ -544,7 +544,7 @@ fn process_refresh_user_obligation(
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
     let manager = user_obligation.manager;
     // 3 + i
-    let reserves = account_info_iter
+    let reserves_map = account_info_iter
         .map(|market_reserve_info| {
             if market_reserve_info.owner != program_id {
                 msg!("Market reserve owner provided is not owned by the lending program");
@@ -559,13 +559,13 @@ fn process_refresh_user_obligation(
             if market_reserve.last_update.is_strict_stale(clock.slot)? {
                 Err(LendingError::MarketReserveStale.into())
             } else {
-                Ok((*market_reserve_info.key, market_reserve))
+                Ok((market_reserve_info.key, market_reserve))
             }
         })
-        .collect::<Result<Vec<_>, ProgramError>>()?;
+        .collect::<Result<HashMap<_, _>, ProgramError>>()?;
 
     // update
-    user_obligation.update_user_obligation(&mut reserves.iter())?;
+    user_obligation.update_user_obligation(reserves_map)?;
     user_obligation.last_update.update_slot(clock.slot, false);
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
@@ -2393,14 +2393,16 @@ fn spl_token_init_mint(params: TokenInitializeMintParams<'_, '_>) -> ProgramResu
         token_program,
         decimals,
     } = params;
-    let ix = spl_token::instruction::initialize_mint(
-        token_program.key,
-        mint.key,
-        authority,
-        None,
-        decimals,
-    )?;
-    let result = invoke(&ix, &[mint, rent, token_program]);
+    let result = invoke(
+        &spl_token::instruction::initialize_mint(
+            token_program.key,
+            mint.key,
+            authority,
+            None,
+            decimals,
+        )?,
+        &[mint, rent, token_program],
+    );
     result.map_err(|_| LendingError::TokenInitializeMintFailed.into())
 }
 

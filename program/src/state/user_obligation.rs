@@ -12,7 +12,12 @@ use solana_program::{
     program_pack::{IsInitialized, Pack, Sealed},
     pubkey::{Pubkey, PUBKEY_BYTES}
 };
-use std::{convert::TryInto, cmp::Ordering, iter::Iterator, any::Any};
+use std::{
+    convert::TryInto,
+    cmp::Ordering,
+    any::Any,
+    collections::HashMap,
+};
 
 /// refresh-obligation comsumed about 150000~160000 compute unit for 11 collateral position, so 11 is safe enough
 const MAX_OBLIGATION_RESERVES: usize = 11;
@@ -316,23 +321,16 @@ impl UserObligation {
     }
     ///
     // need refresh reserves before
-    pub fn update_user_obligation<'a, I>(&mut self, reserve_iter: &mut I) -> ProgramResult
-    where
-        I: Iterator<Item = &'a (Pubkey, MarketReserve)>,
-    {
+    pub fn update_user_obligation(&mut self, reserves_map: HashMap<&Pubkey, MarketReserve>) -> ProgramResult {
         let (collaterals_borrow_value, collaterals_liquidation_value) = self.collaterals
             .iter()
             .try_fold((Decimal::zero(), Decimal::zero()),
                 |(acc_0, acc_1), collateral| -> Result<_, ProgramError> {
-                let (key, reserve) = reserve_iter
-                    .next()
-                    .ok_or(ProgramError::NotEnoughAccountKeys)?;
+                let reserve = reserves_map
+                    .get(&collateral.reserve)
+                    .ok_or(LendingError::ObligationCollateralNotFound)?;
 
-                if key != &collateral.reserve {
-                    return Err(LendingError::ObligationCollateralsNotMatched.into());
-                }
-
-                let collateral_value = collateral.calculate_collateral_value(&reserve)?;
+                let collateral_value = collateral.calculate_collateral_value(reserve)?;
                 let borrow_effective_value = collateral_value
                     .try_mul(Rate::from_percent(collateral.borrow_value_ratio))?
                     .try_add(acc_0)?;
@@ -348,13 +346,9 @@ impl UserObligation {
         self.loans_value = self.loans
             .iter_mut()
             .try_fold(Decimal::zero(), |acc, loan| {
-                let (key, reserve) = reserve_iter
-                    .next()
-                    .ok_or(ProgramError::NotEnoughAccountKeys)?;
-
-                if key != &loan.reserve {
-                    return Err(LendingError::ObligationLoansNotMatched.into());
-                }
+                let reserve = reserves_map
+                    .get(&loan.reserve)
+                    .ok_or(LendingError::ObligationLoanNotFound)?;
 
                 loan.accrue_interest(reserve)?;
                 loan
