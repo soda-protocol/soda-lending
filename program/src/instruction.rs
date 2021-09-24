@@ -623,22 +623,20 @@ pub fn init_market_reserve(
     }
 }
 
-pub fn refresh_market_reserves(
-    updating_keys: Vec<(Pubkey, Pubkey)>
-) -> Instruction {
-    let mut accounts = vec![AccountMeta::new_readonly(sysvar::clock::id(), false)];
+pub fn refresh_market_reserves<T: IntoIterator<Item = Pubkey>>(updating_keys: T) -> Instruction {
+    let mut accounts = updating_keys
+        .into_iter()
+        .enumerate()
+        .map(|(index, key)| {
+            if index % 2 == 0 {
+                AccountMeta::new(key, false)
+            } else {
+                AccountMeta::new_readonly(key, false)
+            }
+        })
+        .collect::<Vec<_>>();
 
-    accounts.extend(
-        updating_keys
-            .into_iter()
-            .map(|(market_reserve_key, price_oracle_key)|
-                vec![
-                    AccountMeta::new(market_reserve_key, false),
-                    AccountMeta::new_readonly(price_oracle_key, false),
-                ]
-            )
-            .flatten()
-    );
+    accounts.insert(0, AccountMeta::new_readonly(sysvar::clock::id(), false));
 
     Instruction {
         program_id: id(),
@@ -704,20 +702,17 @@ pub fn init_user_obligation(
     }
 }
 
-pub fn refresh_user_obligation(
+pub fn refresh_user_obligation<T: IntoIterator<Item = Pubkey>>(
     user_obligation_key: Pubkey,
-    market_reserve_keys: Vec<Pubkey>,
+    market_reserve_keys: T,
 ) -> Instruction {
-    let mut accounts = vec![
-        AccountMeta::new_readonly(sysvar::clock::id(), false),
-        AccountMeta::new(user_obligation_key, false),
-    ];
+    let mut accounts = market_reserve_keys
+        .into_iter()
+        .map(|key| AccountMeta::new_readonly(key, false))
+        .collect::<Vec<_>>();
 
-    accounts.extend(
-        market_reserve_keys
-            .into_iter()
-            .map(|market_reserve_key| AccountMeta::new_readonly(market_reserve_key, false))
-    );
+    accounts.insert(0, AccountMeta::new_readonly(sysvar::clock::id(), false));
+    accounts.insert(1, AccountMeta::new(user_obligation_key, false));
 
     Instruction {
         program_id: id(),
@@ -794,7 +789,7 @@ pub fn deposit_and_pledge(
     supply_token_account_key: Pubkey,
     user_obligation_key: Pubkey,
     user_authority_key: Pubkey,
-    user_token_account_info: Pubkey,
+    user_token_account_key: Pubkey,
     amount: u64,
 ) -> Instruction {
     Instruction {
@@ -805,7 +800,7 @@ pub fn deposit_and_pledge(
             AccountMeta::new(supply_token_account_key, false),
             AccountMeta::new(user_obligation_key, false),
             AccountMeta::new_readonly(user_authority_key, true),
-            AccountMeta::new(user_token_account_info, false),
+            AccountMeta::new(user_token_account_key, false),
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::DepositAndPledge(amount).pack(),
@@ -860,7 +855,7 @@ pub fn redeem_and_withdraw<WithLoan: Bit>(
     user_obligation_key: Pubkey,
     friend_obligation_key: Option<Pubkey>,
     user_authority_key: Pubkey,
-    user_token_account_info: Pubkey,
+    user_token_account_key: Pubkey,
     amount: u64,
 ) -> Instruction {
     let program_id = id();
@@ -877,7 +872,7 @@ pub fn redeem_and_withdraw<WithLoan: Bit>(
         AccountMeta::new(supply_token_account_key, false),
         AccountMeta::new(user_obligation_key, false),
         AccountMeta::new_readonly(user_authority_key, true),
-        AccountMeta::new(user_token_account_info, false),
+        AccountMeta::new(user_token_account_key, false),
         AccountMeta::new_readonly(spl_token::id(), false),
     ];
 
@@ -1096,7 +1091,7 @@ pub fn liquidate<IsCollateral: Bit>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn flash_liquidation<IsCollateral: Bit>(
+pub fn flash_liquidation<IsCollateral: Bit, T: IntoIterator<Item = AccountMeta>>(
     manager_key: Pubkey,
     collateral_market_reserve_key: Pubkey,
     collateral_supply_account_key: Pubkey,
@@ -1106,7 +1101,7 @@ pub fn flash_liquidation<IsCollateral: Bit>(
     friend_obligation_key: Option<Pubkey>,
     liquidator_authority_key: Pubkey,
     liquidator_program_id: Pubkey,
-    liquidator_program_accounts: Vec<AccountMeta>,
+    liquidator_program_accounts: T,
     amount: u64,
     tag: u8,
 ) -> Instruction {
@@ -1147,13 +1142,13 @@ pub fn flash_liquidation<IsCollateral: Bit>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn flash_loan(
+pub fn flash_loan<T: IntoIterator<Item = AccountMeta>>(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
     supply_token_account_key: Pubkey,
     receiver_authority_key: Pubkey,
     receiver_program_id: Pubkey,
-    receiver_program_accounts: Vec<AccountMeta>,
+    receiver_program_accounts: T,
     tag: u8,
     amount: u64,
 ) -> Instruction {

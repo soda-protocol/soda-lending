@@ -21,10 +21,7 @@ pub struct Manager {
 
 impl Manager {
     ///
-    pub fn new(
-        bump_seed: u8,
-        owner: Pubkey,
-    ) -> Self {
+    pub fn new(bump_seed: u8, owner: Pubkey) -> Self {
         Self {
             version: PROGRAM_VERSION,
             bump_seed,

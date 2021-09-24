@@ -1849,8 +1849,6 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         token_program: token_program_id.clone(),
     })?;
 
-    // 12/13 ~
-    let account_infos = account_info_iter.map(|account_info| account_info.clone());
     // prepare instruction and account infos    
     let mut flash_loan_instruction_account_infos = vec![
         clock_info.clone(),
@@ -1859,7 +1857,8 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         liquidator_authority_info.clone(),
         token_program_id.clone(),
     ];
-    flash_loan_instruction_account_infos.extend(account_infos);
+    // 12/13 ~
+    flash_loan_instruction_account_infos.extend(account_info_iter.map(|account_info| account_info.clone()));
 
     let flash_loan_instruction_accounts = flash_loan_instruction_account_infos
         .iter()
@@ -1984,8 +1983,6 @@ fn process_flash_loan(
         token_program: token_program_id.clone(),
     })?;
 
-    // 9 ~
-    let account_infos = account_info_iter.map(|account_info| account_info.clone());
     // prepare instruction and account infos    
     let mut flash_loan_instruction_account_infos = vec![
         clock_info.clone(),
@@ -1993,7 +1990,8 @@ fn process_flash_loan(
         receiver_authority_info.clone(),
         token_program_id.clone(),
     ];
-    flash_loan_instruction_account_infos.extend(account_infos);
+    // 9 ~
+    flash_loan_instruction_account_infos.extend(account_info_iter.map(|account_info| account_info.clone()));
 
     let flash_loan_instruction_accounts = flash_loan_instruction_account_infos
         .iter()
