@@ -624,19 +624,20 @@ pub fn init_market_reserve(
 }
 
 pub fn refresh_market_reserves<T: IntoIterator<Item = Pubkey>>(updating_keys: T) -> Instruction {
-    let mut accounts = updating_keys
-        .into_iter()
-        .enumerate()
-        .map(|(index, key)| {
-            if index % 2 == 0 {
-                AccountMeta::new(key, false)
-            } else {
-                AccountMeta::new_readonly(key, false)
-            }
-        })
-        .collect::<Vec<_>>();
+    let mut accounts = vec![AccountMeta::new_readonly(sysvar::clock::id(), false)];
 
-    accounts.insert(0, AccountMeta::new_readonly(sysvar::clock::id(), false));
+    accounts.extend(
+        updating_keys
+            .into_iter()
+            .enumerate()
+            .map(|(index, key)| {
+                if index % 2 == 0 {
+                    AccountMeta::new(key, false)
+                } else {
+                    AccountMeta::new_readonly(key, false)
+                }
+            })
+    );
 
     Instruction {
         program_id: id(),
@@ -706,13 +707,16 @@ pub fn refresh_user_obligation<T: IntoIterator<Item = Pubkey>>(
     user_obligation_key: Pubkey,
     market_reserve_keys: T,
 ) -> Instruction {
-    let mut accounts = market_reserve_keys
-        .into_iter()
-        .map(|key| AccountMeta::new_readonly(key, false))
-        .collect::<Vec<_>>();
+    let mut accounts = vec![
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new(user_obligation_key, false),
+    ];
 
-    accounts.insert(0, AccountMeta::new_readonly(sysvar::clock::id(), false));
-    accounts.insert(1, AccountMeta::new(user_obligation_key, false));
+    accounts.extend(
+        market_reserve_keys
+            .into_iter()
+            .map(|key| AccountMeta::new_readonly(key, false))
+    );
 
     Instruction {
         program_id: id(),
