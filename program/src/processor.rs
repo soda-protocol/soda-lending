@@ -2266,7 +2266,7 @@ fn process_repay_loan_by_unique_credit(
     unique_credit.accrue_interest(&market_reserve)?;
     let settle = unique_credit.repay(source_token_account.amount.min(source_token_account.delegated_amount), amount)?;
     // repay in reserve
-    market_reserve.liquidity_info.repay(settle)?;
+    market_reserve.liquidity_info.repay(&settle)?;
     // pack
     UniqueCredit::pack(unique_credit, &mut unique_credit_info.try_borrow_mut_data()?)?;
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
