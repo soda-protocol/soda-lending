@@ -10,7 +10,7 @@ use solana_program::{
 
 const SLOTS_PER_YEAR: u64 = DEFAULT_TICKS_PER_SECOND * SECONDS_PER_DAY * 365 / DEFAULT_TICKS_PER_SLOT;
 
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct RateModel {
     pub a: u64,
     pub c: u64,

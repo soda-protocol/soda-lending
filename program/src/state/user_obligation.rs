@@ -16,7 +16,6 @@ use std::{
     convert::TryInto,
     cmp::Ordering,
     any::Any,
-    collections::HashMap,
 };
 
 /// refresh-obligation comsumed about 150000~160000 compute unit for 11 collateral position, so 11 is safe enough
@@ -283,17 +282,17 @@ impl UserObligation {
         }
     }
     ///
-    pub fn find_loan(&self, key: Pubkey) -> Result<usize, ProgramError> {
+    pub fn find_loan(&self, key: &Pubkey) -> Result<usize, ProgramError> {
         self.loans
             .iter()
-            .position(|loan| loan.reserve == key)
+            .position(|loan| &loan.reserve == key)
             .ok_or(LendingError::ObligationLoanNotFound.into())
     }
     ///
-    pub fn find_collateral(&self, key: Pubkey) -> Result<usize, ProgramError> {
+    pub fn find_collateral(&self, key: &Pubkey) -> Result<usize, ProgramError> {
         self.collaterals
             .iter()
-            .position(|collateral| collateral.reserve == key)
+            .position(|collateral| &collateral.reserve == key)
             .ok_or(LendingError::ObligationCollateralNotFound.into())
     }
     ///
@@ -321,14 +320,15 @@ impl UserObligation {
     }
     ///
     // need refresh reserves before
-    pub fn update_user_obligation(&mut self, reserves_map: HashMap<&Pubkey, MarketReserve>) -> ProgramResult {
+    pub fn update_user_obligation(&mut self, reserves_vec: Vec<(&Pubkey, MarketReserve)>) -> ProgramResult {
+        let mut reserves_ref_vec = ReservesRefVec(reserves_vec.iter().collect());
+
         let (collaterals_borrow_value, collaterals_liquidation_value) = self.collaterals
             .iter()
             .try_fold((Decimal::zero(), Decimal::zero()),
                 |(acc_0, acc_1), collateral| -> Result<_, ProgramError> {
-                let reserve = reserves_map
-                    .get(&collateral.reserve)
-                    .ok_or(LendingError::ObligationCollateralNotFound)?;
+                let reserve = reserves_ref_vec
+                    .find_and_remove(&collateral.reserve, LendingError::ObligationCollateralNotFound)?;
 
                 let collateral_value = collateral.calculate_collateral_value(reserve)?;
                 let borrow_effective_value = collateral_value
@@ -341,14 +341,15 @@ impl UserObligation {
                 Ok((borrow_effective_value, liquidation_effective_value))
             })?;
 
+        let mut reserves_ref_vec = ReservesRefVec(reserves_vec.iter().collect());
+
         self.collaterals_borrow_value = collaterals_borrow_value;
         self.collaterals_liquidation_value = collaterals_liquidation_value;
         self.loans_value = self.loans
             .iter_mut()
             .try_fold(Decimal::zero(), |acc, loan| {
-                let reserve = reserves_map
-                    .get(&loan.reserve)
-                    .ok_or(LendingError::ObligationLoanNotFound)?;
+                let reserve = reserves_ref_vec
+                    .find_and_remove(&loan.reserve, LendingError::ObligationLoanNotFound)?;
 
                 loan.accrue_interest(reserve)?;
                 loan
@@ -805,7 +806,7 @@ impl Pack for UserObligation {
     }
 }
 
-impl<P: Any + Param + Copy> Operator<P> for UserObligation {
+impl<P: Any + Param> Operator<P> for UserObligation {
     fn operate_unchecked(&mut self, param: P) -> ProgramResult {
         if let Some(config) = <dyn Any>::downcast_ref::<IndexedCollateralConfig>(&param) {
             let collateral = self.collaterals
@@ -830,7 +831,7 @@ impl<P: Any + Param + Copy> Operator<P> for UserObligation {
     }
 }
 
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct IndexedCollateralConfig {
     ///
     pub index: u8,
@@ -851,7 +852,7 @@ impl Param for IndexedCollateralConfig {
     }
 }
 
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct IndexedLoanConfig {
     ///
     pub index: u8,

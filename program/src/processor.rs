@@ -11,7 +11,7 @@ use crate::{
 };
 #[cfg(feature = "unique-credit")]
 use crate::state::UniqueCredit;
-use std::{any::Any, collections::HashMap};
+use std::any::Any;
 use num_traits::FromPrimitive;
 use solana_program::{
     account_info::{AccountInfo, next_account_info},
@@ -452,7 +452,7 @@ fn process_deposit_or_withdraw<IsDeposit: Bit>(
     // deposit or withdraw
     if IsDeposit::BOOL {
         let user_token_account = Account::unpack(&user_token_account_info.try_borrow_data()?)?;
-        let amount = calculate_amount(amount, get_available_balance(user_token_account, *user_authority_info.key));
+        let amount = calculate_amount(amount, get_available_balance(user_token_account, user_authority_info.key));
         let mint_amount = market_reserve.deposit(amount)?;
         // pack
         MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
@@ -560,7 +560,7 @@ fn process_refresh_user_obligation(
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
     let manager = user_obligation.manager;
     // 3 + i
-    let reserves_map = account_info_iter
+    let reserves_vec = account_info_iter
         .map(|market_reserve_info| {
             if market_reserve_info.owner != program_id {
                 msg!("Market reserve owner provided is not owned by the lending program");
@@ -578,10 +578,10 @@ fn process_refresh_user_obligation(
                 Ok((market_reserve_info.key, market_reserve))
             }
         })
-        .collect::<Result<HashMap<_, _>, ProgramError>>()?;
+        .collect::<Result<Vec<_>, ProgramError>>()?;
 
     // update
-    user_obligation.update_user_obligation(reserves_map)?;
+    user_obligation.update_user_obligation(reserves_vec)?;
     user_obligation.last_update.update_slot(clock.slot, false);
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
@@ -747,8 +747,8 @@ fn process_pledge_collateral(
     let token_program_id = next_account_info(account_info_iter)?;
 
     // handle obligation
-    let balance = get_available_balance(user_sotoken_account, *user_authority_info.key);
-    let amount = if let Ok(index) = user_obligation.find_collateral(*market_reserve_info.key) {
+    let balance = get_available_balance(user_sotoken_account, user_authority_info.key);
+    let amount = if let Ok(index) = user_obligation.find_collateral(market_reserve_info.key) {
         user_obligation.pledge(balance, amount, index)?
     } else {
         user_obligation.new_pledge(balance, amount, *market_reserve_info.key, &market_reserve)?
@@ -821,10 +821,10 @@ fn process_deposit_and_pledge(
     market_reserve.accrue_interest(clock.slot)?;
     market_reserve.last_update.update_slot(clock.slot, true);
     // deposit in reserve
-    let amount = calculate_amount(amount, get_available_balance(user_token_account, *user_authority_info.key));
+    let amount = calculate_amount(amount, get_available_balance(user_token_account, user_authority_info.key));
     let mint_amount = market_reserve.deposit(amount)?;
     // pledge in obligation
-    let _ = if let Ok(index) = user_obligation.find_collateral(*market_reserve_info.key) {
+    let _ = if let Ok(index) = user_obligation.find_collateral(market_reserve_info.key) {
         user_obligation.pledge(mint_amount, u64::MAX, index)?
     } else {
         user_obligation.new_pledge(mint_amount, u64::MAX, *market_reserve_info.key, &market_reserve)?
@@ -941,7 +941,7 @@ fn process_redeem_collateral(
     let token_program_id = next_account_info(account_info_iter)?;
 
     // redeem in obligation
-    let index = user_obligation.find_collateral(*market_reserve_info.key)?;
+    let index = user_obligation.find_collateral(market_reserve_info.key)?;
     let amount = user_obligation.redeem(amount, index, &market_reserve, friend_obligation)?;
     user_obligation.last_update.mark_stale();
     // pack
@@ -1055,7 +1055,7 @@ fn process_redeem_and_withdraw<WithLoan: Bit>(
     let token_program_id = next_account_info(account_info_iter)?;
 
     // redeem in obligation
-    let index = user_obligation.find_collateral(*market_reserve_info.key)?;
+    let index = user_obligation.find_collateral(market_reserve_info.key)?;
     let amount = if WithLoan::BOOL {
         user_obligation.redeem(amount, index, &market_reserve, friend_obligation)?
     } else {
@@ -1164,7 +1164,7 @@ fn process_redeem_collateral_without_loan(
     let token_program_id = next_account_info(account_info_iter)?;
 
     // redeem in obligation
-    let index = user_obligation.find_collateral(*market_reserve_info.key)?;
+    let index = user_obligation.find_collateral(market_reserve_info.key)?;
     let amount = user_obligation.redeem_without_loan(amount, index, friend_obligation)?;
     user_obligation.last_update.mark_stale();
     // pack
@@ -1299,12 +1299,12 @@ fn process_replace_collateral(
     let token_program_id = next_account_info(account_info_iter)?;
 
     // replace
-    let out_index = user_obligation.find_collateral(*out_market_reserve_info.key)?;
-    if user_obligation.find_collateral(*in_market_reserve_info.key).is_ok() {
+    let out_index = user_obligation.find_collateral(out_market_reserve_info.key)?;
+    if user_obligation.find_collateral(in_market_reserve_info.key).is_ok() {
         return Err(LendingError::ObligationReplaceCollateralExists.into());
     }
     let (in_amount, out_amount) = user_obligation.replace_collateral(
-        get_available_balance(user_in_sotoken_account, *user_authority_info.key),
+        get_available_balance(user_in_sotoken_account, user_authority_info.key),
         amount,
         out_index,
         *in_market_reserve_info.key,
@@ -1434,7 +1434,7 @@ fn process_borrow_liquidity(
     let token_program_id = next_account_info(account_info_iter)?;
 
     // borrow
-    if let Ok(index) = user_obligation.find_loan(*market_reserve_info.key) {
+    if let Ok(index) = user_obligation.find_loan(market_reserve_info.key) {
         user_obligation.borrow_in(
             amount,
             index,
@@ -1519,12 +1519,12 @@ fn process_repay_loan(
     market_reserve.accrue_interest(clock.slot)?;
     market_reserve.last_update.update_slot(clock.slot, true);
     // repay in obligation
-    let index = user_obligation.find_loan(*market_reserve_info.key)?;
+    let index = user_obligation.find_loan(market_reserve_info.key)?;
     user_obligation.loans[index].accrue_interest(&market_reserve)?;
     let settle = user_obligation.repay(amount, user_balance, index)?;
     user_obligation.last_update.mark_stale();
     // repay in reserve 
-    market_reserve.liquidity_info.repay(settle)?;
+    market_reserve.liquidity_info.repay(&settle)?;
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
@@ -1651,8 +1651,8 @@ fn process_liquidate<IsCollateral: Bit>(
     let token_program_id = next_account_info(account_info_iter)?;
 
     // liquidate
-    let collateral_index = user_obligation.find_collateral(*collateral_market_reserve_info.key)?;
-    let loan_index = user_obligation.find_loan(*loan_market_reserve_info.key)?;
+    let collateral_index = user_obligation.find_collateral(collateral_market_reserve_info.key)?;
+    let loan_index = user_obligation.find_loan(loan_market_reserve_info.key)?;
     let (so_token_amount, settle) = user_obligation.liquidate::<IsCollateral>(
         amount,
         collateral_index,
@@ -1665,7 +1665,7 @@ fn process_liquidate<IsCollateral: Bit>(
     // repay in market reserve
     loan_market_reserve.accrue_interest(clock.slot)?;
     loan_market_reserve.last_update.update_slot(clock.slot, true);
-    loan_market_reserve.liquidity_info.repay(settle)?;
+    loan_market_reserve.liquidity_info.repay(&settle)?;
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
     MarketReserve::pack(loan_market_reserve, &mut loan_market_reserve_info.try_borrow_mut_data()?)?;
@@ -1807,8 +1807,8 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     }
 
     // liquidate calculate first
-    let collateral_index = user_obligation.find_collateral(*collateral_market_reserve_info.key)?;
-    let loan_index = user_obligation.find_loan(*loan_market_reserve_info.key)?;
+    let collateral_index = user_obligation.find_collateral(collateral_market_reserve_info.key)?;
+    let loan_index = user_obligation.find_loan(loan_market_reserve_info.key)?;
     let (sotoken_amount, settle) = user_obligation.liquidate::<IsCollateral>(
         amount,
         collateral_index,
@@ -1823,7 +1823,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     // liquidation repay in loan reserve
     loan_market_reserve.accrue_interest(clock.slot)?;
     loan_market_reserve.last_update.update_slot(clock.slot, true);
-    loan_market_reserve.liquidity_info.repay(settle)?;
+    loan_market_reserve.liquidity_info.repay(&settle)?;
     // liquidator got sotoken and withdraw immediately
     // remark: token mint + token burn are all omitted here!
     collateral_market_reserve.accrue_interest(clock.slot)?;
@@ -2283,7 +2283,7 @@ fn process_repay_loan_by_unique_credit(
 }
 
 // by manager
-fn process_operate_user_obligation<P: Any + Copy + Param>(
+fn process_operate_user_obligation<P: Any + Param>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     param: P,
@@ -2324,7 +2324,7 @@ fn process_operate_user_obligation<P: Any + Copy + Param>(
 }
 
 // by manager
-fn process_operate_market_reserve<P: Any + Copy + Param>(
+fn process_operate_market_reserve<P: Any + Param>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     param: P,
@@ -2531,14 +2531,14 @@ fn process_close_lending_account(
 }
 
 #[inline(always)]
-fn get_available_balance(account: Account, authority_key: Pubkey) -> u64 {
-    if let COption::Some(delegate) = account.delegate {
+fn get_available_balance(account: Account, authority_key: &Pubkey) -> u64 {
+    if let COption::Some(ref delegate) = account.delegate {
         if delegate == authority_key {
             return account.amount.min(account.delegated_amount);
         }
     }
 
-    if account.owner == authority_key {
+    if &account.owner == authority_key {
         account.amount
     } else {
         0

@@ -17,7 +17,7 @@ use solana_program::{
 use std::{convert::TryInto, any::Any};
 
 ///
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TokenConfig {
     ///
     pub mint_pubkey: Pubkey,
@@ -28,7 +28,7 @@ pub struct TokenConfig {
 }
 
 ///
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CollateralConfig {
     ///
     pub borrow_value_ratio: u8,
@@ -81,7 +81,7 @@ impl CollateralInfo {
 }
 
 ///
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct LiquidityConfig {
     ///
     pub close_ratio: u8,
@@ -203,7 +203,7 @@ impl LiquidityInfo {
         Ok((total_repay, fee))
     }
     ///
-    pub fn repay(&mut self, settle: RepaySettle) -> ProgramResult {
+    pub fn repay(&mut self, settle: &RepaySettle) -> ProgramResult {
         if !self.enable {
             return Err(LendingError::MarketReserveDisabled.into());
         }
@@ -609,7 +609,7 @@ impl Pack for MarketReserve {
 }
 
 /// All Operations due MarketReserve
-impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
+impl<P: Any + Param> Operator<P> for MarketReserve {
     fn operate_unchecked(&mut self, param: P) -> ProgramResult {
         if let Some(control) = <dyn Any>::downcast_ref::<LiquidityControl>(&param) {
             self.liquidity_info.enable = control.0;
@@ -641,7 +641,7 @@ impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
 }
 
 ///
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug)]
 pub struct LiquidityControl(pub bool);
 
 impl Param for LiquidityControl {

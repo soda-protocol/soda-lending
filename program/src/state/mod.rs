@@ -53,7 +53,7 @@ pub trait Param: Sized {
 }
 
 ///
-pub trait Operator<P: Param + Copy> {
+pub trait Operator<P: Param> {
     ///
     fn operate_unchecked(&mut self, param: P) -> ProgramResult;
     ///
@@ -175,7 +175,7 @@ fn calculate_amount_and_decimal(amount: u64, max: Decimal) -> Result<(u64, Decim
 }
 
 ///
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub struct RepaySettle {
     ///
     pub amount: u64,
@@ -183,14 +183,19 @@ pub struct RepaySettle {
     pub amount_decimal: Decimal,
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct FlashLoanSettle {
-    ///
-    pub amount: u64,
-    ///
-    pub amount_decimal: Decimal,
-    ///
-    pub fee_decimal: Decimal,
+pub struct ReservesRefVec<'a, 'b>(Vec<&'b(&'a Pubkey, MarketReserve)>);
+
+impl<'a, 'b> ReservesRefVec<'a, 'b> {
+    pub fn find_and_remove<E>(&mut self, reserve: &Pubkey, e: E) -> Result<&'b MarketReserve, E> {
+        let index = self.0
+            .iter()
+            .position(|(key, _)| key == &reserve)
+            .ok_or(e)?;
+
+        let (_, market_reserve) = self.0.remove(index);
+
+        Ok(market_reserve)
+    }
 }
 
 // #[cfg(test)]
