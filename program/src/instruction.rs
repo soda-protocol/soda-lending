@@ -1467,13 +1467,15 @@ pub fn inject_liquidation(
 #[cfg(feature = "devnet")]
 pub fn close_lending_account(
     source_account_key: Pubkey,
-    dest_account_key: Pubkey,
+    manager_key: Pubkey,
+    authority_info: Pubkey,
 ) -> Instruction {
     Instruction {
         program_id: id(),
         accounts: vec![
             AccountMeta::new(source_account_key, false),
-            AccountMeta::new(dest_account_key, false),
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new(authority_info, true),
         ],
         data: LendingInstruction::CloseLendingAccount.pack(),
     }

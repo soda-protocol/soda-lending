@@ -2520,9 +2520,24 @@ fn process_close_lending_account(
         return Err(LendingError::InvalidAccountOwner.into());
     }
     // 2
-    let dest_account_info = next_account_info(account_info_iter)?;
-    let dest_starting_lamports = dest_account_info.lamports();
-    **dest_account_info.try_borrow_mut_lamports()? = dest_starting_lamports
+    let manager_info = next_account_info(account_info_iter)?;
+    if manager_info.owner != program_id {
+        msg!("Manager owner provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
+    }
+    let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
+    // 3
+    let authority_info = next_account_info(account_info_iter)?;
+    if authority_info.key != &manager.owner {
+        msg!("Only manager owner can update unique credit limit");
+        return Err(LendingError::InvalidAuthority.into());
+    }
+    if !authority_info.is_signer {
+        msg!("authority is not a signer");
+        return Err(LendingError::InvalidSigner.into());
+    }
+    let dest_starting_lamports = authority_info.lamports();
+    **authority_info.try_borrow_mut_lamports()? = dest_starting_lamports
         .checked_add(source_account_info.lamports())
         .ok_or(LendingError::MathOverflow)?;
     **source_account_info.try_borrow_mut_lamports()? = 0;
