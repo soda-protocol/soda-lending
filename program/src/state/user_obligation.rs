@@ -18,8 +18,8 @@ use std::{
     any::Any,
 };
 
-/// refresh-obligation comsumed about 150000~160000 compute unit for 11 collateral position, so 11 is safe enough
-const MAX_OBLIGATION_RESERVES: usize = 11;
+/// refresh-obligation comsumed about 160000~180000 compute unit for extremely 12 collateral position, so 12 is safe enough
+const MAX_OBLIGATION_RESERVES: usize = 12;
 
 /// min borrow value (to avoid dust attack), set 0.1 dollar as default
 const MIN_LOANS_VALUE: u128 = 100_000_000_000_000_000;
@@ -679,7 +679,7 @@ impl IsInitialized for UserObligation {
 // const MAX_PADDING_LEN: usize = max(COLLATERAL_LEN, LOAN_LEN);
 const MAX_COLLATERAL_OR_LOAN_LEN: usize = LOAN_LEN;
 const USER_OBLIGATITION_PADDING_LEN: usize = 128;
-const USER_OBLIGATITION_LEN: usize = 1355;
+const USER_OBLIGATITION_LEN: usize = 1452;
 
 impl Pack for UserObligation {
     const LEN: usize = USER_OBLIGATITION_LEN;
