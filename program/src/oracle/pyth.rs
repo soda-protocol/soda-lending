@@ -112,9 +112,9 @@ fn load<T: Pod>(data: &[u8]) -> Result<&T, PodCastError> {
 }
 
 pub fn get_pyth_price(data: &[u8], clock: &Clock) -> Result<Decimal, ProgramError> {
-    #[cfg(not(feature = "general-test"))]
+    #[cfg(not(feature = "devnet"))]
     const STALE_AFTER_SLOTS_ELAPSED: u64 = 5;
-    #[cfg(feature = "general-test")]
+    #[cfg(feature = "devnet")]
     const STALE_AFTER_SLOTS_ELAPSED: u64 = 10;
 
     let pyth_price = load::<Price>(data).map_err(|_| ProgramError::InvalidAccountData)?;

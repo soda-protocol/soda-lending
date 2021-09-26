@@ -125,12 +125,6 @@ pub enum LendingError {
     #[error("Interest rate is negative")]
     NegativeInterestRate,
     ///
-    #[error("Obligation collaterals not matched")]
-    ObligationCollateralsNotMatched,
-    ///
-    #[error("Obligation loans not matched")]
-    ObligationLoansNotMatched,
-    ///
     #[error("Obligation collaterals are not healthy")]
     ObligationNotHealthy,
     ///
@@ -185,7 +179,7 @@ pub enum LendingError {
     #[error("Insufficient unique credit limit")]
     InsufficientUniqueCreditLimit,
     ///
-    #[cfg(feature = "general-test")]
+    #[cfg(feature = "devnet")]
     #[error("Undefined case injection")]
     UndefinedCaseInjection,
 }

@@ -12,10 +12,14 @@ use solana_program::{
     program_pack::{IsInitialized, Pack, Sealed},
     pubkey::{Pubkey, PUBKEY_BYTES}
 };
-use std::{convert::TryInto, cmp::Ordering, iter::Iterator, any::Any};
+use std::{
+    convert::TryInto,
+    cmp::Ordering,
+    any::Any,
+};
 
-/// refresh-obligation comsumed about 150000~160000 compute unit for 11 collateral position, so 11 is safe enough
-const MAX_OBLIGATION_RESERVES: usize = 11;
+/// refresh-obligation comsumed about 160000~180000 compute unit for extremely 12 collateral position, so 12 is safe enough
+const MAX_OBLIGATION_RESERVES: usize = 12;
 
 /// min borrow value (to avoid dust attack), set 0.1 dollar as default
 const MIN_LOANS_VALUE: u128 = 100_000_000_000_000_000;
@@ -278,17 +282,17 @@ impl UserObligation {
         }
     }
     ///
-    pub fn find_loan(&self, key: Pubkey) -> Result<usize, ProgramError> {
+    pub fn find_loan(&self, key: &Pubkey) -> Result<usize, ProgramError> {
         self.loans
             .iter()
-            .position(|loan| loan.reserve == key)
+            .position(|loan| &loan.reserve == key)
             .ok_or(LendingError::ObligationLoanNotFound.into())
     }
     ///
-    pub fn find_collateral(&self, key: Pubkey) -> Result<usize, ProgramError> {
+    pub fn find_collateral(&self, key: &Pubkey) -> Result<usize, ProgramError> {
         self.collaterals
             .iter()
-            .position(|collateral| collateral.reserve == key)
+            .position(|collateral| &collateral.reserve == key)
             .ok_or(LendingError::ObligationCollateralNotFound.into())
     }
     ///
@@ -316,23 +320,17 @@ impl UserObligation {
     }
     ///
     // need refresh reserves before
-    pub fn update_user_obligation<'a, I>(&mut self, reserve_iter: &mut I) -> ProgramResult
-    where
-        I: Iterator<Item = &'a (Pubkey, MarketReserve)>,
-    {
+    pub fn update_user_obligation(&mut self, reserves_vec: Vec<(&Pubkey, MarketReserve)>) -> ProgramResult {
+        let mut reserves_ref_vec = ReservesRefVec(reserves_vec.iter().collect());
+
         let (collaterals_borrow_value, collaterals_liquidation_value) = self.collaterals
             .iter()
             .try_fold((Decimal::zero(), Decimal::zero()),
                 |(acc_0, acc_1), collateral| -> Result<_, ProgramError> {
-                let (key, reserve) = reserve_iter
-                    .next()
-                    .ok_or(ProgramError::NotEnoughAccountKeys)?;
+                let reserve = reserves_ref_vec
+                    .find_and_remove(&collateral.reserve, LendingError::ObligationCollateralNotFound)?;
 
-                if key != &collateral.reserve {
-                    return Err(LendingError::ObligationCollateralsNotMatched.into());
-                }
-
-                let collateral_value = collateral.calculate_collateral_value(&reserve)?;
+                let collateral_value = collateral.calculate_collateral_value(reserve)?;
                 let borrow_effective_value = collateral_value
                     .try_mul(Rate::from_percent(collateral.borrow_value_ratio))?
                     .try_add(acc_0)?;
@@ -343,18 +341,15 @@ impl UserObligation {
                 Ok((borrow_effective_value, liquidation_effective_value))
             })?;
 
+        let mut reserves_ref_vec = ReservesRefVec(reserves_vec.iter().collect());
+
         self.collaterals_borrow_value = collaterals_borrow_value;
         self.collaterals_liquidation_value = collaterals_liquidation_value;
         self.loans_value = self.loans
             .iter_mut()
             .try_fold(Decimal::zero(), |acc, loan| {
-                let (key, reserve) = reserve_iter
-                    .next()
-                    .ok_or(ProgramError::NotEnoughAccountKeys)?;
-
-                if key != &loan.reserve {
-                    return Err(LendingError::ObligationLoansNotMatched.into());
-                }
+                let reserve = reserves_ref_vec
+                    .find_and_remove(&loan.reserve, LendingError::ObligationLoanNotFound)?;
 
                 loan.accrue_interest(reserve)?;
                 loan
@@ -684,7 +679,7 @@ impl IsInitialized for UserObligation {
 // const MAX_PADDING_LEN: usize = max(COLLATERAL_LEN, LOAN_LEN);
 const MAX_COLLATERAL_OR_LOAN_LEN: usize = LOAN_LEN;
 const USER_OBLIGATITION_PADDING_LEN: usize = 128;
-const USER_OBLIGATITION_LEN: usize = 1355;
+const USER_OBLIGATITION_LEN: usize = 1452;
 
 impl Pack for UserObligation {
     const LEN: usize = USER_OBLIGATITION_LEN;
@@ -722,7 +717,7 @@ impl Pack for UserObligation {
         ];
 
         *version = self.version.to_le_bytes();
-        self.last_update.pack_into_slice(&mut last_update[..]);
+        self.last_update.pack_into_slice(last_update);
         manager.copy_from_slice(self.manager.as_ref());
         owner.copy_from_slice(self.owner.as_ref());
         pack_coption_pubkey(&self.friend, friend);
@@ -798,7 +793,7 @@ impl Pack for UserObligation {
 
         Ok(Self{
             version,
-            last_update: LastUpdate::unpack_from_slice(&last_update[..])?,
+            last_update: LastUpdate::unpack_from_slice(last_update)?,
             manager: Pubkey::new_from_array(*manager),
             owner: Pubkey::new_from_array(*owner),
             friend: unpack_coption_pubkey(friend)?,
@@ -811,7 +806,7 @@ impl Pack for UserObligation {
     }
 }
 
-impl<P: Any + Param + Copy> Operator<P> for UserObligation {
+impl<P: Any + Param> Operator<P> for UserObligation {
     fn operate_unchecked(&mut self, param: P) -> ProgramResult {
         if let Some(config) = <dyn Any>::downcast_ref::<IndexedCollateralConfig>(&param) {
             let collateral = self.collaterals
@@ -836,7 +831,7 @@ impl<P: Any + Param + Copy> Operator<P> for UserObligation {
     }
 }
 
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct IndexedCollateralConfig {
     ///
     pub index: u8,
@@ -857,7 +852,7 @@ impl Param for IndexedCollateralConfig {
     }
 }
 
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct IndexedLoanConfig {
     ///
     pub index: u8,

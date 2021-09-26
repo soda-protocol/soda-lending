@@ -81,10 +81,10 @@ pub struct Config {
 }
 
 pub fn get_chainlink_price(data: &[u8], clock: &Clock) -> Result<Decimal, ProgramError> {
-    #[cfg(feature = "general-test")]
-    const STALE_AFTER_SECS_ELAPSED: i64 = 4;
-    #[cfg(not(feature = "general-test"))]
+    #[cfg(not(feature = "devnet"))]
     const STALE_AFTER_SECS_ELAPSED: i64 = 2;
+    #[cfg(feature = "devnet")]
+    const STALE_AFTER_SECS_ELAPSED: i64 = 4;
 
     let aggregator = try_from_slice_unchecked::<Aggregator>(&data[..4096])?;
     if !aggregator.is_initialized() {
@@ -96,8 +96,18 @@ pub fn get_chainlink_price(data: &[u8], clock: &Clock) -> Result<Decimal, Progra
         LendingError::InvalidPriceOracle
     })?;
 
+    let agg_lastupdate = aggregator
+        .submissions
+        .iter()
+        .map(|submission| submission.0)
+        .max()
+        .ok_or_else(|| {
+            msg!("Chainlink oracle no submissions");
+            LendingError::InvalidPriceOracle
+        })?;
+
     let secs_eplased = clock.unix_timestamp
-        .checked_sub(aggregator.updated_at)
+        .checked_sub(agg_lastupdate)
         .ok_or(LendingError::MathOverflow)?;
     if secs_eplased >= STALE_AFTER_SECS_ELAPSED {
         msg!("Chainlink oracle price is stale");

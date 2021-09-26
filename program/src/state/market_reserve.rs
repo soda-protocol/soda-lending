@@ -17,7 +17,7 @@ use solana_program::{
 use std::{convert::TryInto, any::Any};
 
 ///
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TokenConfig {
     ///
     pub mint_pubkey: Pubkey,
@@ -28,7 +28,7 @@ pub struct TokenConfig {
 }
 
 ///
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CollateralConfig {
     ///
     pub borrow_value_ratio: u8,
@@ -81,7 +81,7 @@ impl CollateralInfo {
 }
 
 ///
-#[derive(Clone, Debug, Copy, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct LiquidityConfig {
     ///
     pub close_ratio: u8,
@@ -203,7 +203,7 @@ impl LiquidityInfo {
         Ok((total_repay, fee))
     }
     ///
-    pub fn repay(&mut self, settle: RepaySettle) -> ProgramResult {
+    pub fn repay(&mut self, settle: &RepaySettle) -> ProgramResult {
         if !self.enable {
             return Err(LendingError::MarketReserveDisabled.into());
         }
@@ -450,7 +450,7 @@ impl Pack for MarketReserve {
         ];
 
         *version = self.version.to_le_bytes();
-        self.last_update.pack_into_slice(&mut last_update[..]);
+        self.last_update.pack_into_slice(last_update);
         manager.copy_from_slice(self.manager.as_ref());
 
         mint_pubkey.copy_from_slice(self.token_config.mint_pubkey.as_ref());
@@ -561,7 +561,7 @@ impl Pack for MarketReserve {
 
         Ok(Self {
             version,
-            last_update: LastUpdate::unpack_from_slice(&last_update[..])?,
+            last_update: LastUpdate::unpack_from_slice(last_update)?,
             manager: Pubkey::new_from_array(*manager),
             token_config: TokenConfig {
                 mint_pubkey: Pubkey::new_from_array(*mint_pubkey),
@@ -609,7 +609,7 @@ impl Pack for MarketReserve {
 }
 
 /// All Operations due MarketReserve
-impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
+impl<P: Any + Param> Operator<P> for MarketReserve {
     fn operate_unchecked(&mut self, param: P) -> ProgramResult {
         if let Some(control) = <dyn Any>::downcast_ref::<LiquidityControl>(&param) {
             self.liquidity_info.enable = control.0;
@@ -641,7 +641,7 @@ impl<P: Any + Param + Copy> Operator<P> for MarketReserve {
 }
 
 ///
-#[derive(Clone, Debug, Copy)]
+#[derive(Clone, Debug)]
 pub struct LiquidityControl(pub bool);
 
 impl Param for LiquidityControl {
