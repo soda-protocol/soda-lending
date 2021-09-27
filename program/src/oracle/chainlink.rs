@@ -102,7 +102,7 @@ pub fn get_chainlink_price(data: &[u8], clock: &Clock) -> Result<Decimal, Progra
         .map(|submission| submission.0)
         .max()
         .ok_or_else(|| {
-            msg!("Chainlink oracle no submissions");
+            msg!("Chainlink oracle has no submissions");
             LendingError::InvalidPriceOracle
         })?;
 

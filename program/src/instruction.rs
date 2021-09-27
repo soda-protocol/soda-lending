@@ -104,9 +104,6 @@ pub enum LendingInstruction {
     /// 36
     #[cfg(feature = "devnet")]
     InjectLiquidation,
-    /// 37
-    #[cfg(feature = "devnet")]
-    CloseLendingAccount,
 }
 
 impl LendingInstruction {
@@ -255,8 +252,6 @@ impl LendingInstruction {
             35 => Self::InjectNoBorrow,
             #[cfg(feature = "devnet")]
             36 => Self::InjectLiquidation,
-            #[cfg(feature = "devnet")]
-            37 => Self::CloseLendingAccount,
             _ => {
                 msg!("Instruction cannot be unpacked");
                 return Err(LendingError::InstructionUnpackError.into());
@@ -538,8 +533,6 @@ impl LendingInstruction {
             Self::InjectNoBorrow => buf.push(35),
             #[cfg(feature = "devnet")]
             Self::InjectLiquidation => buf.push(36),
-            #[cfg(feature = "devnet")]
-            Self::CloseLendingAccount => buf.push(37),
         }
         buf
     }
@@ -1461,22 +1454,5 @@ pub fn inject_liquidation(
         program_id: id(),
         accounts: vec![AccountMeta::new(user_obligation_key, false)],
         data: LendingInstruction::InjectLiquidation.pack(),
-    }
-}
-
-#[cfg(feature = "devnet")]
-pub fn close_lending_account(
-    source_account_key: Pubkey,
-    manager_key: Pubkey,
-    authority_info: Pubkey,
-) -> Instruction {
-    Instruction {
-        program_id: id(),
-        accounts: vec![
-            AccountMeta::new(source_account_key, false),
-            AccountMeta::new_readonly(manager_key, false),
-            AccountMeta::new(authority_info, true),
-        ],
-        data: LendingInstruction::CloseLendingAccount.pack(),
     }
 }

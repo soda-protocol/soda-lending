@@ -1,9 +1,11 @@
 #![allow(missing_docs)]
 mod pyth;
 mod chainlink;
+mod switchboard;
 
 pub use pyth::*;
 pub use chainlink::*;
+pub use switchboard::*;
 
 use crate::{math::Decimal, state::Param};
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -20,6 +22,8 @@ pub enum OracleType {
     Pyth,
     ///
     ChainLink,
+    ///
+    Switchboard,
 }
 
 impl From<u8> for OracleType {
@@ -62,6 +66,7 @@ impl OracleInfo {
         self.price = match self.config.oracle_type {
             OracleType::Pyth => get_pyth_price(data, clock)?,
             OracleType::ChainLink => get_chainlink_price(data, clock)?,
+            OracleType::Switchboard => get_switchboard_price(data, clock)?,
         };
 
         Ok(())

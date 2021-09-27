@@ -207,11 +207,6 @@ pub fn process_instruction(
             msg!("Instruction(Test): Inject Liquidation Reached");
             process_inject_case::<B1>(program_id, accounts)
         }
-        #[cfg(feature = "devnet")]
-        LendingInstruction::CloseLendingAccount => {
-            msg!("Instruction(Test): Close Lending Account");
-            process_close_lending_account(program_id, accounts)
-        }
     }
 }
 
@@ -225,7 +220,7 @@ fn process_init_manager(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("manager provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     assert_rent_exempt(rent, manager_info)?;
@@ -234,7 +229,7 @@ fn process_init_manager(
     let authority_info = next_account_info(account_info_iter)?;
     if !authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     
     let manager = Manager::new(
@@ -267,7 +262,7 @@ fn process_init_market_reserve(
     // 3
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -286,7 +281,7 @@ fn process_init_market_reserve(
     // 6
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("MarketReserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     assert_rent_exempt(rent, market_reserve_info)?;
@@ -304,7 +299,7 @@ fn process_init_market_reserve(
     }
     if !authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     // 10
     let token_program_info = next_account_info(account_info_iter)?;
@@ -362,12 +357,13 @@ fn process_refresh_market_reserves(
             let price_oracle_info = &accounts_info[1];
         
             if market_reserve_info.owner != program_id {
-                msg!("MarketReserve owner provided is not owned by the lending program");
+                msg!("Market reserve provided is not owned by the lending program");
                 return Err(LendingError::InvalidAccountOwner.into());
             }
             let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
         
             if price_oracle_info.key != &market_reserve.oracle_info.config.oracle {
+                msg!("Oracle of market reserve is not matched with oracle provided");
                 return Err(LendingError::InvalidPriceOracle.into());
             }
         
@@ -401,7 +397,7 @@ fn process_deposit_or_withdraw<IsDeposit: Bit>(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -419,23 +415,25 @@ fn process_deposit_or_withdraw<IsDeposit: Bit>(
     // 4
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("MarketReserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
-        return Err(LendingError::InvalidMarketReserve.into())
+        msg!("Manager of market reserve is not matched with manager provided");
+        return Err(LendingError::InvalidMarketReserve.into());
     }
     // 5
     let sotoken_mint_info = next_account_info(account_info_iter)?;
     if sotoken_mint_info.key != &market_reserve.collateral_info.sotoken_mint_pubkey {
+        msg!("Sotoken mint of market reserve is not matched with sotoken mint acount provided");
         return Err(LendingError::InvalidSoTokenMint.into())
     }
     // 6
     let supply_token_account_info = next_account_info(account_info_iter)?;
     if supply_token_account_info.key != &market_reserve.token_config.supply_account {
-        msg!("Supply token account provided is not matched with market reserve provided");
-        return Err(LendingError::InvalidTokenAccount.into()); 
+        msg!("Supply token account in market reserve is not matched with supply token account provided");
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 7
     let user_authority_info = next_account_info(account_info_iter)?;
@@ -516,14 +514,14 @@ fn process_init_user_obligation(
     // 3
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     Manager::unpack(&manager_info.try_borrow_data()?)?;
     // 4
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("UserObligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     assert_rent_exempt(rent, user_obligation_info)?;
@@ -532,7 +530,7 @@ fn process_init_user_obligation(
     let authority_info = next_account_info(account_info_iter)?;
     if !authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
 
     let user_obligation = UserObligation::new(
@@ -554,7 +552,7 @@ fn process_refresh_user_obligation(
     // 2
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -563,7 +561,7 @@ fn process_refresh_user_obligation(
     let reserves_vec = account_info_iter
         .map(|market_reserve_info| {
             if market_reserve_info.owner != program_id {
-                msg!("Market reserve owner provided is not owned by the lending program");
+                msg!("Market reserve provided is not owned by the lending program");
                 return Err(LendingError::InvalidAccountOwner.into());
             }
 
@@ -596,41 +594,45 @@ fn process_bind_friend(
     // 1
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
     // 2
     let friend_obligation_info = next_account_info(account_info_iter)?;
     if friend_obligation_info.owner != program_id {
-        msg!("Friend Obligation owner provided is not owned by the lending program");
+        msg!("Friend obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
 
     if user_obligation_info.key == friend_obligation_info.key {
+        msg!("User obligation provided is not matched with friend obligation provided");
         return Err(LendingError::ObligationInvalidFriend.into())
     }
     if user_obligation.manager != friend_obligation.manager {
+        msg!("Manager of user obligation is not matched with manager of friend obligation");
         return Err(LendingError::ObligationInvalidFriend.into());
     }
     // 3
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
+        msg!("User authority provided is not matched with user obligation owner");
         return Err(LendingError::InvalidAuthority.into());
     }
     if !user_authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     // 4
     let friend_authority_info = next_account_info(account_info_iter)?;
     if friend_authority_info.key != &friend_obligation.owner {
+        msg!("Friend authority provided is not matched with friend obligation owner");
         return Err(LendingError::InvalidAuthority.into());
     }
     if !friend_authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
 
     user_obligation.bind_friend(*friend_obligation_info.key)?;
@@ -652,7 +654,7 @@ fn process_unbind_friend(
     // 2
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -662,7 +664,7 @@ fn process_unbind_friend(
     // 3
     let friend_obligation_info = next_account_info(account_info_iter)?;
     if friend_obligation_info.owner != program_id {
-        msg!("Friend Obligation owner provided is not owned by the lending program");
+        msg!("Friend obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
@@ -670,25 +672,28 @@ fn process_unbind_friend(
         return Err(LendingError::ObligationStale.into());
     }
     if user_obligation.manager != friend_obligation.manager {
+        msg!("Manager of user obligation is not matched with manager of friend obligation");
         return Err(LendingError::ObligationInvalidFriend.into());
     }
     // 4
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
+        msg!("User authority provided is not matched with user obligation owner");
         return Err(LendingError::InvalidAuthority.into());
     }
     if !user_authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     // 5
     let friend_authority_info = next_account_info(account_info_iter)?;
     if friend_authority_info.key != &friend_obligation.owner {
+        msg!("Friend authority provided is not matched with friend obligation owner");
         return Err(LendingError::InvalidAuthority.into());
     }
     if !friend_authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
 
     // unbind
@@ -715,19 +720,20 @@ fn process_pledge_collateral(
     // 1
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("Market reserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     // 2
     let sotoken_mint_info = next_account_info(account_info_iter)?;
     if sotoken_mint_info.key != &market_reserve.collateral_info.sotoken_mint_pubkey {
+        msg!("Sotoken mint of market reserve is not matched with sotoken mint acount provided");
         return Err(LendingError::InvalidSoTokenMint.into()); 
     }
     // 3
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -738,6 +744,7 @@ fn process_pledge_collateral(
     // 4
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
+        msg!("User authority provided is not matched with user obligation owner");
         return Err(LendingError::InvalidAuthority.into());
     }
     // 5
@@ -785,20 +792,20 @@ fn process_deposit_and_pledge(
     // 2
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("Market reserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     // 3
     let supply_token_account_info = next_account_info(account_info_iter)?;
     if supply_token_account_info.key != &market_reserve.token_config.supply_account {
-        msg!("Supply token account provided is not matched with market reserve provided");
-        return Err(LendingError::InvalidTokenAccount.into()); 
+        msg!("Supply token account in market reserve is not matched with supply token account provided");
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 4
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -809,6 +816,7 @@ fn process_deposit_and_pledge(
     // 5
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
+        msg!("User authority provided is not matched with user obligation owner");
         return Err(LendingError::InvalidAuthority.into());
     }
     // 6
@@ -863,7 +871,7 @@ fn process_redeem_collateral(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -881,12 +889,12 @@ fn process_redeem_collateral(
     // 4
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("Market reserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
-        msg!("Market reserve manager provided is not matched with manager info");
+        msg!("Manager of market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     if market_reserve.last_update.is_lax_stale(clock.slot)? {
@@ -895,12 +903,13 @@ fn process_redeem_collateral(
     // 5
     let sotoken_mint_info = next_account_info(account_info_iter)?;
     if sotoken_mint_info.key != &market_reserve.collateral_info.sotoken_mint_pubkey {
+        msg!("Sotoken mint of market reserve is not matched with sotoken mint acount provided");
         return Err(LendingError::InvalidSoTokenMint.into());
     }
     // 6
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -915,6 +924,7 @@ fn process_redeem_collateral(
         // 7
         let friend_obligation_info = next_account_info(account_info_iter)?;
         if friend_obligation_info.key != friend {
+            msg!("Friend obligation provided is not matched with friend in user obligation");
             return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
@@ -929,11 +939,12 @@ fn process_redeem_collateral(
     // 7/8
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
+        msg!("User authority provided is not matched with user obligation owner");
         return Err(LendingError::InvalidAuthority.into());
     }
     if !user_authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     // 8/9
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
@@ -976,7 +987,7 @@ fn process_redeem_and_withdraw<WithLoan: Bit>(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -994,12 +1005,12 @@ fn process_redeem_and_withdraw<WithLoan: Bit>(
     // 4
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("Market reserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
-        msg!("Market reserve manager provided is not matched with manager info");
+        msg!("Manager of market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     if WithLoan::BOOL && market_reserve.last_update.is_lax_stale(clock.slot)? {
@@ -1008,13 +1019,13 @@ fn process_redeem_and_withdraw<WithLoan: Bit>(
     // 5
     let supply_token_account_info = next_account_info(account_info_iter)?;
     if supply_token_account_info.key != &market_reserve.token_config.supply_account {
-        msg!("Supply token account provided is not matched with market reserve provided");
-        return Err(LendingError::InvalidTokenAccount.into()); 
+        msg!("Supply token account in market reserve is not matched with supply token account provided");
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 6
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -1029,6 +1040,7 @@ fn process_redeem_and_withdraw<WithLoan: Bit>(
         // 7
         let friend_obligation_info = next_account_info(account_info_iter)?;
         if friend_obligation_info.key != friend {
+            msg!("Friend obligation provided is not matched with friend in user obligation");
             return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
@@ -1043,11 +1055,12 @@ fn process_redeem_and_withdraw<WithLoan: Bit>(
     // 7/8
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
+        msg!("User authority provided is not matched with user obligation owner");
         return Err(LendingError::InvalidAuthority.into());
     }
     if !user_authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     // 8/9
     let user_token_account_info = next_account_info(account_info_iter)?;
@@ -1095,7 +1108,7 @@ fn process_redeem_collateral_without_loan(
     // 1
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -1113,23 +1126,24 @@ fn process_redeem_collateral_without_loan(
     // 3
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("Market reserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
-        msg!("Market reserve manager provided is not matched with manager info");
+        msg!("Manager of market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     // 4
     let sotoken_mint_info = next_account_info(account_info_iter)?;
     if sotoken_mint_info.key != &market_reserve.collateral_info.sotoken_mint_pubkey {
+        msg!("Sotoken mint of market reserve is not matched with sotoken mint acount provided");
         return Err(LendingError::InvalidSoTokenMint.into());
     }
     // 5
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -1141,6 +1155,7 @@ fn process_redeem_collateral_without_loan(
         // 6
         let friend_obligation_info = next_account_info(account_info_iter)?;
         if friend_obligation_info.key != friend {
+            msg!("Friend obligation provided is not matched with friend in user obligation");
             return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
@@ -1152,11 +1167,12 @@ fn process_redeem_collateral_without_loan(
     // 6/7
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
+        msg!("User authority provided is not matched with user obligation owner");
         return Err(LendingError::InvalidAuthority.into());
     }
     if !user_authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     // 7/8
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
@@ -1199,7 +1215,7 @@ fn process_replace_collateral(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -1217,12 +1233,12 @@ fn process_replace_collateral(
     // 4
     let out_market_reserve_info = next_account_info(account_info_iter)?;
     if out_market_reserve_info.owner != program_id {
-        msg!("Out market reserve owner provided is not owned by the lending program");
+        msg!("Out market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let out_market_reserve = MarketReserve::unpack(&out_market_reserve_info.try_borrow_data()?)?;
     if &out_market_reserve.manager != manager_info.key {
-        msg!("Out market reserve manager provided is not matched with manager info");
+        msg!("Manager of out market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     if out_market_reserve.last_update.is_lax_stale(clock.slot)? {
@@ -1231,17 +1247,18 @@ fn process_replace_collateral(
     // 5
     let out_sotoken_mint_info = next_account_info(account_info_iter)?;
     if out_sotoken_mint_info.key != &out_market_reserve.collateral_info.sotoken_mint_pubkey {
+        msg!("Sotoken mint of out market reserve is not matched with out sotoken mint acount provided");
         return Err(LendingError::InvalidSoTokenMint.into());
     }
     // 6
     let in_market_reserve_info = next_account_info(account_info_iter)?;
     if in_market_reserve_info.owner != program_id {
-        msg!("In market reserve owner provided is not owned by the lending program");
+        msg!("In market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let in_market_reserve = MarketReserve::unpack(&in_market_reserve_info.try_borrow_data()?)?;
     if &in_market_reserve.manager != manager_info.key {
-        msg!("In market reserve manager provided is not matched with manager info");
+        msg!("Manager of in market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     if in_market_reserve.last_update.is_lax_stale(clock.slot)? {
@@ -1250,12 +1267,13 @@ fn process_replace_collateral(
     // 7
     let in_sotoken_mint_info = next_account_info(account_info_iter)?;
     if in_sotoken_mint_info.key != &in_market_reserve.collateral_info.sotoken_mint_pubkey {
+        msg!("Sotoken mint of in market reserve is not matched with in sotoken mint acount provided");
         return Err(LendingError::InvalidSoTokenMint.into());
     }
     // 8
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -1270,6 +1288,7 @@ fn process_replace_collateral(
         // 9
         let friend_obligation_info = next_account_info(account_info_iter)?;
         if friend_obligation_info.key != friend {
+            msg!("Friend obligation provided is not matched with friend in user obligation");
             return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
@@ -1284,11 +1303,12 @@ fn process_replace_collateral(
     // 9/10
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
+        msg!("User authority provided is not matched with user obligation owner");
         return Err(LendingError::InvalidAuthority.into());
     }
     if !user_authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     // 10/11
     let user_out_sotoken_account_info = next_account_info(account_info_iter)?;
@@ -1355,7 +1375,7 @@ fn process_borrow_liquidity(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -1373,12 +1393,12 @@ fn process_borrow_liquidity(
     // 4
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("Market reserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
-        msg!("MarketReserve manager provided is not matched with manager info");
+        msg!("Manager of market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     if market_reserve.last_update.is_lax_stale(clock.slot)? {
@@ -1387,13 +1407,13 @@ fn process_borrow_liquidity(
     // 5
     let supply_token_account_info = next_account_info(account_info_iter)?;
     if supply_token_account_info.key != &market_reserve.token_config.supply_account {
-        msg!("Supply token account provided is not matched with market reserve provided");
-        return Err(LendingError::InvalidTokenAccount.into()); 
+        msg!("Supply token account in market reserve is not matched with supply token account provided");
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 6
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -1408,6 +1428,7 @@ fn process_borrow_liquidity(
         // 7
         let friend_obligation_info = next_account_info(account_info_iter)?;
         if friend_obligation_info.key != friend {
+            msg!("Friend obligation provided is not matched with friend in user obligation");
             return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
@@ -1422,11 +1443,12 @@ fn process_borrow_liquidity(
     // 7/8
     let user_authority_info = next_account_info(account_info_iter)?;
     if user_authority_info.key != &user_obligation.owner {
+        msg!("User authority provided is not matched with user obligation owner");
         return Err(LendingError::InvalidAuthority.into());
     }
     if !user_authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     // 8/9
     let user_token_account_info = next_account_info(account_info_iter)?;
@@ -1486,20 +1508,20 @@ fn process_repay_loan(
     // 2
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("Market reserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     // 3
     let supply_token_account_info = next_account_info(account_info_iter)?;
     if supply_token_account_info.key != &market_reserve.token_config.supply_account {
-        msg!("Supply token account provided is not matched with market reserve provided");
-        return Err(LendingError::InvalidTokenAccount.into()); 
+        msg!("Supply token account in market reserve is not matched with supply token account provided");
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 4
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -1558,7 +1580,7 @@ fn process_liquidate<IsCollateral: Bit>(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -1576,12 +1598,12 @@ fn process_liquidate<IsCollateral: Bit>(
     // 4
     let collateral_market_reserve_info = next_account_info(account_info_iter)?;
     if collateral_market_reserve_info.owner != program_id {
-        msg!("Collateral market reserve owner provided is not owned by the lending program");
+        msg!("Collateral market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let collateral_market_reserve = MarketReserve::unpack(&collateral_market_reserve_info.try_borrow_data()?)?;
     if &collateral_market_reserve.manager != manager_info.key {
-        msg!("Collateral market reserve manager provided is not matched with manager info");
+        msg!("Manager of collateral market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     if collateral_market_reserve.last_update.is_lax_stale(clock.slot)? {
@@ -1590,17 +1612,18 @@ fn process_liquidate<IsCollateral: Bit>(
     // 5
     let sotoken_mint_info = next_account_info(account_info_iter)?;
     if sotoken_mint_info.key != &collateral_market_reserve.collateral_info.sotoken_mint_pubkey {
+        msg!("Sotoken mint of collateral market reserve is not matched with sotoken mint acount provided");
         return Err(LendingError::InvalidSoTokenMint.into());
     }
     // 6
     let loan_market_reserve_info = next_account_info(account_info_iter)?;
     if loan_market_reserve_info.owner != program_id {
-        msg!("Loan market reserve owner provided is not owned by the lending program");
+        msg!("Loan market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut loan_market_reserve = MarketReserve::unpack(&loan_market_reserve_info.try_borrow_data()?)?;
     if &loan_market_reserve.manager != manager_info.key {
-        msg!("Loan market reserve manager provided is not matched with manager info");
+        msg!("Manager of loan market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     if loan_market_reserve.last_update.is_lax_stale(clock.slot)? {
@@ -1609,13 +1632,13 @@ fn process_liquidate<IsCollateral: Bit>(
     // 7
     let supply_token_account_info = next_account_info(account_info_iter)?;
     if supply_token_account_info.key != &loan_market_reserve.token_config.supply_account {
-        msg!("Supply token account provided is not matched with market reserve provided");
-        return Err(LendingError::InvalidTokenAccount.into()); 
+        msg!("Supply token account in loan market reserve is not matched with supply token account provided");
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 8
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -1630,6 +1653,7 @@ fn process_liquidate<IsCollateral: Bit>(
         // 9
         let friend_obligation_info = next_account_info(account_info_iter)?;
         if friend_obligation_info.key != friend {
+            msg!("Friend obligation provided is not matched with friend in user obligation");
             return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
@@ -1711,7 +1735,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -1729,12 +1753,12 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     // 4
     let collateral_market_reserve_info = next_account_info(account_info_iter)?;
     if collateral_market_reserve_info.owner != program_id {
-        msg!("Collateral market reserve owner provided is not owned by the lending program");
+        msg!("Collateral market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut collateral_market_reserve = MarketReserve::unpack(&collateral_market_reserve_info.try_borrow_data()?)?;
     if &collateral_market_reserve.manager != manager_info.key {
-        msg!("Collateral market reserve manager provided is not matched with manager info");
+        msg!("Manager of collateral market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     if collateral_market_reserve.last_update.is_lax_stale(clock.slot)? {
@@ -1743,18 +1767,18 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     // 5
     let collateral_supply_account_info = next_account_info(account_info_iter)?;
     if collateral_supply_account_info.key != &collateral_market_reserve.token_config.supply_account {
-        msg!("Collateral supply token account provided is not matched with market reserve provided");
-        return Err(LendingError::InvalidTokenAccount.into()); 
+        msg!("Supply token account in collateral market reserve is not matched with supply token account provided");
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 6
     let loan_market_reserve_info = next_account_info(account_info_iter)?;
     if loan_market_reserve_info.owner != program_id {
-        msg!("Loan market reserve owner provided is not owned by the lending program");
+        msg!("Loan market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut loan_market_reserve = MarketReserve::unpack(&loan_market_reserve_info.try_borrow_data()?)?;
     if &loan_market_reserve.manager != manager_info.key {
-        msg!("Loan market reserve manager provided is not matched with manager info");
+        msg!("Manager of loan market reserve is not matched with manager account provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     if loan_market_reserve.last_update.is_lax_stale(clock.slot)? {
@@ -1763,13 +1787,13 @@ fn process_flash_liquidation<IsCollateral: Bit>(
     // 7
     let loan_supply_account_info = next_account_info(account_info_iter)?;
     if loan_supply_account_info.key != &loan_market_reserve.token_config.supply_account {
-        msg!("Loan supply token account provided is not matched with market reserve provided");
-        return Err(LendingError::InvalidTokenAccount.into()); 
+        msg!("Supply token account in loan market reserve is not matched with supply token account provided");
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 8
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -1784,6 +1808,7 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         // 9
         let friend_obligation_info = next_account_info(account_info_iter)?;
         if friend_obligation_info.key != friend {
+            msg!("Friend obligation provided is not matched with friend in user obligation");
             return Err(LendingError::ObligationInvalidFriend.into());
         }
         let friend_obligation = UserObligation::unpack(&friend_obligation_info.try_borrow_data()?)?;
@@ -1917,7 +1942,7 @@ fn process_flash_loan(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -1935,19 +1960,19 @@ fn process_flash_loan(
     // 4
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("Market reserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
-        msg!("Market reserve manager provided is not matched with manager info");
+        msg!("Manager of market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     // 5
     let supply_token_account_info = next_account_info(account_info_iter)?;
     if supply_token_account_info.key != &market_reserve.token_config.supply_account {
-        msg!("Supply token account provided is not matched with market reserve provided");
-        return Err(LendingError::InvalidTokenAccount.into()); 
+        msg!("Supply token account in market reserve is not matched with supply token account provided");
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 6
     let receiver_authority_info = next_account_info(account_info_iter)?;
@@ -2050,7 +2075,7 @@ fn process_init_unique_credit(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -2068,17 +2093,18 @@ fn process_init_unique_credit(
     // 4
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("MarketReserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
+        msg!("Manager of market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into())
     }
     // 5
     let unique_credit_info = next_account_info(account_info_iter)?;
     if unique_credit_info.owner != program_id {
-        msg!("UniqueCredit owner provided is not owned by the lending program");
+        msg!("Unique credit provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     assert_rent_exempt(rent, unique_credit_info)?;
@@ -2091,7 +2117,7 @@ fn process_init_unique_credit(
     }
     if !authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
 
     let unique_credit = UniqueCredit::new(
@@ -2116,7 +2142,7 @@ fn process_borrow_liquidity_by_unique_credit(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -2134,38 +2160,40 @@ fn process_borrow_liquidity_by_unique_credit(
     // 4
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("Market reserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
-        msg!("MarketReserve manager provided is not matched with manager info");
+        msg!("Manager of market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     // 5
     let supply_token_account_info = next_account_info(account_info_iter)?;
     if supply_token_account_info.key != &market_reserve.token_config.supply_account {
-        msg!("Supply token account provided is not matched with market reserve provided");
-        return Err(LendingError::InvalidTokenAccount.into()); 
+        msg!("Supply token account in market reserve is not matched with supply token account provided");
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 6
     let unique_credit_info = next_account_info(account_info_iter)?;
     if unique_credit_info.owner != program_id {
-        msg!("UniqueCredit owner provided is not owned by the lending program");
+        msg!("Unique credit provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut unique_credit = UniqueCredit::unpack(&unique_credit_info.try_borrow_data()?)?;
     if &unique_credit.reserve != market_reserve_info.key {
-        return Err(LendingError::InvalidMarketReserve.into());
+        msg!("Reserve of unique credit is not matched with market reserve provided");
+        return Err(LendingError::InvalidUniqueCredit.into());
     }
     // 7
     let authority_info = next_account_info(account_info_iter)?;
     if authority_info.key != &unique_credit.owner {
+        msg!("Only manager owner can create unique credit");
         return Err(LendingError::InvalidAuthority.into());
     }
     if !authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     // 8
     let token_program_info = next_account_info(account_info_iter)?;
@@ -2206,7 +2234,7 @@ fn process_repay_loan_by_unique_credit(
     // 2
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -2224,36 +2252,37 @@ fn process_repay_loan_by_unique_credit(
     // 4
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("Market reserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
-        msg!("MarketReserve manager provided is not matched with manager info");
+        msg!("Manager of market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     // 5
     let supply_token_account_info = next_account_info(account_info_iter)?;
     if supply_token_account_info.key != &market_reserve.token_config.supply_account {
-        msg!("Supply token account provided is not matched with market reserve provided");
-        return Err(LendingError::InvalidTokenAccount.into()); 
+        msg!("Supply account in market reserve is not matched with supply token account provided");
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 6
     let unique_credit_info = next_account_info(account_info_iter)?;
     if unique_credit_info.owner != program_id {
-        msg!("UniqueCredit owner provided is not owned by the lending program");
+        msg!("Unique credit provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut unique_credit = UniqueCredit::unpack(&unique_credit_info.try_borrow_data()?)?;
     if &unique_credit.reserve != market_reserve_info.key {
-        return Err(LendingError::InvalidMarketReserve.into());
+        msg!("Reserve of unique credit is not matched with market reserve provided");
+        return Err(LendingError::InvalidUniqueCredit.into());
     }
     // 7
     let source_token_account_info = next_account_info(account_info_iter)?;
     let source_token_account = Account::unpack(&source_token_account_info.try_borrow_data()?)?;
     if &source_token_account.owner == manager_authority_info.key {
-        msg!("Source token account owner should not equal to manager authority");
-        return Err(LendingError::InvalidTokenAccount.into()); 
+        msg!("Source token account owner should not be manager authority");
+        return Err(LendingError::InvalidTokenAccountOwner.into()); 
     }
     let source_token_account = Account::unpack(&source_token_account_info.try_borrow_data()?)?;
     // 8
@@ -2299,7 +2328,7 @@ fn process_operate_user_obligation<P: Any + Param>(
     // 2
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -2315,7 +2344,7 @@ fn process_operate_user_obligation<P: Any + Param>(
     }
     if !authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
 
     user_obligation.operate(param)?;
@@ -2333,19 +2362,19 @@ fn process_operate_market_reserve<P: Any + Param>(
     // 1
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
     // 2
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("MarketReserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
-        msg!("MarketReserve manager provided is not matched with manager info");
+        msg!("Manager of market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     // 3
@@ -2356,7 +2385,7 @@ fn process_operate_market_reserve<P: Any + Param>(
     }
     if !authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
 
     market_reserve.operate(param)?;
@@ -2375,7 +2404,7 @@ fn process_reduce_insurance(
     // 1
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
@@ -2393,19 +2422,19 @@ fn process_reduce_insurance(
     // 3
     let market_reserve_info = next_account_info(account_info_iter)?;
     if market_reserve_info.owner != program_id {
-        msg!("MarketReserve owner provided is not owned by the lending program");
+        msg!("Market reserve provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut market_reserve = MarketReserve::unpack(&market_reserve_info.try_borrow_data()?)?;
     if &market_reserve.manager != manager_info.key {
-        msg!("MarketReserve manager provided is not matched with manager info");
+        msg!("Manager of market reserve is not matched with manager provided");
         return Err(LendingError::InvalidMarketReserve.into());
     }
     // 4
     let supply_token_account_info = next_account_info(account_info_iter)?;
     if supply_token_account_info.key != &market_reserve.token_config.supply_account {
-        msg!("Supply token account provided is not matched with market reserve provided");
-        return Err(LendingError::InvalidTokenAccount.into()); 
+        msg!("Supply account in market reserve is not matched with supply token account provided");
+        return Err(LendingError::InvalidSupplyTokenAccount.into()); 
     }
     // 5
     let authority_info = next_account_info(account_info_iter)?;
@@ -2415,7 +2444,7 @@ fn process_reduce_insurance(
     }
     if !authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
     // 6
     let receiver_token_account_info = next_account_info(account_info_iter)?;
@@ -2448,14 +2477,14 @@ fn process_update_unique_credit_limit(
     // 1
     let manager_info = next_account_info(account_info_iter)?;
     if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
+        msg!("Manager provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
     // 2
     let unique_credit_info = next_account_info(account_info_iter)?;
     if unique_credit_info.owner != program_id {
-        msg!("UniqueCredit owner provided is not owned by the lending program");
+        msg!("Unique credit provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut unique_credit = UniqueCredit::unpack(&unique_credit_info.try_borrow_data()?)?;
@@ -2470,7 +2499,7 @@ fn process_update_unique_credit_limit(
     }
     if !authority_info.is_signer {
         msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
+        return Err(LendingError::InvalidAuthority.into());
     }
 
     // update borrow limit
@@ -2487,7 +2516,7 @@ fn process_inject_case<B: Bit>(
     // 1
     let user_obligation_info = next_account_info(account_info_iter)?;
     if user_obligation_info.owner != program_id {
-        msg!("User Obligation owner provided is not owned by the lending program");
+        msg!("User obligation provided is not owned by the lending program");
         return Err(LendingError::InvalidAccountOwner.into());
     }
     let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
@@ -2505,44 +2534,6 @@ fn process_inject_case<B: Bit>(
     }
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
-}
-
-#[cfg(feature = "devnet")]
-fn process_close_lending_account(
-    program_id: &Pubkey,
-    accounts: &[AccountInfo],
-) -> ProgramResult {
-    let account_info_iter = &mut accounts.iter();
-    // 1
-    let source_account_info = next_account_info(account_info_iter)?;
-    if source_account_info.owner != program_id {
-        msg!("Source account owner provided is not owned by the lending program");
-        return Err(LendingError::InvalidAccountOwner.into());
-    }
-    // 2
-    let manager_info = next_account_info(account_info_iter)?;
-    if manager_info.owner != program_id {
-        msg!("Manager owner provided is not owned by the lending program");
-        return Err(LendingError::InvalidAccountOwner.into());
-    }
-    let manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
-    // 3
-    let authority_info = next_account_info(account_info_iter)?;
-    if authority_info.key != &manager.owner {
-        msg!("Only manager owner can update unique credit limit");
-        return Err(LendingError::InvalidAuthority.into());
-    }
-    if !authority_info.is_signer {
-        msg!("authority is not a signer");
-        return Err(LendingError::InvalidSigner.into());
-    }
-    let dest_starting_lamports = authority_info.lamports();
-    **authority_info.try_borrow_mut_lamports()? = dest_starting_lamports
-        .checked_add(source_account_info.lamports())
-        .ok_or(LendingError::MathOverflow)?;
-    **source_account_info.try_borrow_mut_lamports()? = 0;
-
-    Ok(())
 }
 
 #[inline(always)]
