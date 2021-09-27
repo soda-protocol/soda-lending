@@ -303,7 +303,7 @@ impl UserObligation {
 
             Ok(())
         } else {
-            Err(LendingError::ObligationAlreadyBindFriend.into())
+            Err(LendingError::AlreadyBindFriend.into())
         }
     }
     ///
