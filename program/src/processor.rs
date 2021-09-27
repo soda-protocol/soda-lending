@@ -825,9 +825,9 @@ fn process_deposit_and_pledge(
     let mint_amount = market_reserve.deposit(amount)?;
     // pledge in obligation
     let _ = if let Ok(index) = user_obligation.find_collateral(market_reserve_info.key) {
-        user_obligation.pledge(mint_amount, u64::MAX, index)?
+        user_obligation.pledge(mint_amount, mint_amount, index)?
     } else {
-        user_obligation.new_pledge(mint_amount, u64::MAX, *market_reserve_info.key, &market_reserve)?
+        user_obligation.new_pledge(mint_amount, mint_amount, *market_reserve_info.key, &market_reserve)?
     };
     user_obligation.last_update.mark_stale();
     // pack
