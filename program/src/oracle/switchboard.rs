@@ -12,7 +12,7 @@ pub fn get_switchboard_price(data: &[u8], clock: &Clock) -> Result<Decimal, Prog
     #[cfg(not(feature = "devnet"))]
     const STALE_AFTER_SLOTS_ELAPSED: u64 = 10;
     #[cfg(feature = "devnet")]
-    const STALE_AFTER_SLOTS_ELAPSED: u64 = 20;
+    const STALE_AFTER_SLOTS_ELAPSED: u64 = 40;
 
     let result = fast_parse_switchboard_result(data).result;
 
