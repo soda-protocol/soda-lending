@@ -256,7 +256,7 @@ impl UserObligation {
             (self.collaterals_borrow_value, self.loans_value)
         };
 
-        if collaterals_borrow_value > loans_value {
+        if collaterals_borrow_value >= loans_value {
             Ok(())
         } else {
             Err(LendingError::ObligationNotHealthy.into())
