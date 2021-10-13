@@ -649,3 +649,64 @@ impl Param for LiquidityControl {
         Ok(())
     }
 }
+
+// #[cfg(test)]
+// mod test {
+//     use super::*;
+//     use crate::math::{PERCENT_SCALER, WAD};
+//     use proptest::prelude::*;
+//     use std::cmp::Ordering;
+
+//     prop_compose! {
+//         fn create_market_reserve()(
+//             a in 0..MODULUS[0],
+//             b in 0..MODULUS[1],
+//             c in 0..MODULUS[2],
+//             d in 0..MODULUS[3],
+//         ) -> MarketReserve {
+//             let mut le_bytes = [0u8; 32];
+//             le_bytes[0..8].copy_from_slice(&a.to_le_bytes());
+//             le_bytes[8..16].copy_from_slice(&b.to_le_bytes());
+//             le_bytes[16..24].copy_from_slice(&c.to_le_bytes());
+//             le_bytes[24..32].copy_from_slice(&d.to_le_bytes());
+//             Fr::from_repr_vartime(le_bytes).expect("from_repr failed")
+//         }
+//     }
+
+//     #[test]
+//     fn liquidity_to_collateral_rate() {
+//         let slot = 0;
+
+//         let reserve = MarketReserve::new(
+//             slot,
+//             Default::default(),
+//             TokenConfig {
+//                 mint_pubkey: Default::default(),
+//                 supply_account: Default::default(),
+//                 decimal: 9,
+//             },
+//             OracleConfig {
+//                 oracle: Default::default(),
+//                 oracle_type: OracleType::Pyth,
+//             },
+//             LiquidityConfig {
+//                 close_ratio: 10,
+//                 borrow_tax_rate: 10,
+//                 flash_loan_fee_rate: 10,
+//                 max_deposit: 10000,
+//             },
+//             Default::default(),
+//             CollateralConfig {
+//                 borrow_value_ratio: 10,
+//                 liquidation_value_ratio: 10,
+//                 liquidation_penalty_ratio: 10,
+//             },
+//             RateModel {
+//                 a: (),
+//                 c: (),
+//                 l_u: (),
+//                 k_u: (),
+//             },
+//         );
+//     }
+// }

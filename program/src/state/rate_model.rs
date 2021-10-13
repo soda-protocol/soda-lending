@@ -29,6 +29,11 @@ impl Param for RateModel {
 }
 
 impl RateModel {
+    // *********************************************************
+    //      / u * a + c                           | if u <= l_u
+    // rate 
+    //      \ [l_u * a + (u - l_u) * a * k_u] + c | if u > l_u
+    // *********************************************************
     pub fn calculate_borrow_rate(&self, utilization: Rate) -> Result<Rate, ProgramError> {
         let utilization_threshold = Rate::from_percent(self.l_u);
         let a = Rate::from_scaled_val(self.a);
@@ -52,3 +57,27 @@ impl RateModel {
         borrow_rate_per_year.try_div(SLOTS_PER_YEAR)
     }
 }
+
+// #[cfg(test)]
+// mod test {
+//     use super::*;
+//     use crate::math::{PERCENT_SCALER, WAD};
+//     use proptest::prelude::*;
+//     use std::cmp::Ordering;
+
+//     prop_compose! {
+//         fn create_rate_model()(
+//             a in [WAD, WAD / 2, ],
+//             c in [0, WAD / 2, WAD, WAD * 3 / 2],
+//             l_u in 1..100,
+//             k_u in [],
+//         ) -> MarketReserve {
+//             let mut le_bytes = [0u8; 32];
+//             le_bytes[0..8].copy_from_slice(&a.to_le_bytes());
+//             le_bytes[8..16].copy_from_slice(&b.to_le_bytes());
+//             le_bytes[16..24].copy_from_slice(&c.to_le_bytes());
+//             le_bytes[24..32].copy_from_slice(&d.to_le_bytes());
+//             Fr::from_repr_vartime(le_bytes).expect("from_repr failed")
+//         }
+//     }
+// }

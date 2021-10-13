@@ -639,6 +639,9 @@ impl UserObligation {
             if repay_amount_decimal > max_repay_amount_decimal {
                 return Err(LendingError::LiquidationRepayTooMuch.into());
             }
+            if repay_amount == 0 {
+                return Err(LendingError::LiquidationRepayTooSmall.into());
+            }
 
             // update loans
             self.loans[loan_index].borrowed_amount_wads = self.loans[loan_index].borrowed_amount_wads.try_sub(repay_amount_decimal)?;
