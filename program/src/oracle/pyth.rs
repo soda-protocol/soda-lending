@@ -115,7 +115,7 @@ pub fn get_pyth_price(data: &[u8], clock: &Clock) -> Result<Decimal, ProgramErro
     #[cfg(not(feature = "devnet"))]
     const STALE_AFTER_SLOTS_ELAPSED: u64 = 10;
     #[cfg(feature = "devnet")]
-    const STALE_AFTER_SLOTS_ELAPSED: u64 = 20;
+    const STALE_AFTER_SLOTS_ELAPSED: u64 = 1000;
 
     let pyth_price = load::<Price>(data).map_err(|_| ProgramError::InvalidAccountData)?;
     if pyth_price.ptype != PriceType::Price {

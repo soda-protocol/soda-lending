@@ -84,7 +84,7 @@ pub fn get_chainlink_price(data: &[u8], clock: &Clock) -> Result<Decimal, Progra
     #[cfg(not(feature = "devnet"))]
     const STALE_AFTER_SECS_ELAPSED: i64 = 4;
     #[cfg(feature = "devnet")]
-    const STALE_AFTER_SECS_ELAPSED: i64 = 8;
+    const STALE_AFTER_SECS_ELAPSED: i64 = 1000;
 
     let aggregator = try_from_slice_unchecked::<Aggregator>(&data[..4096])?;
     if !aggregator.is_initialized() {
