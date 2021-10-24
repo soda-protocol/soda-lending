@@ -171,10 +171,6 @@ pub enum LendingError {
     /// Token approve failed
     #[error("Token revoke failed")]
     TokenRevokeFailed,
-    ///
-    #[cfg(feature = "devnet")]
-    #[error("Undefined case injection")]
-    UndefinedCaseInjection,
 }
 
 impl From<LendingError> for ProgramError {

@@ -28,8 +28,6 @@ use solana_program::{
 };
 use spl_token::{state::{Mint, Account}, native_mint};
 use typenum::{Bit, True, False};
-#[cfg(feature = "devnet")]
-use typenum::{B0, B1};
 
 /// Processes an instruction
 pub fn process_instruction(
@@ -196,16 +194,6 @@ pub fn process_instruction(
         LendingInstruction::UpdateUniqueCreditLimit(amount) => {
             msg!("Instruction: Update Unique Credit Limit: amount = {}", amount);
             process_update_unique_credit_limit(program_id, accounts, amount)
-        }
-        #[cfg(feature = "devnet")]
-        LendingInstruction::InjectNoBorrow => {
-            msg!("Instruction(Test): Inject No Borrow");
-            process_inject_case::<B0>(program_id, accounts)
-        }
-        #[cfg(feature = "devnet")]
-        LendingInstruction::InjectLiquidation => {
-            msg!("Instruction(Test): Inject Liquidation Reached");
-            process_inject_case::<B1>(program_id, accounts)
         }
     }
 }
@@ -1843,11 +1831,12 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         friend_obligation,
     )?;
     user_obligation.last_update.mark_stale();
+    // accure interest
+    loan_market_reserve.accrue_interest(clock.slot)?;
+    loan_market_reserve.last_update.update_slot(clock.slot, true);
     // liquidator flash borrow repaying-loan from reserve
     let (flash_loan_total_repay, flash_loan_fee) = loan_market_reserve.liquidity_info.flash_loan_borrow_out(settle.amount)?;
     // liquidation repay in loan reserve
-    loan_market_reserve.accrue_interest(clock.slot)?;
-    loan_market_reserve.last_update.update_slot(clock.slot, true);
     loan_market_reserve.liquidity_info.repay(&settle)?;
     // liquidator got sotoken and withdraw immediately
     // remark: token mint + token burn are all omitted here!
@@ -1910,6 +1899,13 @@ fn process_flash_liquidation<IsCollateral: Bit>(
         },
         &flash_loan_instruction_account_infos,
     )?;
+
+    spl_token_revoke(TokenRevokeParams {
+        source: collateral_supply_account_info.clone(),
+        authority: manager_authority_info.clone(),
+        authority_signer_seeds,
+        token_program: token_program_id.clone(),
+    })?;
 
     // check loan balance after balance
     let loan_balance_after = Account::unpack(&loan_supply_account_info.try_borrow_data()?)?.amount;
@@ -2136,6 +2132,11 @@ fn process_borrow_liquidity_by_unique_credit(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
+    if amount == 0 {
+        msg!("Liquidity amount provided cannot be zero");
+        return Err(LendingError::InvalidAmount.into());
+    }
+
     let account_info_iter = &mut accounts.iter();
     // 1
     let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
@@ -2228,6 +2229,11 @@ fn process_repay_loan_by_unique_credit(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
+    if amount == 0 {
+        msg!("Liquidity amount provided cannot be zero");
+        return Err(LendingError::InvalidAmount.into());
+    }
+
     let account_info_iter = &mut accounts.iter();
     // 1
     let clock = &Clock::from_account_info(next_account_info(account_info_iter)?)?;
@@ -2400,6 +2406,11 @@ fn process_reduce_insurance(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
+    if amount == 0 {
+        msg!("Reduce insurance amount provided cannot be zero");
+        return Err(LendingError::InvalidAmount.into());
+    }
+
     let account_info_iter = &mut accounts.iter();
     // 1
     let manager_info = next_account_info(account_info_iter)?;
@@ -2505,35 +2516,6 @@ fn process_update_unique_credit_limit(
     // update borrow limit
     unique_credit.borrow_limit = amount;
     UniqueCredit::pack(unique_credit, &mut unique_credit_info.try_borrow_mut_data()?)
-}
-
-#[cfg(feature = "devnet")]
-fn process_inject_case<B: Bit>(
-    program_id: &Pubkey,
-    accounts: &[AccountInfo],
-) -> ProgramResult {
-    let account_info_iter = &mut accounts.iter();
-    // 1
-    let user_obligation_info = next_account_info(account_info_iter)?;
-    if user_obligation_info.owner != program_id {
-        msg!("User obligation provided is not owned by the lending program");
-        return Err(LendingError::InvalidAccountOwner.into());
-    }
-    let mut user_obligation = UserObligation::unpack(&user_obligation_info.try_borrow_data()?)?;
-
-    match B::U8 {
-        B0::U8 => {
-            user_obligation.loans_value = user_obligation.collaterals_borrow_value;
-        }
-        B1::U8 => {
-            user_obligation.loans_value = user_obligation.collaterals_liquidation_value;
-        }
-        _ => {
-            return Err(LendingError::UndefinedCaseInjection.into());
-        }
-    }
-    // pack
-    UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)
 }
 
 #[inline(always)]

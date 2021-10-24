@@ -256,7 +256,7 @@ impl UserObligation {
             (self.collaterals_borrow_value, self.loans_value)
         };
 
-        if collaterals_borrow_value > loans_value {
+        if collaterals_borrow_value >= loans_value {
             Ok(())
         } else {
             Err(LendingError::ObligationNotHealthy.into())
@@ -638,6 +638,9 @@ impl UserObligation {
             let (repay_amount, repay_amount_decimal) = calculate_amount_and_decimal(amount, max_repay_amount_decimal)?;
             if repay_amount_decimal > max_repay_amount_decimal {
                 return Err(LendingError::LiquidationRepayTooMuch.into());
+            }
+            if repay_amount == 0 {
+                return Err(LendingError::LiquidationRepayTooSmall.into());
             }
 
             // update loans

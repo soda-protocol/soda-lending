@@ -197,24 +197,3 @@ impl<'a, 'b> ReservesRefVec<'a, 'b> {
         Ok(market_reserve)
     }
 }
-
-// #[cfg(test)]
-// mod test {
-//     use super::*;
-
-//     #[test]
-//     fn test_calculate_borrow_interest() {
-//         assert_eq!(
-//             calculate_borrow_interest(100_000_000_000, Rate::from_percent(10), 78840000).unwrap(),
-//             10_000_000_000,
-//         );
-//     }
-
-//     #[test]
-//     fn test_calculate_compound_sum() {
-//         assert_eq!(
-//             calculate_compound_sum(100_000_000_000, Rate::from_percent(10), 78840000).unwrap(),
-//             110_517_091_793,
-//         );
-//     }
-// }

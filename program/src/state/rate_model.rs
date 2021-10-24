@@ -29,6 +29,11 @@ impl Param for RateModel {
 }
 
 impl RateModel {
+    // *********************************************************
+    //      / u * a + c                           | if u <= l_u
+    // rate 
+    //      \ [l_u * a + (u - l_u) * a * k_u] + c | if u > l_u
+    // *********************************************************
     pub fn calculate_borrow_rate(&self, utilization: Rate) -> Result<Rate, ProgramError> {
         let utilization_threshold = Rate::from_percent(self.l_u);
         let a = Rate::from_scaled_val(self.a);
