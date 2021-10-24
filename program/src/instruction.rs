@@ -1434,7 +1434,7 @@ pub fn change_manager_owner(
     Instruction {
         program_id: id(),
         accounts: vec![
-            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new(manager_key, false),
             AccountMeta::new_readonly(authority_key, true),
             AccountMeta::new_readonly(new_authority_key, true),
         ],
