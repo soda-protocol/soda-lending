@@ -96,6 +96,8 @@ pub enum LendingInstruction {
     /// 33
     ReduceInsurance(u64),
     /// 34
+    ChangeManagerOwner,
+    /// 35
     #[cfg(feature = "unique-credit")]
     UpdateUniqueCreditLimit(u64),
 }
@@ -237,8 +239,9 @@ impl LendingInstruction {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::ReduceInsurance(amount)
             }
+            34 => Self::ChangeManagerOwner,
             #[cfg(feature = "unique-credit")]
-            34 => {
+            35 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::UpdateUniqueCreditLimit(amount)
             }
@@ -514,9 +517,10 @@ impl LendingInstruction {
                 buf.push(33);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
+            Self::ChangeManagerOwner => buf.push(34),
             #[cfg(feature = "unique-credit")]
             Self::UpdateUniqueCreditLimit(amount) => {
-                buf.push(34);
+                buf.push(35);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
         }
@@ -1418,5 +1422,22 @@ pub fn reduce_insurance(
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::ReduceInsurance(amount).pack(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn change_manager_owner(
+    manager_key: Pubkey,
+    authority_key: Pubkey,
+    new_authority_key: Pubkey,
+) -> Instruction {
+    Instruction {
+        program_id: id(),
+        accounts: vec![
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new_readonly(authority_key, true),
+            AccountMeta::new_readonly(new_authority_key, true),
+        ],
+        data: LendingInstruction::ChangeManagerOwner.pack(),
     }
 }

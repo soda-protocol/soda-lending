@@ -190,6 +190,10 @@ pub fn process_instruction(
             msg!("Instruction: Reduce Insurance: {}", amount);
             process_reduce_insurance(program_id, accounts, amount)
         }
+        LendingInstruction::ChangeManagerOwner => {
+            msg!("Instruction: Change Manager Owner");
+            process_change_manager_owner(program_id, accounts)
+        }
         #[cfg(feature = "unique-credit")]
         LendingInstruction::UpdateUniqueCreditLimit(amount) => {
             msg!("Instruction: Update Unique Credit Limit: amount = {}", amount);
@@ -2475,6 +2479,39 @@ fn process_reduce_insurance(
         authority_signer_seeds,
         token_program: token_program_id.clone(),
     })
+}
+
+fn process_change_manager_owner(
+    program_id: &Pubkey,
+    accounts: &[AccountInfo],
+) -> ProgramResult {
+    let account_info_iter = &mut accounts.iter();
+    // 1
+    let manager_info = next_account_info(account_info_iter)?;
+    if manager_info.owner != program_id {
+        msg!("Manager provided is not owned by the lending program");
+        return Err(LendingError::InvalidAccountOwner.into());
+    }
+    let mut manager = Manager::unpack(&manager_info.try_borrow_data()?)?;
+    // 2
+    let authority_info = next_account_info(account_info_iter)?;
+    if authority_info.key != &manager.owner {
+        msg!("Only manager owner can change owner");
+        return Err(LendingError::InvalidAuthority.into());
+    }
+    if !authority_info.is_signer {
+        msg!("authority is not a signer");
+        return Err(LendingError::InvalidAuthority.into());
+    }
+    // 3
+    let new_authority_info = next_account_info(account_info_iter)?;
+    if !new_authority_info.is_signer {
+        msg!("New authority is not a signer");
+        return Err(LendingError::InvalidAuthority.into());
+    }
+
+    manager.owner = *new_authority_info.key;
+    Manager::pack(manager, &mut manager_info.try_borrow_mut_data()?)
 }
 
 // by manager
