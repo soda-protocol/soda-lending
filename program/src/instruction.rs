@@ -98,12 +98,6 @@ pub enum LendingInstruction {
     /// 34
     #[cfg(feature = "unique-credit")]
     UpdateUniqueCreditLimit(u64),
-    /// 35
-    #[cfg(feature = "devnet")]
-    InjectNoBorrow,
-    /// 36
-    #[cfg(feature = "devnet")]
-    InjectLiquidation,
 }
 
 impl LendingInstruction {
@@ -248,10 +242,6 @@ impl LendingInstruction {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::UpdateUniqueCreditLimit(amount)
             }
-            #[cfg(feature = "devnet")]
-            35 => Self::InjectNoBorrow,
-            #[cfg(feature = "devnet")]
-            36 => Self::InjectLiquidation,
             _ => {
                 msg!("Instruction cannot be unpacked");
                 return Err(LendingError::InstructionUnpackError.into());
@@ -529,10 +519,6 @@ impl LendingInstruction {
                 buf.push(34);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            #[cfg(feature = "devnet")]
-            Self::InjectNoBorrow => buf.push(35),
-            #[cfg(feature = "devnet")]
-            Self::InjectLiquidation => buf.push(36),
         }
         buf
     }
@@ -1432,27 +1418,5 @@ pub fn reduce_insurance(
             AccountMeta::new_readonly(spl_token::id(), false),
         ],
         data: LendingInstruction::ReduceInsurance(amount).pack(),
-    }
-}
-
-#[cfg(feature = "devnet")]
-pub fn inject_no_borrow(
-    user_obligation_key: Pubkey,
-) -> Instruction {
-    Instruction {
-        program_id: id(),
-        accounts: vec![AccountMeta::new(user_obligation_key, false)],
-        data: LendingInstruction::InjectNoBorrow.pack(),
-    }
-}
-
-#[cfg(feature = "devnet")]
-pub fn inject_liquidation(
-    user_obligation_key: Pubkey,
-) -> Instruction {
-    Instruction {
-        program_id: id(),
-        accounts: vec![AccountMeta::new(user_obligation_key, false)],
-        data: LendingInstruction::InjectLiquidation.pack(),
     }
 }

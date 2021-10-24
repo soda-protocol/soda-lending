@@ -29,7 +29,7 @@ serde = "1.0"
 serde_yaml = "0.8"
 
 [features]
-default = []
+default = ["devnet"]
 no-entrypoint = []
 test-bpf = []
 friend = []
