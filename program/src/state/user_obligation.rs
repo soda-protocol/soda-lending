@@ -263,7 +263,11 @@ impl UserObligation {
         }
     }
     ///
-    fn validate_liquidation(&self, other: Option<Self>) -> ProgramResult {
+    fn validate_liquidation(
+        &self,
+        other: Option<Self>,
+        collateral_index: usize,
+    ) -> Result<Rate, ProgramError> {
         let (collaterals_liquidation_value, loans_value) = if let Some(other) = other {
             let collaterals_liquidation_value = self.collaterals_liquidation_value
                 .try_add(other.collaterals_liquidation_value)?;
@@ -276,9 +280,27 @@ impl UserObligation {
 
         // valid liquidation
         if loans_value >= collaterals_liquidation_value {
-            Ok(())
+            // ****************** calculate liquidation penalty threshold *******************
+            // This insures liquidation-limit never decrease after some liquidation processed
+            // a: liquidation value ratio      cf: close factor       θ: liquidation penalty
+            // m: collateral value              n: loan value
+            //    =====================================================================
+            //    |   ∑ (a_i * m_i) - cf * n_j * (1 + θ) * a_k      ∑ (a_i * m_i)     |
+            //    |  ------------------------------------------ >= ----------------   |
+            //    |            ∑ n_i - cf * n_j                        ∑ n_i          |
+            //    |                                  ||                               |
+            //    |                                  \/                               |
+            //    |                               ∑ (a_i * m_i)                       |
+            //    |                     θ   <=   ---------------  -  1                |
+            //    |                                ∑ n_i * a_k                        |
+            //    =====================================================================
+            collaterals_liquidation_value
+                .try_div(loans_value.try_mul(Rate::from_percent(self.collaterals[collateral_index].liquidation_value_ratio))?)?
+                .try_sub(Decimal::one())
+                .map_err(|_| LendingError::LiquidationForbidden)?
+                .try_into()
         } else {
-            return Err(LendingError::LiquidationNotAvailable.into());
+            Err(LendingError::LiquidationNotAvailable.into())
         }
     }
     ///
@@ -591,7 +613,10 @@ impl UserObligation {
         other: Option<Self>,
     ) -> Result<(u64, RepaySettle), ProgramError> {
         // check valid
-        self.validate_liquidation(other)?;
+        let penalty_threshold = self.validate_liquidation(other, collateral_index)?;
+        // get optimal penalty ratio
+        let optimal_penalty_ratio = Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_penalty_ratio)
+            .min(penalty_threshold);
 
         if IsCollateral::BOOL {
             // input amount represents collateral
@@ -609,7 +634,7 @@ impl UserObligation {
             let repay_amount_decimal = collateral_reserve.oracle_info.price
                 .try_mul(amount_mul_rate(seize_amount, collateral_reserve.collateral_to_liquidity_rate()?)?)?
                 .try_div(calculate_decimals(collateral_reserve.token_config.decimal)?)?
-                .try_mul(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_penalty_ratio))?
+                .try_mul(optimal_penalty_ratio)?
                 .try_mul(calculate_decimals(loan_reserve.token_config.decimal)?)?
                 .try_div(loan_reserve.oracle_info.price)?;
 
@@ -653,7 +678,7 @@ impl UserObligation {
                 .try_mul(calculate_decimals(collateral_reserve.token_config.decimal)?)?
                 .try_div(collateral_reserve.oracle_info.price)?
                 .try_div(collateral_reserve.collateral_to_liquidity_rate()?)?
-                .try_div(Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_penalty_ratio))?
+                .try_div(optimal_penalty_ratio)?
                 .try_floor_u64()?;
 
             // update collaterals

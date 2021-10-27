@@ -87,6 +87,9 @@ pub enum LendingError {
     ///
     #[error("Liquidation is not available")]
     LiquidationNotAvailable,
+    ///
+    #[error("Liquidation is forbidden")]
+    LiquidationForbidden,
     /// Liquidation repay amount too small
     #[error("Liquidation repaying liquidity amount is too small")]
     LiquidationRepayTooSmall,

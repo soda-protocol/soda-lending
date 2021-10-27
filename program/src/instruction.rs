@@ -1425,7 +1425,6 @@ pub fn reduce_insurance(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 pub fn change_manager_owner(
     manager_key: Pubkey,
     authority_key: Pubkey,
