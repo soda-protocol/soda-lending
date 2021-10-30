@@ -282,23 +282,21 @@ impl UserObligation {
         if loans_value >= collaterals_liquidation_value {
             // ****************** calculate liquidation penalty threshold *******************
             // This insures liquidation-limit never decrease after some liquidation processed
-            // a: liquidation value ratio      cf: close factor       θ: liquidation penalty
+            // a: liquidation value ratio      cf: close factor       κ: seize rate
             // m: collateral value              n: loan value
-            //    =====================================================================
-            //    |   ∑ (a_i * m_i) - cf * n_j * (1 + θ) * a_k      ∑ (a_i * m_i)     |
-            //    |  ------------------------------------------ >= ----------------   |
-            //    |            ∑ n_i - cf * n_j                        ∑ n_i          |
-            //    |                                  ||                               |
-            //    |                                  \/                               |
-            //    |                               ∑ (a_i * m_i)                       |
-            //    |                     θ   <=   ---------------  -  1                |
-            //    |                                ∑ n_i * a_k                        |
-            //    =====================================================================
-            collaterals_liquidation_value
-                .try_div(loans_value.try_mul(Rate::from_percent(self.collaterals[collateral_index].liquidation_value_ratio))?)?
-                .try_sub(Decimal::one())
-                .map_err(|_| LendingError::LiquidationForbidden)?
-                .try_into()
+            //    ==================================================================
+            //    |   ∑ (a_i * m_i) - cf * n_j * κ * a_k       ∑ (a_i * m_i)       |
+            //    |  ------------------------------------  >= ----------------     |
+            //    |            ∑ n_i - cf * n_j                    ∑ n_i           |
+            //    |                                  ||                            |
+            //    |                                  \/                            |
+            //    |                               ∑ (a_i * m_i)                    |
+            //    |                       κ  <=  ---------------                   |
+            //    |                                ∑ n_i * a_k                     |
+            //    ==================================================================
+            let seize_rate = collaterals_liquidation_value
+                .try_div(loans_value.try_mul(Rate::from_percent(self.collaterals[collateral_index].liquidation_value_ratio))?)?;
+            Rate::try_from(seize_rate).map_err(|_| LendingError::LiquidationForbidden.into())
         } else {
             Err(LendingError::LiquidationNotAvailable.into())
         }
@@ -613,10 +611,11 @@ impl UserObligation {
         other: Option<Self>,
     ) -> Result<(u64, RepaySettle), ProgramError> {
         // check valid
-        let penalty_threshold = self.validate_liquidation(other, collateral_index)?;
-        // get optimal penalty ratio
-        let optimal_penalty_ratio = Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_penalty_ratio)
-            .min(penalty_threshold);
+        let seize_rate = self.validate_liquidation(other, collateral_index)?;
+        // get optimal seize rate
+        let optimal_seize_rate = Rate::from_percent(collateral_reserve.collateral_info.config.liquidation_penalty_ratio)
+            .try_add(Rate::one())?
+            .min(seize_rate);
 
         if IsCollateral::BOOL {
             // input amount represents collateral
@@ -634,7 +633,7 @@ impl UserObligation {
             let repay_amount_decimal = collateral_reserve.oracle_info.price
                 .try_mul(amount_mul_rate(seize_amount, collateral_reserve.collateral_to_liquidity_rate()?)?)?
                 .try_div(calculate_decimals(collateral_reserve.token_config.decimal)?)?
-                .try_mul(optimal_penalty_ratio)?
+                .try_div(optimal_seize_rate)?
                 .try_mul(calculate_decimals(loan_reserve.token_config.decimal)?)?
                 .try_div(loan_reserve.oracle_info.price)?;
 
@@ -675,10 +674,10 @@ impl UserObligation {
             let seize_amount = loan_reserve.oracle_info.price
                 .try_mul(repay_amount)?
                 .try_div(calculate_decimals(loan_reserve.token_config.decimal)?)?
+                .try_mul(optimal_seize_rate)?
                 .try_mul(calculate_decimals(collateral_reserve.token_config.decimal)?)?
                 .try_div(collateral_reserve.oracle_info.price)?
                 .try_div(collateral_reserve.collateral_to_liquidity_rate()?)?
-                .try_div(optimal_penalty_ratio)?
                 .try_floor_u64()?;
 
             // update collaterals
