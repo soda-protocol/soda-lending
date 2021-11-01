@@ -40,9 +40,11 @@ pub struct CollateralConfig {
 
 impl Param for CollateralConfig {
     fn assert_valid(&self) -> ProgramResult {
-        if self.borrow_value_ratio < self.liquidation_value_ratio
-            && self.liquidation_value_ratio < 100
-            && self.liquidation_penalty_ratio < 100 {
+        if self.borrow_value_ratio > 0 &&
+            self.liquidation_penalty_ratio > 0 &&
+            self.borrow_value_ratio < self.liquidation_value_ratio &&
+            self.liquidation_value_ratio < 100 && 
+            self.liquidation_penalty_ratio < 100 {
             Ok(())
         } else {
             Err(LendingError::InvalidCollateralConfig.into())
@@ -95,7 +97,11 @@ pub struct LiquidityConfig {
 
 impl Param for LiquidityConfig {
     fn assert_valid(&self) -> ProgramResult {
-        if self.close_ratio < 100 &&
+        if self.close_ratio > 0 &&
+            self.borrow_tax_rate > 0 &&
+            self.flash_loan_fee_rate > 0 &&
+            self.max_deposit > 0 &&
+            self.close_ratio < 100 &&
             self.borrow_tax_rate < 100 &&
             self.flash_loan_fee_rate < WAD {
             Ok(())

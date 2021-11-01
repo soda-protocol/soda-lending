@@ -20,7 +20,11 @@ pub struct RateModel {
 
 impl Param for RateModel {
     fn assert_valid(&self) -> ProgramResult {
-        if self.c < WAD && self.l_u < 100 {
+        if self.a > 0 &&
+            self.l_u > 0 &&
+            self.k_u > 0 &&
+            self.c < WAD &&
+            self.l_u < 100 {
             Ok(())
         } else {
             Err(LendingError::InvalidRateModel.into())
