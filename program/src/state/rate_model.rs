@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 ///
 use std::convert::TryInto;
-use crate::{error::LendingError, math::WAD};
+use crate::error::LendingError;
 use solana_program::{
     clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, SECONDS_PER_DAY},
     entrypoint::ProgramResult, 
