@@ -268,12 +268,12 @@ impl LendingInstruction {
     }
 
     fn unpack_rate_model(input: &[u8]) -> Result<(RateModel, &[u8]), ProgramError> {
-        let (a, rest) = Self::unpack_u64(input)?;
-        let (c, rest) = Self::unpack_u64(rest)?;
-        let (l_u, rest) = Self::unpack_u8(rest)?;
-        let (k_u, rest) = Self::unpack_u128(rest)?;
+        let (offset, rest) = Self::unpack_u64(input)?;
+        let (optimal, rest) = Self::unpack_u64(rest)?;
+        let (kink, rest) = Self::unpack_u8(rest)?;
+        let (max, rest) = Self::unpack_u128(rest)?;
 
-        Ok((RateModel { a, c, l_u, k_u }, rest))
+        Ok((RateModel { offset, optimal, kink, max }, rest))
     }
 
     fn unpack_oracle_config(input: &[u8]) -> Result<(OracleConfig, &[u8]), ProgramError> {
@@ -528,10 +528,10 @@ impl LendingInstruction {
     }
 
     fn pack_rate_model(model: RateModel, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(&model.a.to_le_bytes());
-        buf.extend_from_slice(&model.c.to_le_bytes());
-        buf.extend_from_slice(&model.l_u.to_le_bytes());
-        buf.extend_from_slice(&model.k_u.to_le_bytes());
+        buf.extend_from_slice(&model.offset.to_le_bytes());
+        buf.extend_from_slice(&model.optimal.to_le_bytes());
+        buf.extend_from_slice(&model.kink.to_le_bytes());
+        buf.extend_from_slice(&model.max.to_le_bytes());
     }
 
     fn pack_oracle_config(config: OracleConfig, buf: &mut Vec<u8>) {

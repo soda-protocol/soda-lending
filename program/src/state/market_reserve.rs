@@ -417,10 +417,10 @@ impl Pack for MarketReserve {
             borrow_tax_rate,
             flash_loan_fee_rate,
             max_deposit,
-            a,
-            c,
-            l_u,
-            k_u,
+            offset,
+            optimal,
+            kink,
+            max,
             _padding,
         ) = mut_array_refs![
             output,
@@ -487,10 +487,10 @@ impl Pack for MarketReserve {
         *flash_loan_fee_rate = self.liquidity_info.config.flash_loan_fee_rate.to_le_bytes();
         *max_deposit = self.liquidity_info.config.max_deposit.to_le_bytes();
 
-        *a = self.rate_model.a.to_le_bytes();
-        *c = self.rate_model.c.to_le_bytes();
-        *l_u = self.rate_model.l_u.to_le_bytes();
-        *k_u = self.rate_model.k_u.to_le_bytes();
+        *offset = self.rate_model.offset.to_le_bytes();
+        *optimal = self.rate_model.optimal.to_le_bytes();
+        *kink = self.rate_model.kink.to_le_bytes();
+        *max = self.rate_model.max.to_le_bytes();
     }
 
     fn unpack_from_slice(input: &[u8]) -> Result<Self, ProgramError> {
@@ -521,10 +521,10 @@ impl Pack for MarketReserve {
             borrow_tax_rate,
             flash_loan_fee_rate,
             max_deposit,
-            a,
-            c,
-            l_u,
-            k_u,
+            offset,
+            optimal,
+            kink,
+            max,
             _padding,
         ) = array_refs![
             input,
@@ -605,10 +605,10 @@ impl Pack for MarketReserve {
                 },
             },
             rate_model: RateModel {
-                a: u64::from_le_bytes(*a),
-                c: u64::from_le_bytes(*c),
-                l_u: u8::from_le_bytes(*l_u),
-                k_u: u128::from_le_bytes(*k_u),
+                offset: u64::from_le_bytes(*offset),
+                optimal: u64::from_le_bytes(*optimal),
+                kink: u8::from_le_bytes(*kink),
+                max: u128::from_le_bytes(*max),
             }
         })
     }
