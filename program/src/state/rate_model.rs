@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 ///
 use std::convert::TryInto;
-use crate::{error::LendingError, math::WAD};
+use crate::error::LendingError;
 use solana_program::{
     clock::{DEFAULT_TICKS_PER_SECOND, DEFAULT_TICKS_PER_SLOT, SECONDS_PER_DAY},
     entrypoint::ProgramResult, 
@@ -32,11 +32,7 @@ impl Param for RateModel {
 }
 
 impl RateModel {
-    // *********************************************************
-    //      / u * a + c                           | if u <= l_u
-    // rate 
-    //      \ [l_u * a + (u - l_u) * k_u] + c | if u > l_u
-    // *********************************************************
+    ///
     pub fn calculate_borrow_rate(&self, utilization: Rate) -> Result<Rate, ProgramError> {
         let kink_utilization = Rate::from_percent(self.kink);
         let offset = Rate::from_scaled_val(self.offset);
