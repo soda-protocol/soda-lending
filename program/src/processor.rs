@@ -170,8 +170,12 @@ pub fn process_instruction(
             msg!("Instruction: Control Market Reserve Liquidity");
             process_operate_market_reserve(program_id, accounts, LiquidityControl(enable))
         }
+        LendingInstruction::UpdateMarketReserveTokenConfig(config) => {
+            msg!("Instruction: Update Market Reserve Token Config");
+            process_operate_market_reserve(program_id, accounts, config)
+        }
         LendingInstruction::UpdateMarketReserveRateModel(model) => {
-            msg!("Instruction: Updae Rate Model");
+            msg!("Instruction: Update Market Reserve Rate Model");
             process_operate_market_reserve(program_id, accounts, model)
         }
         LendingInstruction::UpdateMarketReserveCollateralConfig(config) => {

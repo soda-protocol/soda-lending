@@ -1,14 +1,6 @@
 //! Instruction types
 #![allow(missing_docs)]
-use crate::{
-    id,
-    error::LendingError,
-    state::{
-        IndexedCollateralConfig, IndexedLoanConfig,
-        LiquidityConfig, CollateralConfig, RateModel,
-    },
-    oracle::{OracleConfig, OracleType},
-};
+use crate::{error::LendingError, id, oracle::{OracleConfig, OracleType}, state::{CollateralConfig, IndexedCollateralConfig, IndexedLoanConfig, LiquidityConfig, RateModel, TokenConfig}};
 use solana_program::{
     instruction::{AccountMeta, Instruction},
     msg,
@@ -86,18 +78,20 @@ pub enum LendingInstruction {
     /// 28
     ControlMarketReserveLiquidity(bool),
     /// 29
-    UpdateMarketReserveRateModel(RateModel),
+    UpdateMarketReserveTokenConfig(TokenConfig),
     /// 30
-    UpdateMarketReserveCollateralConfig(CollateralConfig),
+    UpdateMarketReserveRateModel(RateModel),
     /// 31
-    UpdateMarketReserveLiquidityConfig(LiquidityConfig),
+    UpdateMarketReserveCollateralConfig(CollateralConfig),
     /// 32
-    UpdateMarketReserveOracleConfig(OracleConfig),
+    UpdateMarketReserveLiquidityConfig(LiquidityConfig),
     /// 33
-    ReduceInsurance(u64),
+    UpdateMarketReserveOracleConfig(OracleConfig),
     /// 34
-    ChangeManagerOwner,
+    ReduceInsurance(u64),
     /// 35
+    ChangeManagerOwner,
+    /// 36
     #[cfg(feature = "unique-credit")]
     UpdateUniqueCreditLimit(u64),
 }
@@ -220,28 +214,32 @@ impl LendingInstruction {
                 Self::ControlMarketReserveLiquidity(enable)
             }
             29 => {
+                let (config, _rest) = Self::unpack_token_config(rest)?;
+                Self::UpdateMarketReserveTokenConfig(config)
+            }
+            30 => {
                 let (model, _rest) = Self::unpack_rate_model(rest)?;
                 Self::UpdateMarketReserveRateModel(model)
             }
-            30 => {
+            31 => {
                 let (config, _rest) = Self::unpack_collateral_config(rest)?;
                 Self::UpdateMarketReserveCollateralConfig(config)
             }
-            31 => {
+            32 => {
                 let (config, _rest) = Self::unpack_liquidity_config(rest)?;
                 Self::UpdateMarketReserveLiquidityConfig(config)
             }
-            32 => {
+            33 => {
                 let (config, _rest) = Self::unpack_oracle_config(rest)?;
                 Self::UpdateMarketReserveOracleConfig(config)
             }
-            33 => {
+            34 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::ReduceInsurance(amount)
             }
-            34 => Self::ChangeManagerOwner,
+            35 => Self::ChangeManagerOwner,
             #[cfg(feature = "unique-credit")]
-            35 => {
+            36 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::UpdateUniqueCreditLimit(amount)
             }
@@ -265,6 +263,14 @@ impl LendingInstruction {
         let (close_ratio, rest) = Self::unpack_u8(rest)?;
 
         Ok((IndexedLoanConfig { index, close_ratio }, rest))
+    }
+
+    fn unpack_token_config(input: &[u8]) -> Result<(TokenConfig, &[u8]), ProgramError> {
+        let (mint_pubkey, rest) = Self::unpack_pubkey(input)?;
+        let (supply_account, rest) = Self::unpack_pubkey(rest)?;
+        let (decimal, rest) = Self::unpack_u8(rest)?;
+
+        Ok((TokenConfig { mint_pubkey, supply_account, decimal }, rest))
     }
 
     fn unpack_rate_model(input: &[u8]) -> Result<(RateModel, &[u8]), ProgramError> {
@@ -497,34 +503,44 @@ impl LendingInstruction {
                 buf.push(28);
                 buf.extend_from_slice(&(enable as u8).to_le_bytes());
             }
-            Self::UpdateMarketReserveRateModel(model) => {
+            Self::UpdateMarketReserveTokenConfig(config) => {
                 buf.push(29);
+                Self::pack_token_config(config, &mut buf);
+            }
+            Self::UpdateMarketReserveRateModel(model) => {
+                buf.push(30);
                 Self::pack_rate_model(model, &mut buf);
             }
             Self::UpdateMarketReserveCollateralConfig(config) => {
-                buf.push(30);
+                buf.push(31);
                 Self::pack_collateral_config(config, &mut buf);
             }
             Self::UpdateMarketReserveLiquidityConfig(config) => {
-                buf.push(31);
+                buf.push(32);
                 Self::pack_liquidity_config(config, &mut buf);
             }
             Self::UpdateMarketReserveOracleConfig(config) => {
-                buf.push(32);
+                buf.push(33);
                 Self::pack_oracle_config(config, &mut buf);
             }
             Self::ReduceInsurance(amount) => {
-                buf.push(33);
+                buf.push(34);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::ChangeManagerOwner => buf.push(34),
+            Self::ChangeManagerOwner => buf.push(35),
             #[cfg(feature = "unique-credit")]
             Self::UpdateUniqueCreditLimit(amount) => {
-                buf.push(35);
+                buf.push(36);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
         }
         buf
+    }
+
+    fn pack_token_config(config: TokenConfig, buf: &mut Vec<u8>) {
+        buf.extend_from_slice(&config.mint_pubkey.as_ref());
+        buf.extend_from_slice(&config.supply_account.as_ref());
+        buf.extend_from_slice(&config.decimal.to_le_bytes());
     }
 
     fn pack_rate_model(model: RateModel, buf: &mut Vec<u8>) {
@@ -1304,6 +1320,23 @@ pub fn control_market_reserve_liquidity(
             AccountMeta::new_readonly(authority_key, true),
         ],
         data: LendingInstruction::ControlMarketReserveLiquidity(enable).pack(),
+    }
+}
+
+pub fn update_market_reserve_token_config(
+    manager_key: Pubkey,
+    market_reserve_key: Pubkey,
+    authority_key: Pubkey,
+    config: TokenConfig,
+) -> Instruction {
+    Instruction {
+        program_id: id(),
+        accounts: vec![
+            AccountMeta::new_readonly(manager_key, false),
+            AccountMeta::new(market_reserve_key, false),
+            AccountMeta::new_readonly(authority_key, true),
+        ],
+        data: LendingInstruction::UpdateMarketReserveTokenConfig(config).pack(),
     }
 }
 

@@ -27,6 +27,12 @@ pub struct TokenConfig {
     pub decimal: u8,
 }
 
+impl Param for TokenConfig {
+    fn assert_valid(&self) -> ProgramResult {
+        Ok(())
+    }
+}
+
 ///
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CollateralConfig {
@@ -620,6 +626,11 @@ impl<P: Any + Param> Operator<P> for MarketReserve {
         if let Some(control) = <dyn Any>::downcast_ref::<LiquidityControl>(&param) {
             self.liquidity_info.enable = control.0;
             return Ok(())
+        }
+
+        if let Some(config) = <dyn Any>::downcast_ref::<TokenConfig>(&param) {
+            self.token_config = *config;
+            return Ok(());
         }
 
         if let Some(config) = <dyn Any>::downcast_ref::<CollateralConfig>(&param) {
