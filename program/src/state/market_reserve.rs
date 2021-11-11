@@ -229,6 +229,10 @@ impl LiquidityInfo {
     }
     ///
     pub fn flash_loan_repay(&mut self, amount: u64, fee: u64) -> ProgramResult {
+        if !self.enable {
+            return Err(LendingError::MarketReserveDisabled.into());
+        }
+
         self.available = self.available
             .checked_add(amount)
             .ok_or(LendingError::MarketReserveInsufficentLiquidity)?;
@@ -249,6 +253,9 @@ impl LiquidityInfo {
             let amount = amount - self.flash_loan_fee;
             self.flash_loan_fee = 0;
             self.insurance_wads = self.insurance_wads.try_sub(Decimal::from(amount))?;
+            self.available = self.available
+                .checked_sub(amount)
+                .ok_or(LendingError::MarketReserveInsufficentLiquidity)?;
         }
         
         Ok(())
