@@ -278,6 +278,12 @@ pub struct MarketReserve {
 
 impl MarketReserve {
     ///
+    fn supply_without_insurance(&self) -> Result<Decimal, ProgramError> {
+        self.liquidity_info
+            .total_supply()?
+            .try_sub(self.liquidity_info.insurance_wads)
+    }
+    ///
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         slot: Slot,
@@ -317,10 +323,8 @@ impl MarketReserve {
     }
     ///
     pub fn liquidity_to_collateral_rate(&self) -> Result<Rate, ProgramError> {
-        let total_supply = self.liquidity_info
-            .total_supply()?
-            .try_sub(self.liquidity_info.insurance_wads)?;
-        if total_supply == Decimal::zero() {
+        let total_supply = self.supply_without_insurance()?;
+        if total_supply == Decimal::zero() || self.collateral_info.total_mint == 0 {
             Ok(Rate::one())
         } else {
             Decimal::from(self.collateral_info.total_mint)
@@ -330,11 +334,14 @@ impl MarketReserve {
     }
     ///
     pub fn collateral_to_liquidity_rate(&self) -> Result<Rate, ProgramError> {
-        self.liquidity_info
-            .total_supply()?
-            .try_sub(self.liquidity_info.insurance_wads)?
-            .try_div(Decimal::from(self.collateral_info.total_mint))?
-            .try_into()
+        let total_supply = self.supply_without_insurance()?;
+        if total_supply == Decimal::zero() || self.collateral_info.total_mint == 0 {
+            Ok(Rate::one())
+        } else {
+            total_supply
+                .try_div(Decimal::from(self.collateral_info.total_mint))?
+                .try_into()
+        }
     }
     /// 
     // compounded_interest_rate: c
