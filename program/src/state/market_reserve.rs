@@ -229,6 +229,10 @@ impl LiquidityInfo {
     }
     ///
     pub fn flash_loan_repay(&mut self, amount: u64, fee: u64) -> ProgramResult {
+        if !self.enable {
+            return Err(LendingError::MarketReserveDisabled.into());
+        }
+
         self.available = self.available
             .checked_add(amount)
             .ok_or(LendingError::MarketReserveInsufficentLiquidity)?;
@@ -249,6 +253,9 @@ impl LiquidityInfo {
             let amount = amount - self.flash_loan_fee;
             self.flash_loan_fee = 0;
             self.insurance_wads = self.insurance_wads.try_sub(Decimal::from(amount))?;
+            self.available = self.available
+                .checked_sub(amount)
+                .ok_or(LendingError::MarketReserveInsufficentLiquidity)?;
         }
         
         Ok(())
@@ -277,6 +284,12 @@ pub struct MarketReserve {
 }
 
 impl MarketReserve {
+    ///
+    fn supply_without_insurance(&self) -> Result<Decimal, ProgramError> {
+        self.liquidity_info
+            .total_supply()?
+            .try_sub(self.liquidity_info.insurance_wads)
+    }
     ///
     #[allow(clippy::too_many_arguments)]
     pub fn new(
@@ -317,10 +330,8 @@ impl MarketReserve {
     }
     ///
     pub fn liquidity_to_collateral_rate(&self) -> Result<Rate, ProgramError> {
-        let total_supply = self.liquidity_info
-            .total_supply()?
-            .try_sub(self.liquidity_info.insurance_wads)?;
-        if total_supply == Decimal::zero() {
+        let total_supply = self.supply_without_insurance()?;
+        if total_supply == Decimal::zero() || self.collateral_info.total_mint == 0 {
             Ok(Rate::one())
         } else {
             Decimal::from(self.collateral_info.total_mint)
@@ -330,11 +341,14 @@ impl MarketReserve {
     }
     ///
     pub fn collateral_to_liquidity_rate(&self) -> Result<Rate, ProgramError> {
-        self.liquidity_info
-            .total_supply()?
-            .try_sub(self.liquidity_info.insurance_wads)?
-            .try_div(Decimal::from(self.collateral_info.total_mint))?
-            .try_into()
+        let total_supply = self.supply_without_insurance()?;
+        if total_supply == Decimal::zero() || self.collateral_info.total_mint == 0 {
+            Ok(Rate::one())
+        } else {
+            total_supply
+                .try_div(Decimal::from(self.collateral_info.total_mint))?
+                .try_into()
+        }
     }
     /// 
     // compounded_interest_rate: c
