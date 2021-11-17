@@ -2170,7 +2170,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "soda-lending-contract"
+name = "soda-lending"
 version = "0.1.0"
 dependencies = [
  "arrayref",
