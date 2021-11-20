@@ -1,6 +1,11 @@
 //! Instruction types
 #![allow(missing_docs)]
-use crate::{error::LendingError, id, oracle::{OracleConfig, OracleType}, state::{CollateralConfig, IndexedCollateralConfig, IndexedLoanConfig, LiquidityConfig, RateModel, TokenConfig}};
+use crate::{
+    error::LendingError,
+    id,
+    oracle::{OracleConfig, OracleType},
+    state::{CollateralConfig, IndexedCollateralConfig, IndexedLoanConfig, LiquidityConfig, RateModel},
+};
 use solana_program::{
     instruction::{AccountMeta, Instruction},
     msg,
@@ -78,20 +83,18 @@ pub enum LendingInstruction {
     /// 28
     ControlMarketReserveLiquidity(bool),
     /// 29
-    UpdateMarketReserveTokenConfig(TokenConfig),
-    /// 30
     UpdateMarketReserveRateModel(RateModel),
-    /// 31
+    /// 30
     UpdateMarketReserveCollateralConfig(CollateralConfig),
-    /// 32
+    /// 31
     UpdateMarketReserveLiquidityConfig(LiquidityConfig),
-    /// 33
+    /// 32
     UpdateMarketReserveOracleConfig(OracleConfig),
-    /// 34
+    /// 33
     ReduceInsurance(u64),
-    /// 35
+    /// 34
     ChangeManagerOwner,
-    /// 36
+    /// 35
     #[cfg(feature = "unique-credit")]
     UpdateUniqueCreditLimit(u64),
 }
@@ -214,32 +217,28 @@ impl LendingInstruction {
                 Self::ControlMarketReserveLiquidity(enable)
             }
             29 => {
-                let (config, _rest) = Self::unpack_token_config(rest)?;
-                Self::UpdateMarketReserveTokenConfig(config)
-            }
-            30 => {
                 let (model, _rest) = Self::unpack_rate_model(rest)?;
                 Self::UpdateMarketReserveRateModel(model)
             }
-            31 => {
+            30 => {
                 let (config, _rest) = Self::unpack_collateral_config(rest)?;
                 Self::UpdateMarketReserveCollateralConfig(config)
             }
-            32 => {
+            31 => {
                 let (config, _rest) = Self::unpack_liquidity_config(rest)?;
                 Self::UpdateMarketReserveLiquidityConfig(config)
             }
-            33 => {
+            32 => {
                 let (config, _rest) = Self::unpack_oracle_config(rest)?;
                 Self::UpdateMarketReserveOracleConfig(config)
             }
-            34 => {
+            33 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::ReduceInsurance(amount)
             }
-            35 => Self::ChangeManagerOwner,
+            34 => Self::ChangeManagerOwner,
             #[cfg(feature = "unique-credit")]
-            36 => {
+            35 => {
                 let (amount, _rest) = Self::unpack_u64(rest)?;
                 Self::UpdateUniqueCreditLimit(amount)
             }
@@ -263,14 +262,6 @@ impl LendingInstruction {
         let (close_ratio, rest) = Self::unpack_u8(rest)?;
 
         Ok((IndexedLoanConfig { index, close_ratio }, rest))
-    }
-
-    fn unpack_token_config(input: &[u8]) -> Result<(TokenConfig, &[u8]), ProgramError> {
-        let (mint_pubkey, rest) = Self::unpack_pubkey(input)?;
-        let (supply_account, rest) = Self::unpack_pubkey(rest)?;
-        let (decimal, rest) = Self::unpack_u8(rest)?;
-
-        Ok((TokenConfig { mint_pubkey, supply_account, decimal }, rest))
     }
 
     fn unpack_rate_model(input: &[u8]) -> Result<(RateModel, &[u8]), ProgramError> {
@@ -503,44 +494,34 @@ impl LendingInstruction {
                 buf.push(28);
                 buf.extend_from_slice(&(enable as u8).to_le_bytes());
             }
-            Self::UpdateMarketReserveTokenConfig(config) => {
-                buf.push(29);
-                Self::pack_token_config(config, &mut buf);
-            }
             Self::UpdateMarketReserveRateModel(model) => {
-                buf.push(30);
+                buf.push(29);
                 Self::pack_rate_model(model, &mut buf);
             }
             Self::UpdateMarketReserveCollateralConfig(config) => {
-                buf.push(31);
+                buf.push(30);
                 Self::pack_collateral_config(config, &mut buf);
             }
             Self::UpdateMarketReserveLiquidityConfig(config) => {
-                buf.push(32);
+                buf.push(31);
                 Self::pack_liquidity_config(config, &mut buf);
             }
             Self::UpdateMarketReserveOracleConfig(config) => {
-                buf.push(33);
+                buf.push(32);
                 Self::pack_oracle_config(config, &mut buf);
             }
             Self::ReduceInsurance(amount) => {
-                buf.push(34);
+                buf.push(33);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::ChangeManagerOwner => buf.push(35),
+            Self::ChangeManagerOwner => buf.push(34),
             #[cfg(feature = "unique-credit")]
             Self::UpdateUniqueCreditLimit(amount) => {
-                buf.push(36);
+                buf.push(35);
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
         }
         buf
-    }
-
-    fn pack_token_config(config: TokenConfig, buf: &mut Vec<u8>) {
-        buf.extend_from_slice(&config.mint_pubkey.as_ref());
-        buf.extend_from_slice(&config.supply_account.as_ref());
-        buf.extend_from_slice(&config.decimal.to_le_bytes());
     }
 
     fn pack_rate_model(model: RateModel, buf: &mut Vec<u8>) {
@@ -1320,23 +1301,6 @@ pub fn control_market_reserve_liquidity(
             AccountMeta::new_readonly(authority_key, true),
         ],
         data: LendingInstruction::ControlMarketReserveLiquidity(enable).pack(),
-    }
-}
-
-pub fn update_market_reserve_token_config(
-    manager_key: Pubkey,
-    market_reserve_key: Pubkey,
-    authority_key: Pubkey,
-    config: TokenConfig,
-) -> Instruction {
-    Instruction {
-        program_id: id(),
-        accounts: vec![
-            AccountMeta::new_readonly(manager_key, false),
-            AccountMeta::new(market_reserve_key, false),
-            AccountMeta::new_readonly(authority_key, true),
-        ],
-        data: LendingInstruction::UpdateMarketReserveTokenConfig(config).pack(),
     }
 }
 
