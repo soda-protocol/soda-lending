@@ -382,7 +382,11 @@ impl MarketReserve {
     }
     ///
     pub fn withdraw(&mut self, amount: u64) -> Result<u64, ProgramError> {
-        let withdraw_amount = amount_mul_rate(amount, self.collateral_to_liquidity_rate()?)?;
+        let withdraw_amount = if amount == self.collateral_info.total_mint {
+              self.liquidity_info.available
+        } else {
+            amount_mul_rate(amount, self.collateral_to_liquidity_rate()?)?
+        };
         self.collateral_info.burn(amount)?;
         self.liquidity_info.withdraw(withdraw_amount)?;
 
