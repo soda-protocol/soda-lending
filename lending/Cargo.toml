@@ -1,7 +1,6 @@
 [package]
 name = "soda-lending"
 version = "0.1.0"
-authors = ["gyllone <gyl19930522@163.com>"]
 edition = "2018"
 
 [dependencies]
