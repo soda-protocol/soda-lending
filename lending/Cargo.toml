@@ -12,6 +12,7 @@ num-derive = "0.3"
 num-traits = "0.2"
 solana-program = "1.7.11"
 spl-token = { version = "3.2.0", features = [ "no-entrypoint" ] }
+spl-token-swap = { path = "../solana-program-library/token-swap/program", features = [ "no-entrypoint" ] }
 switchboard-program = "0.1.52"
 thiserror = "1.0"
 typenum = "1.14.0"

@@ -283,6 +283,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e78d4f1cc4ae33bbfc157ed5d5a5ef3bc29227303d595861deb238fcec4e9457"
 
 [[package]]
+name = "enum_dispatch"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bd53b3fde38a39a06b2e66dc282f3e86191e53bd04cc499929c15742beae3df8"
+dependencies = [
+ "once_cell",
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "env_logger"
 version = "0.8.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -525,6 +537,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "once_cell"
+version = "1.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "692fcb63b64b1758029e0a96ee63e049ce8c5948587f2f7208df04625e5f6b56"
+
+[[package]]
 name = "opaque-debug"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -756,7 +774,8 @@ dependencies = [
  "num-derive",
  "num-traits",
  "solana-program",
- "spl-token",
+ "spl-token 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spl-token-swap",
  "switchboard-program",
  "thiserror",
  "typenum",
@@ -772,7 +791,7 @@ dependencies = [
  "soda-lending",
  "solana-program",
  "spl-associated-token-account",
- "spl-token",
+ "spl-token 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
  "typenum",
 ]
@@ -877,7 +896,32 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "393e2240d521c3dd770806bff25c2c00d761ac962be106e14e22dd912007f428"
 dependencies = [
  "solana-program",
- "spl-token",
+ "spl-token 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "spl-math"
+version = "0.1.0"
+dependencies = [
+ "borsh",
+ "borsh-derive",
+ "num-derive",
+ "num-traits",
+ "solana-program",
+ "thiserror",
+ "uint",
+]
+
+[[package]]
+name = "spl-token"
+version = "3.2.0"
+dependencies = [
+ "arrayref",
+ "num-derive",
+ "num-traits",
+ "num_enum",
+ "solana-program",
+ "thiserror",
 ]
 
 [[package]]
@@ -891,6 +935,20 @@ dependencies = [
  "num-traits",
  "num_enum",
  "solana-program",
+ "thiserror",
+]
+
+[[package]]
+name = "spl-token-swap"
+version = "2.1.0"
+dependencies = [
+ "arrayref",
+ "enum_dispatch",
+ "num-derive",
+ "num-traits",
+ "solana-program",
+ "spl-math",
+ "spl-token 3.2.0",
  "thiserror",
 ]
 

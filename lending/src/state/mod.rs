@@ -143,7 +143,7 @@ fn unpack_bool(src: &[u8; 1]) -> Result<bool, ProgramError> {
 }
 
 #[inline(always)]
-fn calculate_decimals(decimal: u8) -> Result<u64, ProgramError> {
+pub fn calculate_decimals(decimal: u8) -> Result<u64, ProgramError> {
     10u64
         .checked_pow(decimal as u32)
         .ok_or(LendingError::MathOverflow.into())

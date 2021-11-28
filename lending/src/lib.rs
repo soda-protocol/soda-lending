@@ -5,6 +5,7 @@
 pub mod entrypoint;
 pub mod error;
 pub mod instruction;
+pub mod lp_oracle;
 pub mod oracle;
 pub mod math;
 pub mod processor;

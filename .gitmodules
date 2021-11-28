@@ -1,0 +1,4 @@
+[submodule "solana-program-library"]
+	path = solana-program-library
+	url = https://github.com/solana-labs/solana-program-library
+	branch = master

@@ -44,6 +44,6 @@ impl From<ProxyError> for ProgramError {
 
 impl<T> DecodeError<T> for ProxyError {
     fn type_of() -> &'static str {
-        "Soda Flash Liquidation Error"
+        "Soda Proxy Error"
     }
 }
