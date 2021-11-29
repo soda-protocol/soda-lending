@@ -93,9 +93,12 @@ pub enum LendingError {
     /// Liquidation repay amount too small
     #[error("Liquidation repaying liquidity amount is too small")]
     LiquidationRepayTooSmall,
-    /// Liquidation repay amount too small
+    /// Liquidation repay amount too much
     #[error("Liquidation repaying liquidity amount is too much")]
     LiquidationRepayTooMuch,
+    ///
+    #[error("Liquidation seize collateral amount is too small")]
+    LiquidationSeizeTooSmall,
     /// Math operation overflow
     #[error("Math operation overflow")]
     MathOverflow,

@@ -67,34 +67,34 @@ pub enum LendingInstruction {
     FlashLiquidationByLoan(u8, u64),
     /// 22
     FlashLoan(u8, u64),
-    /// 23
+    /// 100
     #[cfg(feature = "unique-credit")]
     InitUniqueCredit(Pubkey, u64),
-    /// 24
+    /// 101
     #[cfg(feature = "unique-credit")]
     BorrowLiquidityByUniqueCredit(u64),
-    /// 25
+    /// 102
     #[cfg(feature = "unique-credit")]
     RepayLoanByUniqueCredit(u64),
-    /// 26
+    /// 103
     UpdateIndexedCollateralConfig(IndexedCollateralConfig),
-    /// 27
+    /// 104
     UpdateIndexedLoanConfig(IndexedLoanConfig),
-    /// 28
+    /// 105
     ControlMarketReserveLiquidity(bool),
-    /// 29
+    /// 106
     UpdateMarketReserveRateModel(RateModel),
-    /// 30
+    /// 107
     UpdateMarketReserveCollateralConfig(CollateralConfig),
-    /// 31
+    /// 108
     UpdateMarketReserveLiquidityConfig(LiquidityConfig),
-    /// 32
+    /// 109
     UpdateMarketReserveOracleConfig(OracleConfig),
-    /// 33
+    /// 110
     ReduceInsurance(u64),
-    /// 34
+    /// 111
     ChangeManagerOwner,
-    /// 35
+    /// 112
     #[cfg(feature = "unique-credit")]
     UpdateUniqueCreditLimit(u64),
 }

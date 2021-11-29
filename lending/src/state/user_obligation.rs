@@ -679,6 +679,9 @@ impl UserObligation {
                 .try_div(collateral_reserve.oracle_info.price)?
                 .try_div(collateral_reserve.collateral_to_liquidity_rate()?)?
                 .try_floor_u64()?;
+            if seize_amount == 0 {
+                return Err(LendingError::LiquidationSeizeTooSmall.into());
+            }
 
             // update collaterals
             self.collaterals[collateral_index].amount = self.collaterals[collateral_index].amount
