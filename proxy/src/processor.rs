@@ -486,6 +486,7 @@ fn process_raydium_router_swap(accounts: &[AccountInfo], router_input: RouterSwa
     for i in 0..router_input.router_num as usize {
         let amm_info = next_account_info(account_info_iter)?;
         let amm_open_orders_info = next_account_info(account_info_iter)?;
+        let amm_target_orders_info = next_account_info(account_info_iter)?;
         let serum_market_info =  next_account_info(account_info_iter)?;
         let serum_bids_info = next_account_info(account_info_iter)?;
         let serum_asks_info = next_account_info(account_info_iter)?;
@@ -509,6 +510,7 @@ fn process_raydium_router_swap(accounts: &[AccountInfo], router_input: RouterSwa
                 amm_info.clone(),
                 amm_authority_info.clone(),
                 amm_open_orders_info.clone(),
+                amm_target_orders_info.clone(),
                 pool_coin_account_info.clone(),
                 pool_pc_account_info.clone(),
                 serum_program_info.clone(),
@@ -638,6 +640,7 @@ fn process_raydium_swap(accounts: &[AccountInfo], input: SwapInput) -> ProgramRe
     let amm_id = next_account_info(account_info_iter)?;
     let amm_authority_info = next_account_info(account_info_iter)?;
     let amm_open_orders_info = next_account_info(account_info_iter)?;
+    let amm_target_orders_info = next_account_info(account_info_iter)?;
     let pool_dest_account_info = next_account_info(account_info_iter)?;
     let pool_source_account_info = next_account_info(account_info_iter)?;
     // serum
@@ -668,6 +671,7 @@ fn process_raydium_swap(accounts: &[AccountInfo], input: SwapInput) -> ProgramRe
             amm_id.clone(),
             amm_authority_info.clone(),
             amm_open_orders_info.clone(),
+            amm_target_orders_info.clone(),
             pool_dest_account_info.clone(),
             pool_source_account_info.clone(),
             serum_program_info.clone(),
