@@ -17,6 +17,7 @@ spl-associated-token-account = { version = "1.0.3", features = [ "no-entrypoint"
 
 [features]
 default = []
+devnet = []
 no-entrypoint = []
 test-bpf = []
 

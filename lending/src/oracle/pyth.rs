@@ -30,7 +30,7 @@ pub enum AccountType {
     Price,
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialEq)]
 #[repr(C)]
 pub enum PriceStatus {
     Unknown,
@@ -120,6 +120,11 @@ pub fn get_pyth_price(data: &[u8], clock: &Clock) -> Result<Decimal, ProgramErro
     let pyth_price = load::<Price>(data).map_err(|_| ProgramError::InvalidAccountData)?;
     if pyth_price.ptype != PriceType::Price {
         msg!("Pyth oracle price type is invalid");
+        return Err(LendingError::InvalidPriceOracle.into());
+    }
+
+    if pyth_price.agg.status != PriceStatus::Trading {
+        msg!("Pyth oracle status is invalid");
         return Err(LendingError::InvalidPriceOracle.into());
     }
 

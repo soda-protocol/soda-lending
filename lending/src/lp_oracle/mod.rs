@@ -70,45 +70,45 @@ impl LPAggregator {
         self.enable = enable;
     }
 
-    pub fn feed_standard_lp_price(
-        &mut self,
-        token_swap: &SwapVersion,
-        oracle_a_data: &[u8],
-        oracle_b_data: &[u8],
-        clock: &Clock,
-        lp_supply: u64,
-        balance_a: u64,
-        balance_b: u64,
-        max_lp_amount: u64,
-    ) -> ProgramResult {
-        if !self.enable {
-            return Err();
-        }
+    // pub fn feed_standard_lp_price(
+    //     &mut self,
+    //     token_swap: &SwapVersion,
+    //     oracle_a_data: &[u8],
+    //     oracle_b_data: &[u8],
+    //     clock: &Clock,
+    //     lp_supply: u64,
+    //     balance_a: u64,
+    //     balance_b: u64,
+    //     max_lp_amount: u64,
+    // ) -> ProgramResult {
+    //     if !self.enable {
+    //         return Err();
+    //     }
 
-        let price_a = self.config.token_a.oracle_config.oracle_type.parse_price(oracle_a_data, clock)?;
-        let price_b = self.config.token_b.oracle_config.oracle_type.parse_price(oracle_b_data, clock)?;
+    //     let price_a = self.config.token_a.oracle_config.oracle_type.parse_price(oracle_a_data, clock)?;
+    //     let price_b = self.config.token_b.oracle_config.oracle_type.parse_price(oracle_b_data, clock)?;
 
-        let price = estimate_standard_lp_price(
-            token_swap,
-            lp_supply,
-            balance_a,
-            balance_b,
-            max_lp_amount,
-            self.config.lp_decimal,
-            TokenPrice {
-                price: price_a,
-                decimal: self.config.token_a.decimal,
-            },
-            TokenPrice {
-                price: price_b,
-                decimal: self.config.token_b.decimal,
-            },
-        )?;
-        self.price = price.to_scaled_val()?;
-        self.last_update = clock.slot;
+    //     let price = estimate_standard_lp_price(
+    //         token_swap,
+    //         lp_supply,
+    //         balance_a,
+    //         balance_b,
+    //         max_lp_amount,
+    //         self.config.lp_decimal,
+    //         TokenPrice {
+    //             price: price_a,
+    //             decimal: self.config.token_a.decimal,
+    //         },
+    //         TokenPrice {
+    //             price: price_b,
+    //             decimal: self.config.token_b.decimal,
+    //         },
+    //     )?;
+    //     self.price = price.to_scaled_val()?;
+    //     self.last_update = clock.slot;
 
-        Ok(())
-    }
+    //     Ok(())
+    // }
 }
 
 impl Sealed for LPAggregator {}
