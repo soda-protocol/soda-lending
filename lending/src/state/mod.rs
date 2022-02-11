@@ -174,6 +174,14 @@ fn calculate_amount_and_decimal(amount: u64, max: Decimal) -> Result<(u64, Decim
     }
 }
 
+#[inline(always)]
+pub fn calculate_effective_value(price: Decimal, amount: u64, decimals: u64, ratio: Rate) -> Result<Decimal, ProgramError> {
+    price
+        .try_mul(amount)?
+        .try_div(decimals)?
+        .try_mul(ratio)
+}
+
 ///
 #[derive(Clone, Debug)]
 pub struct RepaySettle {

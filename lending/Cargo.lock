@@ -2253,6 +2253,7 @@ dependencies = [
  "borsh",
  "borsh-derive",
  "bytemuck",
+ "lazy_static",
  "log",
  "num-derive",
  "num-traits",
@@ -2266,7 +2267,6 @@ dependencies = [
  "spl-token-swap",
  "switchboard-program",
  "thiserror",
- "typenum",
  "uint",
 ]
 

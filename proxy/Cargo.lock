@@ -771,6 +771,7 @@ dependencies = [
  "borsh",
  "borsh-derive",
  "bytemuck",
+ "lazy_static",
  "num-derive",
  "num-traits",
  "solana-program",
@@ -778,7 +779,6 @@ dependencies = [
  "spl-token-swap",
  "switchboard-program",
  "thiserror",
- "typenum",
  "uint",
 ]
 
@@ -793,7 +793,6 @@ dependencies = [
  "spl-associated-token-account",
  "spl-token 3.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "thiserror",
- "typenum",
 ]
 
 [[package]]

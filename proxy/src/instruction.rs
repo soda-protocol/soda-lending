@@ -427,7 +427,7 @@ pub fn create_market_reserve(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn deposit_and_pledge_or_repay<IsRepay: typenum::Bit>(
+pub fn deposit_and_pledge_or_repay<const IS_REPAY: bool>(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
     supply_mint_key: Pubkey,
@@ -451,7 +451,7 @@ pub fn deposit_and_pledge_or_repay<IsRepay: typenum::Bit>(
         &supply_mint_key,
     );
 
-    let accounts = if IsRepay::BOOL {
+    let accounts = if IS_REPAY {
         vec![
             AccountMeta::new_readonly(sysvar::rent::id(), false),
             AccountMeta::new_readonly(sysvar::clock::id(), false),
@@ -487,7 +487,7 @@ pub fn deposit_and_pledge_or_repay<IsRepay: typenum::Bit>(
     Instruction {
         program_id,
         accounts,
-        data: if IsRepay::BOOL {
+        data: if IS_REPAY {
             ProxyInstruction::Repay(amount)
         } else {
             ProxyInstruction::DepositAndPledge(amount)
@@ -496,7 +496,7 @@ pub fn deposit_and_pledge_or_repay<IsRepay: typenum::Bit>(
 }
 
 #[allow(clippy::too_many_arguments)]
-pub fn redeem_and_withdraw_or_borrow<IsBorrow: typenum::Bit, WithLoan: typenum::Bit>(
+pub fn redeem_and_withdraw_or_borrow<const IS_BORROW: bool, const WITH_LOAN: bool>(
     manager_key: Pubkey,
     market_reserve_key: Pubkey,
     supply_mint_key: Pubkey,
@@ -543,10 +543,10 @@ pub fn redeem_and_withdraw_or_borrow<IsBorrow: typenum::Bit, WithLoan: typenum::
             AccountMeta::new_readonly(system_program::id(), false),
             AccountMeta::new_readonly(spl_associated_token_account::id(), false),
         ],
-        data: if IsBorrow::BOOL {
+        data: if IS_BORROW {
             ProxyInstruction::Borrow(amount)
         } else {
-            if WithLoan::BOOL {
+            if WITH_LOAN {
                 ProxyInstruction::RedeemAndWithdraw(amount)
             } else {
                 ProxyInstruction::RedeemWithoutLoanAndWithdraw(amount)

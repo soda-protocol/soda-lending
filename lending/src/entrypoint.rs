@@ -17,7 +17,8 @@ fn process_instruction(
     if let Err(error) = processor::process_instruction(program_id, accounts, instruction_data) {
         // catch the error so we can print it
         error.print::<LendingError>();
-        return Err(error);
+        Err(error)
+    } else {
+        Ok(())
     }
-    Ok(())
 }

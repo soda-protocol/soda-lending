@@ -1,6 +1,5 @@
 #![allow(missing_docs)]
 use num_traits::FromPrimitive;
-use typenum::{Bit, True, False, Unsigned, U1, U9};
 use crate::{
     error::ProxyError,
     instruction::{ProxyInstruction, SwapInput, RouterSwapInput},
@@ -62,13 +61,13 @@ pub fn process_instruction(
             process_deposit_and_pledge(program_id, accounts, amount)
         }
         ProxyInstruction::RedeemAndWithdraw(amount) => {
-            process_redeem_and_withdraw_or_borrow::<False, True>(accounts, amount)
+            process_redeem_and_withdraw_or_borrow::<false, true>(accounts, amount)
         }
         ProxyInstruction::RedeemWithoutLoanAndWithdraw(amount) => {
-            process_redeem_and_withdraw_or_borrow::<False, False>(accounts, amount)
+            process_redeem_and_withdraw_or_borrow::<false, false>(accounts, amount)
         }
         ProxyInstruction::Borrow(amount) => {
-            process_redeem_and_withdraw_or_borrow::<True, False>(accounts, amount)
+            process_redeem_and_withdraw_or_borrow::<true, false>(accounts, amount)
         }
         ProxyInstruction::Repay(amount) => {
             process_repay(accounts, amount)
@@ -328,7 +327,7 @@ fn process_repay(accounts: &[AccountInfo], amount: u64) -> ProgramResult {
 }
 
 #[inline(never)]
-fn process_redeem_and_withdraw_or_borrow<IsBorrow: Bit, WithLoan: Bit>(
+fn process_redeem_and_withdraw_or_borrow<const IS_BORROW: bool, const WITH_LOAN: bool>(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
@@ -372,7 +371,7 @@ fn process_redeem_and_withdraw_or_borrow<IsBorrow: Bit, WithLoan: Bit>(
         lending_program_info.clone(),
     ];
 
-    if IsBorrow::BOOL {
+    if IS_BORROW {
         invoke(
             &lending_instruction::borrow_liquidity(
                 *manager_info.key,
@@ -388,7 +387,7 @@ fn process_redeem_and_withdraw_or_borrow<IsBorrow: Bit, WithLoan: Bit>(
         )?;
     } else {
         invoke(
-            &lending_instruction::redeem_and_withdraw::<WithLoan>(
+            &lending_instruction::redeem_and_withdraw::<WITH_LOAN>(
                 *manager_info.key,
                 *market_reserve_info.key,
                 *supply_token_account_info.key,
@@ -439,8 +438,8 @@ fn process_solana_router_swap(accounts: &[AccountInfo], router_input: RouterSwap
             input.minimum_amount_out = router_input.minimum_amount_out;
         }
 
-        type SolanaSwapTag = U1;
-        input.amount_in = _process_swap_and_return_balance::<SolanaSwapTag>(
+        const SOLANA_SWAP_TAG: u8 = 1;
+        input.amount_in = _process_swap_and_return_balance::<SOLANA_SWAP_TAG>(
             input,
             user_dest_info,
             swap_program_info,
@@ -500,8 +499,8 @@ fn process_raydium_router_swap(accounts: &[AccountInfo], router_input: RouterSwa
             input.minimum_amount_out = router_input.minimum_amount_out;
         }
 
-        type RaydiumSwapTag = U9;
-        input.amount_in = _process_swap_and_return_balance::<RaydiumSwapTag>(
+        const RAYDIUM_SWAP_TAG: u8 = 9;
+        input.amount_in = _process_swap_and_return_balance::<RAYDIUM_SWAP_TAG>(
             input,
             user_dest_account_info,
             swap_program_info,
@@ -560,8 +559,8 @@ fn process_saber_router_swap(accounts: &[AccountInfo], router_input: RouterSwapI
             input.minimum_amount_out = router_input.minimum_amount_out;
         }
 
-        type SaberSwapTag = U1;
-        input.amount_in = _process_swap_and_return_balance::<SaberSwapTag>(
+        const SABER_SWAP_TAG: u8 = 1;
+        input.amount_in = _process_swap_and_return_balance::<SABER_SWAP_TAG>(
             input,
             user_dest_info,
             swap_program_info,
@@ -604,8 +603,8 @@ fn process_solana_swap(accounts: &[AccountInfo], input: SwapInput) -> ProgramRes
     let solana_swap_program_info = next_account_info(account_info_iter)?;
 
     // Solana swap tag is 1
-    type SolanaSwapTag = U1;
-    _process_swap_and_repay_loan::<SolanaSwapTag>(
+    const SOLANA_SWAP_TAG: u8 = 1;
+    _process_swap_and_repay_loan::<SOLANA_SWAP_TAG>(
         input,
         lending_dest_account_info,
         user_dest_info,
@@ -658,8 +657,8 @@ fn process_raydium_swap(accounts: &[AccountInfo], input: SwapInput) -> ProgramRe
     let raydium_program_info = next_account_info(account_info_iter)?;
 
     // raydium swap tag is 9
-    type RaydiumSwapTag = U9;
-    _process_swap_and_repay_loan::<RaydiumSwapTag>(
+    const RAYDIUM_SWAP_TAG: u8 = 9;
+    _process_swap_and_repay_loan::<RAYDIUM_SWAP_TAG>(
         input,
         lending_dest_account_info,
         user_dest_account_info,
@@ -709,8 +708,8 @@ fn process_saber_swap(accounts: &[AccountInfo], input: SwapInput) -> ProgramResu
     let saber_program_info = next_account_info(account_info_iter)?;
 
     // saber swap tag is 1
-    type SaberSwapTag = U1;
-    _process_swap_and_repay_loan::<SaberSwapTag>(
+    const SABER_SWAP_TAG: u8 = 1;
+    _process_swap_and_repay_loan::<SABER_SWAP_TAG>(
         input,
         lending_dest_account_info,
         user_dest_info,
@@ -969,7 +968,7 @@ fn _process_close_account<'a>(
     Ok(())
 }
 
-fn _process_swap_and_return_balance<'a, T: Unsigned>(
+fn _process_swap_and_return_balance<'a, const T: u8>(
     input: SwapInput,
     user_dest_account_info: &AccountInfo<'a>,
     swap_program_info: &AccountInfo<'a>,
@@ -987,7 +986,7 @@ fn _process_swap_and_return_balance<'a, T: Unsigned>(
     account_infos.push(swap_program_info.clone());
 
     let mut data = Vec::with_capacity(1 + 8 + 8);
-    data.push(T::U8);
+    data.push(T);
     data.extend_from_slice(&input.amount_in.to_le_bytes());
     data.extend_from_slice(&input.minimum_amount_out.to_le_bytes());
 
@@ -1006,7 +1005,7 @@ fn _process_swap_and_return_balance<'a, T: Unsigned>(
 
 #[inline(never)]
 #[allow(clippy::too_many_arguments)]
-fn _process_swap_and_repay_loan<'a, T: Unsigned>(
+fn _process_swap_and_repay_loan<'a, const T: u8>(
     input: SwapInput,
     lending_dest_account: &AccountInfo<'a>,
     user_dest_account_info: &AccountInfo<'a>,
@@ -1027,7 +1026,7 @@ fn _process_swap_and_repay_loan<'a, T: Unsigned>(
         account_infos.push(swap_program_info.clone());
 
     let mut data = Vec::with_capacity(1 + 8 + 8);
-    data.push(T::U8);
+    data.push(T);
     data.extend_from_slice(&input.amount_in.to_le_bytes());
     data.extend_from_slice(&input.minimum_amount_out.to_le_bytes());
 

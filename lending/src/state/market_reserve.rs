@@ -660,7 +660,7 @@ impl<P: Any + Param> Operator<P> for MarketReserve {
             return Ok(());
         }
 
-        panic!("unexpected param type {}", std::any::type_name::<P>());
+        unreachable!("unexpected param type {}", std::any::type_name::<P>());
     }
 }
 

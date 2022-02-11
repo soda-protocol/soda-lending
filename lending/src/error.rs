@@ -73,9 +73,6 @@ pub enum LendingError {
     #[error("Input amount is invalid")]
     InvalidAmount,
     ///
-    #[error("Input flash loan program is invalid")]
-    InvalidFlashLoanProgram,
-    ///
     #[error("Invalid soToken mint info")]
     InvalidSoTokenMint,
     /// Invalid instruction data passed in.
@@ -177,6 +174,9 @@ pub enum LendingError {
     /// Token approve failed
     #[error("Token revoke failed")]
     TokenRevokeFailed,
+    /// invalid Dex program
+    #[error("Dex related accounts are invalid")]
+    InvalidDexAccounts,
 }
 
 impl From<LendingError> for ProgramError {

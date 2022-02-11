@@ -7,13 +7,11 @@ pub use standard::*;
 use borsh::{BorshSerialize, BorshDeserialize};
 use solana_program::{
     msg,
-    clock::{Clock, Slot},
-    entrypoint::ProgramResult,
+    clock::Slot,
     program_error::ProgramError,
     program_pack::{IsInitialized, Sealed, Pack},
     pubkey::Pubkey,
 };
-use spl_token_swap::state::SwapVersion;
 use crate::{math::Decimal, oracle::OracleConfig, state::{PROGRAM_VERSION, UNINITIALIZED_VERSION}};
 
 #[derive(Clone, Debug, PartialEq)]

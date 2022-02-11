@@ -230,39 +230,6 @@ pub struct UserObligation {
 
 impl UserObligation {
     ///
-    pub fn new(slot: Slot, manager: Pubkey, owner: Pubkey) -> Self {
-        Self {
-            version: PROGRAM_VERSION,
-            last_update: LastUpdate::new(slot),
-            manager,
-            owner,
-            friend: COption::None,
-            collaterals: Vec::new(),
-            collaterals_borrow_value: Decimal::zero(),
-            collaterals_liquidation_value: Decimal::zero(),
-            loans: Vec::new(),
-            loans_value: Decimal::zero(),
-        }
-    }
-    ///
-    fn validate_health(&self, other: Option<Self>) -> ProgramResult {
-        let (collaterals_borrow_value, loans_value) = if let Some(other) = other {
-            let collaterals_borrow_value = self.collaterals_borrow_value
-                .try_add(other.collaterals_borrow_value)?;
-            let loans_value = self.loans_value.try_add(other.loans_value)?;
-
-            (collaterals_borrow_value, loans_value)
-        } else {
-            (self.collaterals_borrow_value, self.loans_value)
-        };
-
-        if collaterals_borrow_value >= loans_value {
-            Ok(())
-        } else {
-            Err(LendingError::ObligationNotHealthy.into())
-        }
-    }
-    ///
     fn validate_liquidation(
         &self,
         other: Option<Self>,
@@ -299,6 +266,39 @@ impl UserObligation {
             Rate::try_from(seize_rate).map_err(|_| LendingError::LiquidationForbidden.into())
         } else {
             Err(LendingError::LiquidationNotAvailable.into())
+        }
+    }
+    ///
+    fn validate_health(&self, other: Option<Self>) -> ProgramResult {
+        let (collaterals_borrow_value, loans_value) = if let Some(other) = other {
+            let collaterals_borrow_value = self.collaterals_borrow_value
+                .try_add(other.collaterals_borrow_value)?;
+            let loans_value = self.loans_value.try_add(other.loans_value)?;
+
+            (collaterals_borrow_value, loans_value)
+        } else {
+            (self.collaterals_borrow_value, self.loans_value)
+        };
+
+        if collaterals_borrow_value >= loans_value {
+            Ok(())
+        } else {
+            Err(LendingError::ObligationNotHealthy.into())
+        }
+    }
+    ///
+    pub fn new(slot: Slot, manager: Pubkey, owner: Pubkey) -> Self {
+        Self {
+            version: PROGRAM_VERSION,
+            last_update: LastUpdate::new(slot),
+            manager,
+            owner,
+            friend: COption::None,
+            collaterals: Vec::new(),
+            collaterals_borrow_value: Decimal::zero(),
+            collaterals_liquidation_value: Decimal::zero(),
+            loans: Vec::new(),
+            loans_value: Decimal::zero(),
         }
     }
     ///
@@ -508,9 +508,7 @@ impl UserObligation {
         other: Option<Self>,
     ) -> Result<u64, ProgramError> {
         let amount = calculate_amount(amount, self.collaterals[index].amount);
-        let ctl = reserve.collateral_to_liquidity_rate()?;
         let borrow_value_ratio = Rate::from_percent(self.collaterals[index].borrow_value_ratio);
-        let before_amount = self.collaterals[index].amount;
         let after_amount = self.collaterals[index].amount
             .checked_sub(amount)
             .ok_or(LendingError::ObligationCollateralInsufficient)?;
@@ -520,14 +518,12 @@ impl UserObligation {
             self.collaterals[index].amount = after_amount;
         }
 
-        let changed_liquidity_amount = amount_mul_rate(before_amount, ctl)?
-            .checked_sub(amount_mul_rate(after_amount, ctl)?)
-            .ok_or(LendingError::MathOverflow)?;
-        let changed_borrow_value = reserve.oracle_info.price
-            .try_mul(changed_liquidity_amount)?
-            .try_div(calculate_decimals(reserve.token_config.decimal)?)?
-            .try_mul(borrow_value_ratio)?;
-
+        let changed_borrow_value = calculate_effective_value(
+            reserve.oracle_info.price,
+            amount_mul_rate(amount, reserve.collateral_to_liquidity_rate()?)?,
+            calculate_decimals(reserve.token_config.decimal)?,
+            borrow_value_ratio
+        )?;
         // update value
         self.collaterals_borrow_value = self.collaterals_borrow_value.try_sub(changed_borrow_value)?;
 
@@ -581,14 +577,18 @@ impl UserObligation {
             liquidation_value_ratio: in_reserve.collateral_info.config.liquidation_value_ratio,
         });
 
-        let out_borrow_value = out_reserve.oracle_info.price
-            .try_mul(amount_mul_rate(out_amount, out_reserve.collateral_to_liquidity_rate()?)?)?
-            .try_div(calculate_decimals(out_reserve.token_config.decimal)?)?
-            .try_mul(out_borrow_value_ratio)?;
-        let in_borrow_value = in_reserve.oracle_info.price
-            .try_mul(amount_mul_rate(in_amount, in_reserve.collateral_to_liquidity_rate()?)?)?
-            .try_div(calculate_decimals(in_reserve.token_config.decimal)?)?
-            .try_mul(Rate::from_percent(in_reserve.collateral_info.config.borrow_value_ratio))?;
+        let out_borrow_value = calculate_effective_value(
+            out_reserve.oracle_info.price,
+            amount_mul_rate(out_amount, out_reserve.collateral_to_liquidity_rate()?)?,
+            calculate_decimals(out_reserve.token_config.decimal)?,
+            out_borrow_value_ratio,
+        )?;
+        let in_borrow_value = calculate_effective_value(
+            in_reserve.oracle_info.price,
+            amount_mul_rate(in_amount, in_reserve.collateral_to_liquidity_rate()?)?,
+            calculate_decimals(in_reserve.token_config.decimal)?,
+            Rate::from_percent(in_reserve.collateral_info.config.borrow_value_ratio),
+        )?;
 
         self.collaterals_borrow_value = self.collaterals_borrow_value
             .try_sub(out_borrow_value)?
@@ -601,7 +601,7 @@ impl UserObligation {
     ///
     // need refresh obligation before
     #[allow(clippy::too_many_arguments)]
-    pub fn liquidate<IsCollateral: typenum::Bit>(
+    pub fn liquidate<const IS_COLLATERAL: bool>(
         &mut self,
         amount: u64,
         collateral_index: usize,
@@ -617,7 +617,7 @@ impl UserObligation {
             .try_add(Rate::one())?
             .min(seize_rate);
 
-        if IsCollateral::BOOL {
+        if IS_COLLATERAL {
             // input amount represents collateral
             let seize_amount = calculate_amount(amount, self.collaterals[collateral_index].amount);
 
@@ -857,7 +857,7 @@ impl<P: Any + Param> Operator<P> for UserObligation {
             return Ok(());
         }
 
-        panic!("unexpected param type");
+        unreachable!("unexpected param type");
     }
 }
 
