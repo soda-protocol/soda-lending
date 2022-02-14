@@ -1,11 +1,8 @@
-use lazy_static::lazy_static;
-use std::str::FromStr;
 use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
     program_pack::Pack,
     program_error::ProgramError,
-    pubkey::Pubkey,
 };
 use spl_token::state::Account;
 use crate::{Data, invoker::process_invoke};
@@ -13,15 +10,13 @@ use crate::{Data, invoker::process_invoke};
 use super::Swapper;
 
 // Orca testnet
-lazy_static! {
-    static ref ORCA_PROGRAM: Pubkey = Pubkey::from_str("3xQ8SWv2GaFXXpHZNqkXsdxq5DZciHBz6ZFoPPfbFd7U").unwrap();
-    static ref SUPPORTED_ORCA_SWAP_POOLS: Vec<Pubkey> = vec![
-        Pubkey::from_str("GaCKuVZyo6HxUf6bkcWzDETGHqqViF6H77ax7Uxq3LXU").unwrap(), // orca/usdc
-        Pubkey::from_str("B4v9urCKnrdCMWt7rEPyA5xyuEeYQv4aDpCfGFVaCvox").unwrap(), // orca/sol
-        Pubkey::from_str("65AsoozQfBedPU3rGCB7CfBbSFhiFGaVQaeoF9mLFM3g").unwrap(), // sol/usdt
-        Pubkey::from_str("F9MgdfFEshXCTGbppcVr2DzpVxqkiVowGqd95S4vpC6D").unwrap(), // eth/sol
-    ];
-}
+const ORCA_PROGRAM: &str = "3xQ8SWv2GaFXXpHZNqkXsdxq5DZciHBz6ZFoPPfbFd7U";
+const SUPPORTED_ORCA_SWAP_POOLS: [&str; 4] = [
+    "GaCKuVZyo6HxUf6bkcWzDETGHqqViF6H77ax7Uxq3LXU", // orca/usdc
+    "B4v9urCKnrdCMWt7rEPyA5xyuEeYQv4aDpCfGFVaCvox", // orca/sol
+    "65AsoozQfBedPU3rGCB7CfBbSFhiFGaVQaeoF9mLFM3g", // sol/usdt
+    "F9MgdfFEshXCTGbppcVr2DzpVxqkiVowGqd95S4vpC6D", // eth/sol
+];
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct OrcaSwapData {
@@ -60,10 +55,10 @@ pub struct OrcaSwapContext<'a, 'b> {
 
 impl<'a, 'b> Swapper<'a, 'b> for OrcaSwapContext<'a, 'b> {
     fn is_supported(&self) -> bool {
-        let a = ORCA_PROGRAM.eq(self.swap_program.key);
+        let a = self.swap_program.key.to_string() == ORCA_PROGRAM;
         let b = SUPPORTED_ORCA_SWAP_POOLS
             .iter()
-            .any(|key| key == self.pool_info.key);
+            .any(|&key| key == self.pool_info.key.to_string());
 
         a && b
     }
