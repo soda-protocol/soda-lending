@@ -2,7 +2,7 @@ use solana_program::{
     account_info::AccountInfo,
     entrypoint::ProgramResult,
     program_pack::Pack,
-    program_error::ProgramError,
+    program_error::ProgramError, pubkey::Pubkey,
 };
 use spl_token::state::Account;
 use crate::{Data, invoker::process_invoke};
@@ -10,13 +10,11 @@ use crate::{Data, invoker::process_invoke};
 use super::Swapper;
 
 // Orca testnet
-const ORCA_PROGRAM: &str = "3xQ8SWv2GaFXXpHZNqkXsdxq5DZciHBz6ZFoPPfbFd7U";
-const SUPPORTED_ORCA_SWAP_POOLS: [&str; 4] = [
-    "GaCKuVZyo6HxUf6bkcWzDETGHqqViF6H77ax7Uxq3LXU", // orca/usdc
-    "B4v9urCKnrdCMWt7rEPyA5xyuEeYQv4aDpCfGFVaCvox", // orca/sol
-    "65AsoozQfBedPU3rGCB7CfBbSFhiFGaVQaeoF9mLFM3g", // sol/usdt
-    "F9MgdfFEshXCTGbppcVr2DzpVxqkiVowGqd95S4vpC6D", // eth/sol
-];
+const ORCA_PROGRAM: Pubkey = solana_program::pubkey!("3xQ8SWv2GaFXXpHZNqkXsdxq5DZciHBz6ZFoPPfbFd7U");
+const ORCA_POOL_ORCA_USDT: Pubkey = solana_program::pubkey!("GaCKuVZyo6HxUf6bkcWzDETGHqqViF6H77ax7Uxq3LXU");
+const ORCA_POOL_ORCA_SOL: Pubkey = solana_program::pubkey!("B4v9urCKnrdCMWt7rEPyA5xyuEeYQv4aDpCfGFVaCvox");
+const ORCA_POOL_SOL_USDT: Pubkey = solana_program::pubkey!("65AsoozQfBedPU3rGCB7CfBbSFhiFGaVQaeoF9mLFM3g");
+const ORCA_POOL_ETH_SOL: Pubkey = solana_program::pubkey!("F9MgdfFEshXCTGbppcVr2DzpVxqkiVowGqd95S4vpC6D");
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct OrcaSwapData {
@@ -55,11 +53,11 @@ pub struct OrcaSwapContext<'a, 'b> {
 
 impl<'a, 'b> Swapper<'a, 'b> for OrcaSwapContext<'a, 'b> {
     fn is_supported(&self) -> bool {
-        let a = self.swap_program.key.to_string() == ORCA_PROGRAM;
-        let b = SUPPORTED_ORCA_SWAP_POOLS
-            .iter()
-            .any(|&key| key == self.pool_info.key.to_string());
-
+        let a = self.swap_program.key == &ORCA_PROGRAM;
+        let b = (self.pool_info.key == &ORCA_POOL_ORCA_USDT) ||
+            (self.pool_info.key == &ORCA_POOL_ORCA_SOL) ||
+            (self.pool_info.key == &ORCA_POOL_SOL_USDT) ||
+            (self.pool_info.key == &ORCA_POOL_ETH_SOL);
         a && b
     }
 
