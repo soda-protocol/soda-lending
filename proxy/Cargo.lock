@@ -884,8 +884,7 @@ dependencies = [
  "solana-program",
  "spl-token 3.2.0",
  "spl-token-swap",
- "switchboard-program 0.1.59",
- "switchboard-program 0.2.0",
+ "switchboard-program",
  "thiserror",
  "uint",
 ]
@@ -1079,22 +1078,6 @@ checksum = "6bdef32e8150c2a081110b42772ffe7d7c9032b606bc226c8260fd97e0976601"
 
 [[package]]
 name = "switchboard-program"
-version = "0.1.59"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "57445d78029687264e245eb949e5c928e3aecd64a0afea770fc4fb2a826e60e0"
-dependencies = [
- "bincode",
- "borsh",
- "byteorder",
- "quick-protobuf",
- "solana-program",
- "switchboard-protos",
- "switchboard-utils",
- "zerocopy",
-]
-
-[[package]]
-name = "switchboard-program"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "667985cd609f73ea5d6c6b4b5564a816d74d1e8824a5f8ead7f24ecba6d28ae1"
@@ -1122,23 +1105,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "switchboard-utils"
-version = "0.1.32"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0bc027ee269f663f2a6a848ee3c819936dbdbd35d74b9c4fb2aaf3f0360d903f"
-dependencies = [
- "bincode",
- "borsh",
- "byteorder",
- "quick-protobuf",
- "rust_decimal",
- "rust_decimal_macros",
- "solana-program",
- "switchboard-protos",
- "zerocopy",
-]
-
-[[package]]
 name = "switchboard-utils-bm"
 version = "0.1.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1163,18 +1129,6 @@ checksum = "8daf5dd0bb60cbd4137b1b587d2fc0ae729bc07cf01cd70b36a1ed5ade3b9d59"
 dependencies = [
  "proc-macro2",
  "quote",
- "unicode-xid",
-]
-
-[[package]]
-name = "synstructure"
-version = "0.12.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f36bdaa60a83aca3921b5259d5400cbf5e90fc51931376a9bd4a0eb79aa7210f"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
  "unicode-xid",
 ]
 
@@ -1346,27 +1300,6 @@ name = "winapi-x86_64-pc-windows-gnu"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
-
-[[package]]
-name = "zerocopy"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6580539ad917b7c026220c4b3f2c08d52ce54d6ce0dc491e66002e35388fab46"
-dependencies = [
- "byteorder",
- "zerocopy-derive",
-]
-
-[[package]]
-name = "zerocopy-derive"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d498dbd1fd7beb83c86709ae1c33ca50942889473473d287d56ce4770a18edfb"
-dependencies = [
- "proc-macro2",
- "syn",
- "synstructure",
-]
 
 [[package]]
 name = "zeroize"

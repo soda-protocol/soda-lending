@@ -20,9 +20,7 @@ pub enum OracleType {
     ///
     ChainLink,
     ///
-    SwitchboardV1,
-    ///
-    SwitchboardV2,
+    Switchboard,
 }
 
 impl OracleType {
@@ -30,8 +28,7 @@ impl OracleType {
         match self {
             OracleType::Pyth => get_pyth_price(data, clock),
             OracleType::ChainLink => get_chainlink_price(data, clock),
-            OracleType::SwitchboardV1 => get_switchboard_price_v1(data, clock),
-            OracleType::SwitchboardV2 => get_switchboard_price_v2(data, clock),
+            OracleType::Switchboard => get_switchboard_price(data, clock),
         }
     }
 }
