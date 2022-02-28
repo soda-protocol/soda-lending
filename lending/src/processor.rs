@@ -30,7 +30,7 @@ use crate::{
         Manager, MarketReserve, Operator, Param, RateModel,
         TokenConfig, UserObligation, calculate_amount,
     },
-    oracle::OracleConfig,
+    oracle::OracleConfig, math::Decimal,
 };
 #[cfg(feature = "unique-credit")]
 use crate::state::UniqueCredit;
@@ -955,7 +955,7 @@ fn process_redeem_collateral(
 
     // redeem in obligation
     let index = user_obligation.find_collateral(market_reserve_info.key)?;
-    let amount = user_obligation.redeem(amount, index, &market_reserve, friend_obligation)?;
+    let amount = user_obligation.redeem::<true>(amount, index, &market_reserve, friend_obligation)?;
     user_obligation.last_update.mark_stale();
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
@@ -1071,7 +1071,7 @@ fn process_redeem_and_withdraw<const WITH_LOAN: bool>(
     // redeem in obligation
     let index = user_obligation.find_collateral(market_reserve_info.key)?;
     let amount = if WITH_LOAN {
-        user_obligation.redeem(amount, index, &market_reserve, friend_obligation)?
+        user_obligation.redeem::<true>(amount, index, &market_reserve, friend_obligation)?
     } else {
         user_obligation.redeem_without_loan(amount, index, friend_obligation)?
     };
@@ -2337,16 +2337,12 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
     let token_program_id = next_account_info(account_info_iter)?;
 
     let collateral_index = user_obligation.find_collateral(collateral_market_reserve_info.key)?;
-    // redeem
-    let sotoken_amount = user_obligation.redeem(sotoken_amount, collateral_index, &collateral_market_reserve, friend_obligation)?;
-    // user got sotoken and withdraw immediately
-    // remark: token mint + token burn are all omitted here!
-    collateral_market_reserve.accrue_interest(clock.slot)?;
-    collateral_market_reserve.last_update.update_slot(clock.slot, true);
+    // redeem without remove
+    let sotoken_amount = user_obligation.redeem::<false>(sotoken_amount, collateral_index, &collateral_market_reserve, friend_obligation)?;
     let collateral_amount = collateral_market_reserve.withdraw(sotoken_amount)?;
-    let actual_repay_amount = match DEX_TYPE {
+    match DEX_TYPE {
         ORCA_DEX => {
-            let swap_ctx = OrcaSwapContext {
+            let mut swap_ctx = OrcaSwapContext {
                 swap_program: next_account_info(account_info_iter)?,
                 token_program: token_program_id,
                 pool_info: next_account_info(account_info_iter)?,
@@ -2369,35 +2365,54 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
             // do swap
             swap_ctx.swap(collateral_amount, min_repay_amount)?;
             // after swap
-            swap_ctx.get_user_dest_token_balance()?
+            let actual_repay_amount = swap_ctx.get_user_dest_token_balance()?
                 .checked_sub(loan_amount_before)
-                .ok_or(LendingError::MathOverflow)?
+                .ok_or(LendingError::MathOverflow)?;
+
+            let loan_index = user_obligation.find_loan(loan_market_reserve_info.key)?;
+            let settle = user_obligation.repay(
+                if Decimal::from(actual_repay_amount) < user_obligation.loans[loan_index].borrowed_amount_wads {
+                    Some(actual_repay_amount)
+                } else {
+                    None
+                },
+                u64::MAX,
+                loan_index,
+            )?;
+            // accrue interest
+            loan_market_reserve.accrue_interest(clock.slot)?;
+            loan_market_reserve.last_update.update_slot(clock.slot, true);
+            // user repay in loan reserve
+            loan_market_reserve.liquidity_info.repay(&settle)?;
+
+            if actual_repay_amount > settle.amount {
+                let pool_dest_token_account = swap_ctx.pool_source_token_account;
+                swap_ctx.pool_source_token_account = swap_ctx.pool_dest_token_account;
+                swap_ctx.pool_dest_token_account = pool_dest_token_account;
+
+                let user_dest_token_account = swap_ctx.user_source_token_account;
+                swap_ctx.user_source_token_account = swap_ctx.user_dest_token_account;
+                swap_ctx.user_dest_token_account = user_dest_token_account;
+
+                // before swap
+                let collateral_amount_before = swap_ctx.get_user_dest_token_balance()?;
+                // do swap back
+                swap_ctx.swap(actual_repay_amount - settle.amount, 1)?;
+                // after swap
+                let collateral_amount_after = swap_ctx.get_user_dest_token_balance()?
+                    .checked_sub(collateral_amount_before)
+                    .ok_or(LendingError::MathOverflow)?;
+                // accure interest
+                collateral_market_reserve.accrue_interest(clock.slot)?;
+                collateral_market_reserve.last_update.update_slot(clock.slot, true);
+                // deposit back to collateral reserve
+                let mint_amount = collateral_market_reserve.deposit(collateral_amount_after)?;
+                user_obligation.pledge(mint_amount, None, collateral_index)?;
+            }
         }
         _ => unreachable!("invalid dex type {}", DEX_TYPE)
     };
     
-    // repay
-    let loan_index = user_obligation.find_loan(loan_market_reserve_info.key)?;
-    let settle = user_obligation.repay(
-        if actual_repay_amount < loan_market_reserve.liquidity_info.available { Some(actual_repay_amount) } else { None },
-        loan_market_reserve.liquidity_info.available,
-        loan_index,
-    )?;
-    // accure interest
-    loan_market_reserve.accrue_interest(clock.slot)?;
-    loan_market_reserve.last_update.update_slot(clock.slot, true);
-    // user repay in loan reserve
-    loan_market_reserve.liquidity_info.repay(&settle)?;
-    // remaining loan tokens deposit in reserve
-    if actual_repay_amount > settle.amount {
-        let mint_amount = loan_market_reserve.deposit(actual_repay_amount - settle.amount)?;
-        // pledge in obligation
-        let _ = if let Ok(index) = user_obligation.find_collateral(loan_market_reserve_info.key) {
-            user_obligation.pledge(mint_amount, None, index)?
-        } else {
-            user_obligation.new_pledge(mint_amount, None, *loan_market_reserve_info.key, &loan_market_reserve)?
-        };
-    }
     user_obligation.last_update.mark_stale();
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;

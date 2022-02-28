@@ -500,7 +500,7 @@ impl UserObligation {
     }
     ///
     // need refresh obligation before
-    pub fn redeem(
+    pub fn redeem<const ALLOW_REMOVE: bool>(
         &mut self,
         amount: Option<u64>,
         index: usize,
@@ -512,7 +512,8 @@ impl UserObligation {
         let after_amount = self.collaterals[index].amount
             .checked_sub(amount)
             .ok_or(LendingError::ObligationCollateralInsufficient)?;
-        if after_amount == 0 {
+
+        if ALLOW_REMOVE && after_amount == 0 {
             self.collaterals.remove(index);
         } else {
             self.collaterals[index].amount = after_amount;
