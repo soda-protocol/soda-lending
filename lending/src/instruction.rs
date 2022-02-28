@@ -193,8 +193,8 @@ impl LendingInstruction {
             }
             23 => {
                 let (sotoken_amount, rest) = Self::unpack_u64(rest)?;
-                let (repay_amount, _rest) = Self::unpack_u64(rest)?;
-                Self::EasyRepayWithOrca(sotoken_amount, repay_amount)
+                let (min_repay_amount, _rest) = Self::unpack_u64(rest)?;
+                Self::EasyRepayWithOrca(sotoken_amount, min_repay_amount)
             }
             24 => {
                 let (borrow_amount, rest) = Self::unpack_u64(rest)?;
@@ -476,10 +476,10 @@ impl LendingInstruction {
                 buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::EasyRepayWithOrca(sotoken_amount, repay_amount) => {
+            Self::EasyRepayWithOrca(sotoken_amount, min_repay_amount) => {
                 buf.push(23);
                 buf.extend_from_slice(&sotoken_amount.to_le_bytes());
-                buf.extend_from_slice(&repay_amount.to_le_bytes());
+                buf.extend_from_slice(&min_repay_amount.to_le_bytes());
             }
             Self::OpenLeveragePositionWithOrca(borrow_amount, min_collateral_amount) => {
                 buf.push(24);
@@ -1202,7 +1202,7 @@ pub fn easy_repay_with_orca(
     pool_dest_token_account_key: Pubkey,
     pool_fee_account: Pubkey,
     sotoken_amount: u64,
-    repay_amount: u64,
+    min_repay_amount: u64,
 ) -> Instruction {
     let program_id = id();
     let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
@@ -1236,7 +1236,7 @@ pub fn easy_repay_with_orca(
     Instruction {
         program_id,
         accounts,
-        data: LendingInstruction::EasyRepayWithOrca(sotoken_amount, repay_amount).pack(),
+        data: LendingInstruction::EasyRepayWithOrca(sotoken_amount, min_repay_amount).pack(),
     }
 }
 

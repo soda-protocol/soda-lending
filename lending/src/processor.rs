@@ -149,9 +149,9 @@ pub fn process_instruction(
             msg!("Instruction: Flash Loan: amount = {}", amount);
             process_flash_loan(program_id, accounts, tag, amount)
         }
-        LendingInstruction::EasyRepayWithOrca(sotoken_amount, repay_amount) => {
-            msg!("Instruction: Easy Repay With Orca: collateral amount = {}, repay amount {}", sotoken_amount, repay_amount);
-            process_easy_repay_by_dex::<ORCA_DEX>(program_id, accounts, sotoken_amount, repay_amount)
+        LendingInstruction::EasyRepayWithOrca(sotoken_amount, min_repay_amount) => {
+            msg!("Instruction: Easy Repay With Orca: collateral amount = {}, min repay amount {}", sotoken_amount, min_repay_amount);
+            process_easy_repay_by_dex::<ORCA_DEX>(program_id, accounts, sotoken_amount, min_repay_amount)
         }
         LendingInstruction::OpenLeveragePositionWithOrca(borrow_amount, min_collateral_amount) => {
             msg!("Instruction: Open Leverage Position With Orca: borrow amount = {}, min collateral amount {}", borrow_amount, min_collateral_amount);
