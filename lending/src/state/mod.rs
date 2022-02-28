@@ -158,21 +158,13 @@ fn amount_mul_rate(amount: u64, rate: Rate) -> Result<u64, ProgramError> {
 
 #[inline(always)]
 pub fn calculate_amount(amount: Option<u64>, max: u64) -> u64 {
-    if let Some(amount) = amount {
-        amount.min(max)
-    } else {
-        max
-    }
+    if let Some(amount) = amount { amount } else { max }
 }
 
 #[inline(always)]
 fn calculate_amount_and_decimal(amount: Option<u64>, max: Decimal) -> Result<(u64, Decimal), ProgramError> {
     if let Some(amount) = amount {
-        if Decimal::from(amount) > max {
-            Ok((max.try_ceil_u64()?, max))
-        } else {
-            Ok((amount, Decimal::from(amount)))
-        }
+        Ok((amount, Decimal::from(amount)))
     } else {
         Ok((max.try_ceil_u64()?, max))
     }

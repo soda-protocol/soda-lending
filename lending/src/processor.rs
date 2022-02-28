@@ -2378,7 +2378,11 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
     
     // repay
     let loan_index = user_obligation.find_loan(loan_market_reserve_info.key)?;
-    let settle = user_obligation.repay(Some(actual_repay_amount), loan_market_reserve.liquidity_info.available, loan_index)?;
+    let settle = user_obligation.repay(
+        if actual_repay_amount < loan_market_reserve.liquidity_info.available { Some(actual_repay_amount) } else { None },
+        loan_market_reserve.liquidity_info.available,
+        loan_index,
+    )?;
     // accure interest
     loan_market_reserve.accrue_interest(clock.slot)?;
     loan_market_reserve.last_update.update_slot(clock.slot, true);
