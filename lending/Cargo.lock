@@ -2219,7 +2219,7 @@ dependencies = [
  "solana-program",
  "solana-program-test",
  "solana-sdk",
- "spl-token 3.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "spl-token 3.3.0",
  "spl-token-swap",
  "switchboard-program",
  "thiserror",
@@ -2755,7 +2755,7 @@ dependencies = [
 
 [[package]]
 name = "spl-token"
-version = "3.3.0"
+version = "3.2.0"
 dependencies = [
  "arrayref",
  "num-derive",
@@ -2789,7 +2789,7 @@ dependencies = [
  "num-traits",
  "solana-program",
  "spl-math",
- "spl-token 3.3.0",
+ "spl-token 3.2.0",
  "thiserror",
 ]
 

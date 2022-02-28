@@ -2356,13 +2356,12 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
     // repay and redeem
     let settle = user_obligation.repay(repay_amount, loan_market_reserve.liquidity_info.available, loan_index)?;
     let sotoken_amount = user_obligation.redeem(sotoken_amount, collateral_index, &collateral_market_reserve, friend_obligation)?;
-    user_obligation.last_update.mark_stale();
     // user got sotoken and withdraw immediately
     // remark: token mint + token burn are all omitted here!
     collateral_market_reserve.accrue_interest(clock.slot)?;
     collateral_market_reserve.last_update.update_slot(clock.slot, true);
     let collateral_amount = collateral_market_reserve.withdraw(sotoken_amount)?;
-    match DEX_TYPE {
+    let loan_amount = match DEX_TYPE {
         ORCA_DEX => {
             let swap_ctx = OrcaSwapContext {
                 swap_program: next_account_info(account_info_iter)?,
@@ -2382,8 +2381,14 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
             if !swap_ctx.is_supported() {
                 return Err(LendingError::InvalidDexAccounts.into());
             }
+            // before swap
+            let loan_amount_before = swap_ctx.get_user_dest_token_balance()?;
             // do swap
             swap_ctx.swap(collateral_amount, settle.amount)?;
+            // after swap
+            swap_ctx.get_user_dest_token_balance()?
+                .checked_sub(loan_amount_before)
+                .ok_or(LendingError::MathOverflow)?
         }
         _ => unreachable!("invalid dex type {}", DEX_TYPE)
     };
@@ -2392,6 +2397,17 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
     loan_market_reserve.last_update.update_slot(clock.slot, true);
     // user repay in loan reserve
     loan_market_reserve.liquidity_info.repay(&settle)?;
+    // remaining loan tokens deposit in reserve
+    if loan_amount > settle.amount {
+        let mint_amount = loan_market_reserve.deposit(repay_amount - settle.amount)?;
+        // pledge in obligation
+        let _ = if let Ok(index) = user_obligation.find_collateral(loan_market_reserve_info.key) {
+            user_obligation.pledge(mint_amount, mint_amount, index)?
+        } else {
+            user_obligation.new_pledge(mint_amount, mint_amount, *loan_market_reserve_info.key, &loan_market_reserve)?
+        };
+    }
+    user_obligation.last_update.mark_stale();
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
     MarketReserve::pack(loan_market_reserve, &mut loan_market_reserve_info.try_borrow_mut_data()?)?;
