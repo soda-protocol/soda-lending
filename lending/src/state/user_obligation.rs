@@ -383,7 +383,7 @@ impl UserObligation {
     // need refresh obligation before
     pub fn borrow_in(
         &mut self,
-        amount: u64,
+        amount: Option<u64>,
         index: usize,
         reserve: &MarketReserve,
         other: Option<Self>,
@@ -408,7 +408,7 @@ impl UserObligation {
     // need refresh obligation before
     pub fn new_borrow_in(
         &mut self,
-        amount: u64,
+        amount: Option<u64>,
         key: Pubkey,
         reserve: &MarketReserve,
         other: Option<Self>,
@@ -442,7 +442,7 @@ impl UserObligation {
     // need accure reserve and obligation interest before
     pub fn repay(
         &mut self,
-        amount: u64,
+        amount: Option<u64>,
         balance: u64,
         index: usize,
     ) -> Result<RepaySettle, ProgramError> {
@@ -466,7 +466,7 @@ impl UserObligation {
     pub fn pledge(
         &mut self,
         balance: u64,
-        amount: u64,
+        amount: Option<u64>,
         index: usize,
     ) -> Result<u64, ProgramError> {
         let amount = calculate_amount(amount, balance);
@@ -480,7 +480,7 @@ impl UserObligation {
     pub fn new_pledge(
         &mut self,
         balance: u64,
-        amount: u64,
+        amount: Option<u64>,
         key: Pubkey,
         reserve: &MarketReserve,
     ) -> Result<u64, ProgramError> {
@@ -502,7 +502,7 @@ impl UserObligation {
     // need refresh obligation before
     pub fn redeem(
         &mut self,
-        amount: u64,
+        amount: Option<u64>,
         index: usize,
         reserve: &MarketReserve,
         other: Option<Self>,
@@ -532,7 +532,12 @@ impl UserObligation {
         Ok(amount)
     }
     ///
-    pub fn redeem_without_loan(&mut self, amount: u64, index: usize, other: Option<Self>) -> Result<u64, ProgramError> {
+    pub fn redeem_without_loan(
+        &mut self,
+        amount: Option<u64>,
+        index: usize,
+        other: Option<Self>,
+    ) -> Result<u64, ProgramError> {
         let is_empty = other
             .map(|obligation| obligation.loans.is_empty())
             .unwrap_or(true);
@@ -558,7 +563,7 @@ impl UserObligation {
     pub fn replace_collateral(
         &mut self,
         balance: u64,
-        in_amount: u64,
+        in_amount: Option<u64>,
         out_index: usize,
         in_key: Pubkey,
         out_reserve: &MarketReserve,
@@ -603,7 +608,7 @@ impl UserObligation {
     #[allow(clippy::too_many_arguments)]
     pub fn liquidate<const IS_COLLATERAL: bool>(
         &mut self,
-        amount: u64,
+        amount: Option<u64>,
         collateral_index: usize,
         loan_index: usize,
         collateral_reserve: &MarketReserve,

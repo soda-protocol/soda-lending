@@ -16,7 +16,7 @@ use solana_program::{
 use spl_token::{state::{Mint, Account}, native_mint};
 
 use crate::{
-    assert_rent_exempt, assert_uninitialized, Data,
+    assert_rent_exempt, assert_uninitialized, handle_amount, Data,
     dex::{DexType, OrcaSwapContext, Swapper, ORCA_DEX},
     error::LendingError,
     instruction::LendingInstruction,
@@ -388,14 +388,13 @@ fn process_deposit_or_withdraw<const IS_DEPOSIT: bool>(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
+    let amount = handle_amount(amount, || {
         if IS_DEPOSIT {
             msg!("Liquidity amount provided cannot be zero");
         } else {
             msg!("Collateral amount provided cannot be zero");
         }
-        return Err(LendingError::InvalidAmount.into());
-    }
+    })?;
 
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -717,10 +716,9 @@ fn process_pledge_collateral(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
+    let amount = handle_amount(amount, || {
         msg!("Collateral amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
+    })?;
 
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -787,10 +785,9 @@ fn process_deposit_and_pledge(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
+    let amount = handle_amount(amount, || {
         msg!("Liquidity amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
+    })?;
 
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -839,9 +836,9 @@ fn process_deposit_and_pledge(
     let mint_amount = market_reserve.deposit(amount)?;
     // pledge in obligation
     let _ = if let Ok(index) = user_obligation.find_collateral(market_reserve_info.key) {
-        user_obligation.pledge(mint_amount, mint_amount, index)?
+        user_obligation.pledge(mint_amount, None, index)?
     } else {
-        user_obligation.new_pledge(mint_amount, mint_amount, *market_reserve_info.key, &market_reserve)?
+        user_obligation.new_pledge(mint_amount, None, *market_reserve_info.key, &market_reserve)?
     };
     user_obligation.last_update.mark_stale();
     // pack
@@ -866,10 +863,9 @@ fn process_redeem_collateral(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
+    let amount = handle_amount(amount, || {
         msg!("Collateral amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
+    })?;
 
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -982,10 +978,9 @@ fn process_redeem_and_withdraw<const WITH_LOAN: bool>(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
+    let amount = handle_amount(amount, || {
         msg!("Collateral amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
+    })?;
 
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -1105,10 +1100,9 @@ fn process_redeem_collateral_without_loan(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
+    let amount = handle_amount(amount, || {
         msg!("Collateral amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
+    })?;
 
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -1210,10 +1204,9 @@ fn process_replace_collateral(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
+    let amount = handle_amount(amount, || {
         msg!("Collateral amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
+    })?;
 
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -1370,10 +1363,9 @@ fn process_borrow_liquidity(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
+    let amount = handle_amount(amount, || {
         msg!("Liquidity amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
+    })?;
 
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -1462,7 +1454,7 @@ fn process_borrow_liquidity(
     let token_program_id = next_account_info(account_info_iter)?;
 
     // borrow
-    if let Ok(index) = user_obligation.find_loan(market_reserve_info.key) {
+    let amount = if let Ok(index) = user_obligation.find_loan(market_reserve_info.key) {
         user_obligation.borrow_in(
             amount,
             index,
@@ -1503,10 +1495,9 @@ fn process_repay_loan(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
+    let amount = handle_amount(amount, || {
         msg!("Liquidity amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
+    })?;
 
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -1575,10 +1566,9 @@ fn process_liquidate<const IS_COLLATERAL: bool>(
     accounts: &[AccountInfo],
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
-        msg!("Liquidation amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
+    let amount = handle_amount(amount, || {
+        msg!("Liquidity amount provided cannot be zero");
+    })?;
 
     let account_info_iter = &mut accounts.iter();
     // 1
@@ -1729,10 +1719,9 @@ fn process_flash_loan(
     tag: u8,
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
+    let amount = handle_amount(amount, || {
         msg!("Flash loan amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
+    })?;
 
     let account_info_iter = &mut accounts.iter().peekable();
     // 1
@@ -1803,7 +1792,7 @@ fn process_flash_loan(
         supply_token_account_info,
         receiver_authority_info,
         manager_authority_info,
-        amount,
+        borrow_amount,
         authority_signer_seeds,
     )?;
 
@@ -1849,10 +1838,9 @@ fn process_flash_liquidate<const IS_COLLATERAL: bool>(
     tag: u8,
     amount: u64,
 ) -> ProgramResult {
-    if amount == 0 {
+    let amount = handle_amount(amount, || {
         msg!("Flash liquidation amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
+    })?;
 
     let account_info_iter = &mut accounts.iter().peekable();
     // 1
@@ -2043,10 +2031,9 @@ fn process_open_leverage_position_by_dex<const DEX_TYPE: DexType>(
     borrow_amount: u64,
     min_collateral_amount: u64,
 ) -> ProgramResult {
-    if borrow_amount == 0 {
+    let borrow_amount = handle_amount(borrow_amount, || {
         msg!("Open leverage position borrow amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
+    })?;
     if min_collateral_amount == 0 {
         msg!("Open leverage position min collateral amount provided cannot be zero");
         return Err(LendingError::InvalidAmount.into());
@@ -2198,21 +2185,21 @@ fn process_open_leverage_position_by_dex<const DEX_TYPE: DexType>(
     let mint_amount = collateral_market_reserve.deposit(collateral_amount)?;
     // pledge in obligation
     let _ = if let Ok(index) = user_obligation.find_collateral(collateral_market_reserve_info.key) {
-        user_obligation.pledge(mint_amount, mint_amount, index)?
+        user_obligation.pledge(mint_amount, None, index)?
     } else {
-        user_obligation.new_pledge(mint_amount, mint_amount, *collateral_market_reserve_info.key, &collateral_market_reserve)?
+        user_obligation.new_pledge(mint_amount, None, *collateral_market_reserve_info.key, &collateral_market_reserve)?
     };
     // borrow
-    if let Ok(index) = user_obligation.find_loan(loan_market_reserve_info.key) {
+    let borrow_amount = if let Ok(index) = user_obligation.find_loan(loan_market_reserve_info.key) {
         user_obligation.borrow_in(
-            borrow_amount,
+            Some(borrow_amount),
             index,
             &loan_market_reserve,
             friend_obligation,
         )?
     } else {
         user_obligation.new_borrow_in(
-            borrow_amount,
+            Some(borrow_amount),
             *loan_market_reserve_info.key,
             &loan_market_reserve,
             friend_obligation,
@@ -2234,14 +2221,13 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     sotoken_amount: u64,
-    repay_amount: u64,
+    min_repay_amount: u64,
 ) -> ProgramResult {
-    if sotoken_amount == 0 {
+    let sotoken_amount = handle_amount(sotoken_amount, || {
         msg!("Flash repay sotoken amount provided cannot be zero");
-        return Err(LendingError::InvalidAmount.into());
-    }
-    if repay_amount == 0 {
-        msg!("Flash repay repaying amount provided cannot be zero");
+    })?;
+    if min_repay_amount == 0 {
+        msg!("Flash repay min repaying amount provided cannot be zero");
         return Err(LendingError::InvalidAmount.into());
     }
 
@@ -2350,18 +2336,15 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
     // 10/11
     let token_program_id = next_account_info(account_info_iter)?;
 
-    // flash repay
     let collateral_index = user_obligation.find_collateral(collateral_market_reserve_info.key)?;
-    let loan_index = user_obligation.find_loan(loan_market_reserve_info.key)?;
-    // repay and redeem
-    let settle = user_obligation.repay(repay_amount, loan_market_reserve.liquidity_info.available, loan_index)?;
+    // redeem
     let sotoken_amount = user_obligation.redeem(sotoken_amount, collateral_index, &collateral_market_reserve, friend_obligation)?;
     // user got sotoken and withdraw immediately
     // remark: token mint + token burn are all omitted here!
     collateral_market_reserve.accrue_interest(clock.slot)?;
     collateral_market_reserve.last_update.update_slot(clock.slot, true);
     let collateral_amount = collateral_market_reserve.withdraw(sotoken_amount)?;
-    let loan_amount = match DEX_TYPE {
+    let actual_repay_amount = match DEX_TYPE {
         ORCA_DEX => {
             let swap_ctx = OrcaSwapContext {
                 swap_program: next_account_info(account_info_iter)?,
@@ -2384,7 +2367,7 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
             // before swap
             let loan_amount_before = swap_ctx.get_user_dest_token_balance()?;
             // do swap
-            swap_ctx.swap(collateral_amount, settle.amount)?;
+            swap_ctx.swap(collateral_amount, min_repay_amount)?;
             // after swap
             swap_ctx.get_user_dest_token_balance()?
                 .checked_sub(loan_amount_before)
@@ -2392,19 +2375,23 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
         }
         _ => unreachable!("invalid dex type {}", DEX_TYPE)
     };
+    
+    // repay
+    let loan_index = user_obligation.find_loan(loan_market_reserve_info.key)?;
+    let settle = user_obligation.repay(Some(actual_repay_amount), loan_market_reserve.liquidity_info.available, loan_index)?;
     // accure interest
     loan_market_reserve.accrue_interest(clock.slot)?;
     loan_market_reserve.last_update.update_slot(clock.slot, true);
     // user repay in loan reserve
     loan_market_reserve.liquidity_info.repay(&settle)?;
     // remaining loan tokens deposit in reserve
-    if loan_amount > settle.amount {
-        let mint_amount = loan_market_reserve.deposit(repay_amount - settle.amount)?;
+    if actual_repay_amount > settle.amount {
+        let mint_amount = loan_market_reserve.deposit(actual_repay_amount - settle.amount)?;
         // pledge in obligation
         let _ = if let Ok(index) = user_obligation.find_collateral(loan_market_reserve_info.key) {
-            user_obligation.pledge(mint_amount, mint_amount, index)?
+            user_obligation.pledge(mint_amount, None, index)?
         } else {
-            user_obligation.new_pledge(mint_amount, mint_amount, *loan_market_reserve_info.key, &loan_market_reserve)?
+            user_obligation.new_pledge(mint_amount, None, *loan_market_reserve_info.key, &loan_market_reserve)?
         };
     }
     user_obligation.last_update.mark_stale();

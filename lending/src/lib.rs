@@ -15,6 +15,7 @@ pub mod state;
 
 // Export current sdk types for downstream users building with a different sdk version
 use solana_program;
+use solana_program::program_error::ProgramError;
 use solana_program::program_pack::{Pack, IsInitialized};
 use solana_program::{msg, rent::Rent, account_info::AccountInfo, entrypoint::ProgramResult};
 use error::LendingError;
@@ -42,5 +43,17 @@ fn assert_uninitialized<T: Pack + IsInitialized>(account_info: &AccountInfo) -> 
         Err(LendingError::AlreadyInitialized.into())
     } else {
         Ok(())
+    }
+}
+
+#[inline(always)]
+fn handle_amount<F: FnOnce()>(amount: u64, notify: F) -> Result<Option<u64>, ProgramError> {
+    if amount == 0 {
+        notify();
+        Err(LendingError::InvalidAmount.into())
+    } else if amount == u64::MAX {
+        Ok(None)
+    } else {
+        Ok(Some(amount))
     }
 }
