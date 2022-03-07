@@ -445,6 +445,7 @@ impl UserObligation {
         amount: Option<u64>,
         balance: u64,
         index: usize,
+        reserve: Option<&MarketReserve>,
     ) -> Result<RepaySettle, ProgramError> {
         let (amount, amount_decimal) =
             calculate_amount_and_decimal(amount, self.loans[index].borrowed_amount_wads.min(Decimal::from(balance)))?;
@@ -455,6 +456,13 @@ impl UserObligation {
 
         if self.loans[index].borrowed_amount_wads == Decimal::zero() {
             self.loans.remove(index);
+        }
+
+        if let Some(reserve) = reserve {
+            let value = reserve.oracle_info.price
+                .try_mul(amount)?
+                .try_div(calculate_decimals(reserve.token_config.decimal)?)?;
+            self.loans_value = self.loans_value.try_sub(value)?;
         }
 
         Ok(RepaySettle {
@@ -468,16 +476,29 @@ impl UserObligation {
         balance: u64,
         amount: Option<u64>,
         index: usize,
+        reserve: Option<&MarketReserve>,
     ) -> Result<u64, ProgramError> {
         let amount = calculate_amount(amount, balance);
         self.collaterals[index].amount = self.collaterals[index].amount
             .checked_add(amount)
             .ok_or(LendingError::MathOverflow)?;
 
+        if let Some(reserve) = reserve {
+            let borrow_value_ratio = Rate::from_percent(self.collaterals[index].borrow_value_ratio);
+            let changed_value = calculate_effective_value(
+                reserve.oracle_info.price,
+                amount_mul_rate(amount, reserve.collateral_to_liquidity_rate()?)?,
+                calculate_decimals(reserve.token_config.decimal)?,
+                borrow_value_ratio
+            )?;
+            // update value
+            self.collaterals_borrow_value = self.collaterals_borrow_value.try_add(changed_value)?;
+        }
+
         Ok(amount)
     }
     ///
-    pub fn new_pledge(
+    pub fn new_pledge<const UPDATE_VALUE: bool>(
         &mut self,
         balance: u64,
         amount: Option<u64>,
@@ -494,6 +515,18 @@ impl UserObligation {
                 borrow_value_ratio: reserve.collateral_info.config.borrow_value_ratio,
                 liquidation_value_ratio: reserve.collateral_info.config.liquidation_value_ratio,
             });
+
+            if UPDATE_VALUE {
+                let borrow_value_ratio = Rate::from_percent(reserve.collateral_info.config.borrow_value_ratio);
+                let changed_value = calculate_effective_value(
+                    reserve.oracle_info.price,
+                    amount_mul_rate(amount, reserve.collateral_to_liquidity_rate()?)?,
+                    calculate_decimals(reserve.token_config.decimal)?,
+                    borrow_value_ratio
+                )?;
+                // update value
+                self.collaterals_borrow_value = self.collaterals_borrow_value.try_add(changed_value)?;
+            }
 
             Ok(amount)
         }
