@@ -955,7 +955,7 @@ fn process_redeem_collateral(
 
     // redeem in obligation
     let index = user_obligation.find_collateral(market_reserve_info.key)?;
-    let amount = user_obligation.redeem::<true>(amount, index, &market_reserve, friend_obligation)?;
+    let amount = user_obligation.redeem::<true, true>(amount, index, &market_reserve, friend_obligation)?;
     user_obligation.last_update.mark_stale();
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
@@ -1071,7 +1071,7 @@ fn process_redeem_and_withdraw<const WITH_LOAN: bool>(
     // redeem in obligation
     let index = user_obligation.find_collateral(market_reserve_info.key)?;
     let amount = if WITH_LOAN {
-        user_obligation.redeem::<true>(amount, index, &market_reserve, friend_obligation)?
+        user_obligation.redeem::<true, true>(amount, index, &market_reserve, friend_obligation)?
     } else {
         user_obligation.redeem_without_loan(amount, index, friend_obligation)?
     };
@@ -2224,10 +2224,10 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
     min_repay_amount: u64,
 ) -> ProgramResult {
     let sotoken_amount = handle_amount(sotoken_amount, || {
-        msg!("Flash repay sotoken amount provided cannot be zero");
+        msg!("Easy repay sotoken amount provided cannot be zero");
     })?;
     if min_repay_amount == 0 {
-        msg!("Flash repay min repaying amount provided cannot be zero");
+        msg!("Easy repay min repaying amount provided cannot be zero");
         return Err(LendingError::InvalidAmount.into());
     }
 
@@ -2338,7 +2338,7 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
 
     let collateral_index = user_obligation.find_collateral(collateral_market_reserve_info.key)?;
     // redeem without remove
-    let sotoken_amount = user_obligation.redeem::<false>(sotoken_amount, collateral_index, &collateral_market_reserve, friend_obligation)?;
+    let sotoken_amount = user_obligation.redeem::<false, false>(sotoken_amount, collateral_index, &collateral_market_reserve, friend_obligation.clone())?;
     let collateral_amount = collateral_market_reserve.withdraw(sotoken_amount)?;
     match DEX_TYPE {
         ORCA_DEX => {
@@ -2379,6 +2379,8 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
                 u64::MAX,
                 loan_index,
             )?;
+            // validate health
+            user_obligation.validate_health(friend_obligation)?;
             // accrue interest
             loan_market_reserve.accrue_interest(clock.slot)?;
             loan_market_reserve.last_update.update_slot(clock.slot, true);

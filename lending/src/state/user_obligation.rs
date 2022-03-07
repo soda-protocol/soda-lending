@@ -269,7 +269,7 @@ impl UserObligation {
         }
     }
     ///
-    fn validate_health(&self, other: Option<Self>) -> ProgramResult {
+    pub fn validate_health(&self, other: Option<Self>) -> ProgramResult {
         let (collaterals_borrow_value, loans_value) = if let Some(other) = other {
             let collaterals_borrow_value = self.collaterals_borrow_value
                 .try_add(other.collaterals_borrow_value)?;
@@ -500,7 +500,7 @@ impl UserObligation {
     }
     ///
     // need refresh obligation before
-    pub fn redeem<const ALLOW_REMOVE: bool>(
+    pub fn redeem<const ALLOW_REMOVE: bool, const WITH_VALIDATE: bool>(
         &mut self,
         amount: Option<u64>,
         index: usize,
@@ -528,7 +528,9 @@ impl UserObligation {
         // update value
         self.collaterals_borrow_value = self.collaterals_borrow_value.try_sub(changed_borrow_value)?;
 
-        self.validate_health(other)?;
+        if WITH_VALIDATE {
+            self.validate_health(other)?;
+        }
 
         Ok(amount)
     }
