@@ -9,12 +9,17 @@ use crate::{Data, invoker::process_invoke};
 
 use super::Swapper;
 
-// Orca testnet
-const ORCA_PROGRAM: Pubkey = solana_program::pubkey!("3xQ8SWv2GaFXXpHZNqkXsdxq5DZciHBz6ZFoPPfbFd7U");
-const ORCA_POOL_ORCA_USDT: Pubkey = solana_program::pubkey!("GaCKuVZyo6HxUf6bkcWzDETGHqqViF6H77ax7Uxq3LXU");
-const ORCA_POOL_ORCA_SOL: Pubkey = solana_program::pubkey!("B4v9urCKnrdCMWt7rEPyA5xyuEeYQv4aDpCfGFVaCvox");
-const ORCA_POOL_SOL_USDT: Pubkey = solana_program::pubkey!("65AsoozQfBedPU3rGCB7CfBbSFhiFGaVQaeoF9mLFM3g");
-const ORCA_POOL_ETH_SOL: Pubkey = solana_program::pubkey!("F9MgdfFEshXCTGbppcVr2DzpVxqkiVowGqd95S4vpC6D");
+// Orca mainnet
+const ORCA_PROGRAM: Pubkey = solana_program::pubkey!("9W959DqEETiGZocYWCQPaJ6sBmUzgfxXfqGeTEdp3aQP");
+const ORCA_POOL_SOL_USDT: Pubkey = solana_program::pubkey!("Dqk7mHQBx2ZWExmyrR2S8X6UG75CrbbpK2FSBZsNYsw6");
+const ORCA_POOL_SOL_USDC: Pubkey = solana_program::pubkey!("EGZ7tiLeH62TPV1gL8WwbXGzEPa9zmcpVnnkPKKnrE2U");
+const ORCA_POOL_ORCA_USDT: Pubkey = solana_program::pubkey!("4YnaUPeZ2fYqpoLrCyprSai8LaDWZxmgb6cGfNHJmyP6");
+const ORCA_POOL_ORCA_USDC: Pubkey = solana_program::pubkey!("2p7nYbtPBgtmY69NsE8DAW6szpRJn7tQvDnqvoEWQvjY");
+const ORCA_POOL_ORCA_SOL: Pubkey = solana_program::pubkey!("2ZnVuidTHpi5WWKUwFXauYGhvdT9jRKYv5MDahtbwtYr");
+const ORCA_POOL_BTC_USDC: Pubkey = solana_program::pubkey!("2dwHmCoAGxCXvTbLTMjqAhvEFAHWUt9kZaroJJJdmoD4");
+const ORCA_POOL_BTC_SOL: Pubkey = solana_program::pubkey!("7N2AEJ98qBs4PwEwZ6k5pj8uZBKMkZrKZeiC7A64B47u");
+const ORCA_POOL_ETH_USDC: Pubkey = solana_program::pubkey!("FgZut2qVQEyPBibaTJbbX2PxaMZvT1vjDebiVaDp5BWP");
+const ORCA_POOL_ETH_SOL: Pubkey = solana_program::pubkey!("EuK3xDa4rWuHeMQCBsHf1ETZNiEQb5C476oE9u9kp8Ji");
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 struct OrcaSwapData {
@@ -54,9 +59,14 @@ pub struct OrcaSwapContext<'a, 'b> {
 impl<'a, 'b> Swapper<'a, 'b> for OrcaSwapContext<'a, 'b> {
     fn is_supported(&self) -> bool {
         let a = self.swap_program.key == &ORCA_PROGRAM;
-        let b = (self.pool_info.key == &ORCA_POOL_ORCA_USDT) ||
+        let b = (self.pool_info.key == &ORCA_POOL_SOL_USDT) ||
+            (self.pool_info.key == &ORCA_POOL_SOL_USDC) ||
+            (self.pool_info.key == &ORCA_POOL_ORCA_USDT) ||
+            (self.pool_info.key == &ORCA_POOL_ORCA_USDC) ||
             (self.pool_info.key == &ORCA_POOL_ORCA_SOL) ||
-            (self.pool_info.key == &ORCA_POOL_SOL_USDT) ||
+            (self.pool_info.key == &ORCA_POOL_BTC_USDC) ||
+            (self.pool_info.key == &ORCA_POOL_BTC_SOL) ||
+            (self.pool_info.key == &ORCA_POOL_ETH_USDC) ||
             (self.pool_info.key == &ORCA_POOL_ETH_SOL);
         a && b
     }
