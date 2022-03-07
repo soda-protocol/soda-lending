@@ -760,9 +760,9 @@ fn process_pledge_collateral(
     // handle obligation
     let balance = get_available_balance(user_sotoken_account, user_authority_info.key);
     let amount = if let Ok(index) = user_obligation.find_collateral(market_reserve_info.key) {
-        user_obligation.pledge(balance, amount, index)?
+        user_obligation.pledge::<false>(balance, amount, index, &market_reserve)?
     } else {
-        user_obligation.new_pledge(balance, amount, *market_reserve_info.key, &market_reserve)?
+        user_obligation.new_pledge::<false>(balance, amount, *market_reserve_info.key, &market_reserve)?
     };
     user_obligation.last_update.mark_stale();
     // pack
@@ -836,9 +836,9 @@ fn process_deposit_and_pledge(
     let mint_amount = market_reserve.deposit(amount)?;
     // pledge in obligation
     let _ = if let Ok(index) = user_obligation.find_collateral(market_reserve_info.key) {
-        user_obligation.pledge(mint_amount, None, index)?
+        user_obligation.pledge::<false>(mint_amount, None, index, &market_reserve)?
     } else {
-        user_obligation.new_pledge(mint_amount, None, *market_reserve_info.key, &market_reserve)?
+        user_obligation.new_pledge::<false>(mint_amount, None, *market_reserve_info.key, &market_reserve)?
     };
     user_obligation.last_update.mark_stale();
     // pack
@@ -1540,7 +1540,7 @@ fn process_repay_loan(
     // repay in obligation
     let index = user_obligation.find_loan(market_reserve_info.key)?;
     user_obligation.loans[index].accrue_interest(&market_reserve)?;
-    let settle = user_obligation.repay(amount, user_balance, index)?;
+    let settle = user_obligation.repay::<false>(amount, user_balance, index, &market_reserve)?;
     user_obligation.last_update.mark_stale();
     // repay in reserve 
     market_reserve.liquidity_info.repay(&settle)?;
@@ -2185,9 +2185,9 @@ fn process_open_leverage_position_by_dex<const DEX_TYPE: DexType>(
     let mint_amount = collateral_market_reserve.deposit(collateral_amount)?;
     // pledge in obligation
     let _ = if let Ok(index) = user_obligation.find_collateral(collateral_market_reserve_info.key) {
-        user_obligation.pledge(mint_amount, None, index)?
+        user_obligation.pledge::<true>(mint_amount, None, index, &collateral_market_reserve)?
     } else {
-        user_obligation.new_pledge(mint_amount, None, *collateral_market_reserve_info.key, &collateral_market_reserve)?
+        user_obligation.new_pledge::<true>(mint_amount, None, *collateral_market_reserve_info.key, &collateral_market_reserve)?
     };
     // borrow
     let borrow_amount = if let Ok(index) = user_obligation.find_loan(loan_market_reserve_info.key) {
@@ -2370,7 +2370,7 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
                 .ok_or(LendingError::MathOverflow)?;
 
             let loan_index = user_obligation.find_loan(loan_market_reserve_info.key)?;
-            let settle = user_obligation.repay(
+            let settle = user_obligation.repay::<true>(
                 if Decimal::from(actual_repay_amount) < user_obligation.loans[loan_index].borrowed_amount_wads {
                     Some(actual_repay_amount)
                 } else {
@@ -2378,6 +2378,7 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
                 },
                 u64::MAX,
                 loan_index,
+                &loan_market_reserve,
             )?;
             // validate health
             user_obligation.validate_health(friend_obligation)?;
@@ -2409,7 +2410,7 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
                 collateral_market_reserve.last_update.update_slot(clock.slot, true);
                 // deposit back to collateral reserve
                 let mint_amount = collateral_market_reserve.deposit(collateral_amount_after)?;
-                user_obligation.pledge(mint_amount, None, collateral_index)?;
+                user_obligation.pledge::<false>(mint_amount, None, collateral_index, &collateral_market_reserve)?;
             }
         }
         _ => unreachable!("invalid dex type {}", DEX_TYPE)
