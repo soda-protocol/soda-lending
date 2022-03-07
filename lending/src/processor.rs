@@ -2380,8 +2380,6 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
                 loan_index,
                 &loan_market_reserve,
             )?;
-            // validate health
-            user_obligation.validate_health(friend_obligation)?;
             // accrue interest
             loan_market_reserve.accrue_interest(clock.slot)?;
             loan_market_reserve.last_update.update_slot(clock.slot, true);
@@ -2410,12 +2408,14 @@ fn process_easy_repay_by_dex<const DEX_TYPE: DexType>(
                 collateral_market_reserve.last_update.update_slot(clock.slot, true);
                 // deposit back to collateral reserve
                 let mint_amount = collateral_market_reserve.deposit(collateral_amount_after)?;
-                user_obligation.pledge::<false>(mint_amount, None, collateral_index, &collateral_market_reserve)?;
+                user_obligation.pledge::<true>(mint_amount, None, collateral_index, &collateral_market_reserve)?;
             }
         }
         _ => unreachable!("invalid dex type {}", DEX_TYPE)
     };
     
+    // validate health
+    user_obligation.validate_health(friend_obligation)?;
     user_obligation.last_update.mark_stale();
     // pack
     UserObligation::pack(user_obligation, &mut user_obligation_info.try_borrow_mut_data()?)?;
