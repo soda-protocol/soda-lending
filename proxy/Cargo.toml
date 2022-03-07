@@ -1,0 +1,24 @@
+[package]
+name = "soda-proxy"
+version = "0.1.0"
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+num-derive = "0.3"
+num-traits = "0.2"
+thiserror = "1.0"
+solana-program = "1.9.6"
+spl-token = { version = "3.2.0", features = [ "no-entrypoint" ] }
+soda-lending = { path = "../lending", features = [ "no-entrypoint" ] }
+spl-associated-token-account = { version = "1.0.3", features = [ "no-entrypoint" ] }
+
+[features]
+default = []
+devnet = []
+no-entrypoint = []
+test-bpf = []
+
+[lib]
+crate-type = ["cdylib", "lib"]

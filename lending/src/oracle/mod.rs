@@ -7,16 +7,13 @@ pub use pyth::*;
 pub use chainlink::*;
 pub use switchboard::*;
 
-use crate::{math::Decimal, state::Param};
+use borsh::{BorshSerialize, BorshDeserialize};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
-use solana_program::{
-    clock::Clock,
-    pubkey::Pubkey,
-    entrypoint::ProgramResult,
-};
+use solana_program::{clock::Clock, entrypoint::ProgramResult, program_error::ProgramError, pubkey::Pubkey};
+use crate::{math::Decimal, state::Param};
 
-#[derive(Clone, Copy, Debug, FromPrimitive, ToPrimitive, PartialEq)]
+#[derive(Clone, Copy, BorshSerialize, BorshDeserialize, Debug, FromPrimitive, ToPrimitive, PartialEq)]
 pub enum OracleType {
     ///
     Pyth,
@@ -24,6 +21,16 @@ pub enum OracleType {
     ChainLink,
     ///
     Switchboard,
+}
+
+impl OracleType {
+    pub fn parse_price(&self, data: &[u8], clock: &Clock) -> Result<Decimal, ProgramError> {
+        match self {
+            OracleType::Pyth => get_pyth_price(data, clock),
+            OracleType::ChainLink => get_chainlink_price(data, clock),
+            OracleType::Switchboard => get_switchboard_price(data, clock),
+        }
+    }
 }
 
 impl From<u8> for OracleType {
@@ -38,7 +45,7 @@ impl Into<u8> for OracleType {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, BorshSerialize, BorshDeserialize)]
 pub struct OracleConfig {
     ///
     pub oracle: Pubkey,
@@ -63,11 +70,7 @@ pub struct OracleInfo {
 impl OracleInfo {
     ///
     pub fn update_price(&mut self, data: &[u8], clock: &Clock) -> ProgramResult {
-        self.price = match self.config.oracle_type {
-            OracleType::Pyth => get_pyth_price(data, clock)?,
-            OracleType::ChainLink => get_chainlink_price(data, clock)?,
-            OracleType::Switchboard => get_switchboard_price(data, clock)?,
-        };
+        self.price = self.config.oracle_type.parse_price(data, clock)?;
 
         Ok(())
     }

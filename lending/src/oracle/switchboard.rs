@@ -6,6 +6,7 @@ use solana_program::{
     program_error::ProgramError,
 };
 use switchboard_program::fast_parse_switchboard_result;
+
 use crate::{error::LendingError, math::{Decimal, TryDiv}};
 
 pub fn get_switchboard_price(data: &[u8], clock: &Clock) -> Result<Decimal, ProgramError> {
@@ -34,5 +35,5 @@ pub fn get_switchboard_price(data: &[u8], clock: &Clock) -> Result<Decimal, Prog
         .try_into()
         .map_err(|_| LendingError::MathOverflow)?;
 
-    Decimal::from(price).try_div(decimals)
+    Decimal::from(price).try_div(decimals)   
 }

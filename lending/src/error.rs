@@ -73,9 +73,6 @@ pub enum LendingError {
     #[error("Input amount is invalid")]
     InvalidAmount,
     ///
-    #[error("Input flash loan program is invalid")]
-    InvalidFlashLoanProgram,
-    ///
     #[error("Invalid soToken mint info")]
     InvalidSoTokenMint,
     /// Invalid instruction data passed in.
@@ -93,9 +90,12 @@ pub enum LendingError {
     /// Liquidation repay amount too small
     #[error("Liquidation repaying liquidity amount is too small")]
     LiquidationRepayTooSmall,
-    /// Liquidation repay amount too small
+    /// Liquidation repay amount too much
     #[error("Liquidation repaying liquidity amount is too much")]
     LiquidationRepayTooMuch,
+    ///
+    #[error("Liquidation seize collateral amount is too small")]
+    LiquidationSeizeTooSmall,
     /// Math operation overflow
     #[error("Math operation overflow")]
     MathOverflow,
@@ -174,6 +174,9 @@ pub enum LendingError {
     /// Token approve failed
     #[error("Token revoke failed")]
     TokenRevokeFailed,
+    /// invalid Dex program
+    #[error("Dex related accounts are invalid")]
+    InvalidDexAccounts,
 }
 
 impl From<LendingError> for ProgramError {
