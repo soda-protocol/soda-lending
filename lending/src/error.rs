@@ -36,21 +36,6 @@ pub enum LendingError {
     #[error("Authority is invalid")]
     InvalidAuthority,
     ///
-    #[error("Manager is invalid")]
-    InvalidManager,
-    ///
-    #[error("Manager authority is invalid")]
-    InvalidManagerAuthority,
-    ///
-    #[error("Invalid supply token account")]
-    InvalidSupplyTokenAccount,
-    ///
-    #[error("Market reserve is invalid")]
-    InvalidMarketReserve,
-    ///
-    #[error("Unique Credit is invalid")]
-    InvalidUniqueCredit,
-    ///
     #[error("Price oracle is invalid")]
     InvalidPriceOracle,
     ///
@@ -68,17 +53,14 @@ pub enum LendingError {
     ///
     #[error("Indexed loan config is invalid")]
     InvalidIndexedLoanConfig,
-    // 10
     /// Invalid amount, must be greater than zero
     #[error("Input amount is invalid")]
     InvalidAmount,
-    ///
-    #[error("Invalid soToken mint info")]
-    InvalidSoTokenMint,
     /// Invalid instruction data passed in.
     #[error("Failed to unpack instruction data")]
     InstructionUnpackError,
     ///
+    #[cfg(feature = "unique-credit")]
     #[error("Insufficient unique credit limit")]
     InsufficientUniqueCreditLimit,
     ///
@@ -148,9 +130,6 @@ pub enum LendingError {
     #[error("Obligation replace collateral already exists`")]
     ObligationReplaceCollateralExists,
     ///
-    #[error("User Obligation friend is invalid")]
-    ObligationInvalidFriend,
-    ///
     #[error("Repaying liquidity amount is too much")]
     RepayTooMuch,
     /// Token approve failed
@@ -177,6 +156,9 @@ pub enum LendingError {
     /// invalid Dex program
     #[error("Dex related accounts are invalid")]
     InvalidDexAccounts,
+    /// Unmatched accounts
+    #[error("Unmatched accounts")]
+    UnmatchedAccounts,
 }
 
 impl From<LendingError> for ProgramError {

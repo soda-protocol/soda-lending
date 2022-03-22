@@ -5,11 +5,11 @@ use solana_program::{
     program_error::ProgramError, pubkey::Pubkey,
 };
 use spl_token::state::Account;
-use crate::{Data, invoker::process_invoke};
+use crate::{Data, invoker::process_invoke, check_pubkey};
 
 use super::Swapper;
 
-// Orca testnet
+// Orca devnet
 const ORCA_PROGRAM: Pubkey = solana_program::pubkey!("3xQ8SWv2GaFXXpHZNqkXsdxq5DZciHBz6ZFoPPfbFd7U");
 const ORCA_POOL_ORCA_USDT: Pubkey = solana_program::pubkey!("GaCKuVZyo6HxUf6bkcWzDETGHqqViF6H77ax7Uxq3LXU");
 const ORCA_POOL_ORCA_SOL: Pubkey = solana_program::pubkey!("B4v9urCKnrdCMWt7rEPyA5xyuEeYQv4aDpCfGFVaCvox");
@@ -17,14 +17,14 @@ const ORCA_POOL_SOL_USDT: Pubkey = solana_program::pubkey!("65AsoozQfBedPU3rGCB7
 const ORCA_POOL_ETH_SOL: Pubkey = solana_program::pubkey!("F9MgdfFEshXCTGbppcVr2DzpVxqkiVowGqd95S4vpC6D");
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
-struct OrcaSwapData {
+struct SwapData {
     /// SOURCE amount to transfer, output to DESTINATION is based on the exchange rate
     amount_in: u64,
     /// Minimum amount of DESTINATION token to output, prevents excessive slippage
     minimum_amount_out: u64,
 }
 
-impl Data for OrcaSwapData {
+impl Data for SwapData {
     fn to_vec(self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(1 + 8 + 8);
         buf.push(1);
@@ -45,20 +45,22 @@ pub struct OrcaSwapContext<'a, 'b> {
     pub pool_source_token_account: &'a AccountInfo<'b>,
     pub pool_dest_token_account: &'a AccountInfo<'b>,
     pub pool_fee_account: &'a AccountInfo<'b>,
-    pub user_authority: &'a AccountInfo<'b>,
     pub user_source_token_account: &'a AccountInfo<'b>,
     pub user_dest_token_account: &'a AccountInfo<'b>,
+    pub user_authority: &'a AccountInfo<'b>,
     pub signer_seeds: &'a [&'a [u8]],
 }
 
 impl<'a, 'b> Swapper<'a, 'b> for OrcaSwapContext<'a, 'b> {
     fn is_supported(&self) -> bool {
-        let a = self.swap_program.key == &ORCA_PROGRAM;
-        let b = (self.pool_info.key == &ORCA_POOL_ORCA_USDT) ||
-            (self.pool_info.key == &ORCA_POOL_ORCA_SOL) ||
-            (self.pool_info.key == &ORCA_POOL_SOL_USDT) ||
-            (self.pool_info.key == &ORCA_POOL_ETH_SOL);
-        a && b
+        check_pubkey!(
+            self.swap_program.key == &ORCA_PROGRAM,
+            self.pool_info.key,
+            &ORCA_POOL_ORCA_USDT,
+            &ORCA_POOL_ORCA_SOL,
+            &ORCA_POOL_SOL_USDT,
+            &ORCA_POOL_ETH_SOL
+        )
     }
 
     fn get_user_source_token_balance(&self) -> Result<u64, ProgramError> {
@@ -77,8 +79,8 @@ impl<'a, 'b> Swapper<'a, 'b> for OrcaSwapContext<'a, 'b> {
         Ok(Account::unpack(&self.pool_dest_token_account.try_borrow_data()?)?.amount)
     }
 
-    fn swap(&self, amount_in: u64, minimum_amount_out: u64) -> ProgramResult {
-        let data = OrcaSwapData { amount_in, minimum_amount_out };
+    fn swap_base_in(&self, amount_in: u64, minimum_amount_out: u64) -> ProgramResult {
+        let data = SwapData { amount_in, minimum_amount_out };
         let mut user_authority = self.user_authority.clone();
         user_authority.is_signer = true;
 
@@ -99,5 +101,9 @@ impl<'a, 'b> Swapper<'a, 'b> for OrcaSwapContext<'a, 'b> {
             ],
             self.signer_seeds,
         )
+    }
+
+    fn swap_base_out(&self, _max_amount_in: u64, _amount_out: u64) -> ProgramResult {
+        unreachable!("Orca is not support for swap base out")
     }
 }

@@ -67,9 +67,15 @@ pub enum LendingInstruction {
     /// 22
     FlashLoan(u8, u64),
     /// 23
-    EasyRepayWithOrca(u64, u64),
+    EasyRepayByOrca(u64, u64),
     /// 24
-    OpenLeveragePositionWithOrca(u64, u64),
+    OpenLeveragePositionByOrca(u64, u64),
+    /// 25
+    OpenLeveragePositionByDualOrcaRouter(u64, u64),
+    /// 26
+    EasyRepayByRaydium(u64, u64),
+    /// 27
+    OpenLeveragePositionByRaydium(u64, u64),
     /// 100
     #[cfg(feature = "unique-credit")]
     InitUniqueCredit(Pubkey, u64),
@@ -194,12 +200,27 @@ impl LendingInstruction {
             23 => {
                 let (sotoken_amount, rest) = Self::unpack_u64(rest)?;
                 let (min_repay_amount, _rest) = Self::unpack_u64(rest)?;
-                Self::EasyRepayWithOrca(sotoken_amount, min_repay_amount)
+                Self::EasyRepayByOrca(sotoken_amount, min_repay_amount)
             }
             24 => {
                 let (borrow_amount, rest) = Self::unpack_u64(rest)?;
                 let (min_collateral_amount, _rest) = Self::unpack_u64(rest)?;
-                Self::OpenLeveragePositionWithOrca(borrow_amount, min_collateral_amount)
+                Self::OpenLeveragePositionByOrca(borrow_amount, min_collateral_amount)
+            }
+            25 => {
+                let (borrow_amount, rest) = Self::unpack_u64(rest)?;
+                let (min_collateral_amount, _rest) = Self::unpack_u64(rest)?;
+                Self::OpenLeveragePositionByDualOrcaRouter(borrow_amount, min_collateral_amount)
+            }
+            26 => {
+                let (max_sotoken_amount, rest) = Self::unpack_u64(rest)?;
+                let (repay_amount, _rest) = Self::unpack_u64(rest)?;
+                Self::EasyRepayByRaydium(max_sotoken_amount, repay_amount)
+            }
+            27 => {
+                let (max_borrow_amount, rest) = Self::unpack_u64(rest)?;
+                let (collateral_amount, _rest) = Self::unpack_u64(rest)?;
+                Self::OpenLeveragePositionByRaydium(max_borrow_amount, collateral_amount)
             }
             #[cfg(feature = "unique-credit")]
             100 => {
@@ -476,15 +497,30 @@ impl LendingInstruction {
                 buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::EasyRepayWithOrca(sotoken_amount, min_repay_amount) => {
+            Self::EasyRepayByOrca(sotoken_amount, min_repay_amount) => {
                 buf.push(23);
                 buf.extend_from_slice(&sotoken_amount.to_le_bytes());
                 buf.extend_from_slice(&min_repay_amount.to_le_bytes());
             }
-            Self::OpenLeveragePositionWithOrca(borrow_amount, min_collateral_amount) => {
+            Self::OpenLeveragePositionByOrca(borrow_amount, min_collateral_amount) => {
                 buf.push(24);
                 buf.extend_from_slice(&borrow_amount.to_le_bytes());
                 buf.extend_from_slice(&min_collateral_amount.to_le_bytes());
+            }
+            Self::OpenLeveragePositionByDualOrcaRouter(borrow_amount, min_collateral_amount) => {
+                buf.push(25);
+                buf.extend_from_slice(&borrow_amount.to_le_bytes());
+                buf.extend_from_slice(&min_collateral_amount.to_le_bytes());
+            }
+            Self::EasyRepayByRaydium(max_sotoken_amount, repay_amount) => {
+                buf.push(26);
+                buf.extend_from_slice(&max_sotoken_amount.to_le_bytes());
+                buf.extend_from_slice(&repay_amount.to_le_bytes());
+            }
+            Self::OpenLeveragePositionByRaydium(max_borrow_amount, collateral_amount) => {
+                buf.push(27);
+                buf.extend_from_slice(&max_borrow_amount.to_le_bytes());
+                buf.extend_from_slice(&collateral_amount.to_le_bytes());
             }
             #[cfg(feature = "unique-credit")]
             Self::InitUniqueCredit(authority, amount) => {
@@ -1236,7 +1272,7 @@ pub fn easy_repay_with_orca(
     Instruction {
         program_id,
         accounts,
-        data: LendingInstruction::EasyRepayWithOrca(sotoken_amount, min_repay_amount).pack(),
+        data: LendingInstruction::EasyRepayByOrca(sotoken_amount, min_repay_amount).pack(),
     }
 }
 
@@ -1292,7 +1328,7 @@ pub fn open_leverage_position_with_orca(
     Instruction {
         program_id,
         accounts,
-        data: LendingInstruction::OpenLeveragePositionWithOrca(borrow_amount, min_collateral_amount).pack(),
+        data: LendingInstruction::OpenLeveragePositionByOrca(borrow_amount, min_collateral_amount).pack(),
     }
 }
 

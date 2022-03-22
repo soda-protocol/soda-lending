@@ -176,7 +176,6 @@ pub fn process_token_init_mint<'a>(
 }
 
 #[inline(always)]
-#[allow(clippy::too_many_arguments)]
 pub fn process_token_init_account<'a>(
     token_program: &AccountInfo<'a>,
     account: &AccountInfo<'a>,
@@ -204,6 +203,7 @@ pub fn process_token_init_account<'a>(
 }
 
 #[inline(never)]
+#[allow(clippy::too_many_arguments)]
 pub fn process_optimal_create_account<'a>(
     rent_info: &AccountInfo<'a>,
     target_account_info: &AccountInfo<'a>,
