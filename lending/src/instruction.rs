@@ -1332,6 +1332,148 @@ pub fn open_leverage_position_with_orca(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
+pub fn open_leverage_position_with_dual_orca_router(
+    manager_key: Pubkey,
+    collateral_market_reserve_key: Pubkey,
+    collateral_supply_account_key: Pubkey,
+    loan_market_reserve_key: Pubkey,
+    loan_supply_account_key: Pubkey,
+    user_obligation_key: Pubkey,
+    friend_obligation_key: Option<Pubkey>,
+    user_authority: Pubkey,
+    swap_program: Pubkey,
+    user_temp_token_account_key: Pubkey,
+    pool_1_key: Pubkey,
+    pool_1_authority: Pubkey,
+    pool_1_lp_token_mint_key: Pubkey,
+    pool_1_source_token_account_key: Pubkey,
+    pool_1_dest_token_account_key: Pubkey,
+    pool_1_fee_account: Pubkey,
+    pool_2_key: Pubkey,
+    pool_2_authority: Pubkey,
+    pool_2_lp_token_mint_key: Pubkey,
+    pool_2_source_token_account_key: Pubkey,
+    pool_2_dest_token_account_key: Pubkey,
+    pool_2_fee_account: Pubkey,
+    borrow_amount: u64,
+    min_collateral_amount: u64,
+) -> Instruction {
+    let program_id = id();
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
+        &program_id,
+    );
+
+    let mut accounts = vec![
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(manager_key, false),
+        AccountMeta::new_readonly(manager_authority_key, false),
+        AccountMeta::new(collateral_market_reserve_key, false),
+        AccountMeta::new(collateral_supply_account_key, false),
+        AccountMeta::new(loan_market_reserve_key, false),
+        AccountMeta::new(loan_supply_account_key, false),
+        AccountMeta::new(user_obligation_key, false),
+        AccountMeta::new_readonly(user_authority, true),
+        AccountMeta::new_readonly(spl_token::id(), false),
+        AccountMeta::new_readonly(swap_program, false),
+        AccountMeta::new(user_temp_token_account_key, false),
+        AccountMeta::new_readonly(pool_1_key, false),
+        AccountMeta::new_readonly(pool_1_authority, false),
+        AccountMeta::new(pool_1_lp_token_mint_key, false),
+        AccountMeta::new(pool_1_source_token_account_key, false),
+        AccountMeta::new(pool_1_dest_token_account_key, false),
+        AccountMeta::new(pool_1_fee_account, false),
+        AccountMeta::new_readonly(pool_2_key, false),
+        AccountMeta::new_readonly(pool_2_authority, false),
+        AccountMeta::new(pool_2_lp_token_mint_key, false),
+        AccountMeta::new(pool_2_source_token_account_key, false),
+        AccountMeta::new(pool_2_dest_token_account_key, false),
+        AccountMeta::new(pool_2_fee_account, false),
+    ];
+    if let Some(friend_obligation_key) = friend_obligation_key {
+        accounts.insert(8, AccountMeta::new_readonly(friend_obligation_key, false))
+    }
+
+    Instruction {
+        program_id,
+        accounts,
+        data: LendingInstruction::OpenLeveragePositionByDualOrcaRouter(borrow_amount, min_collateral_amount).pack(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn open_leverage_position_with_raydium(
+    manager_key: Pubkey,
+    collateral_market_reserve_key: Pubkey,
+    collateral_supply_account_key: Pubkey,
+    loan_market_reserve_key: Pubkey,
+    loan_supply_account_key: Pubkey,
+    user_obligation_key: Pubkey,
+    friend_obligation_key: Option<Pubkey>,
+    user_authority: Pubkey,
+    swap_program: Pubkey,
+    amm_key: Pubkey,
+    amm_authority: Pubkey,
+    amm_open_orders: Pubkey,
+    amm_target_orders: Pubkey,
+    pool_source_token_account: Pubkey,
+    pool_dest_token_account: Pubkey,
+    serum_program: Pubkey,
+    serum_market: Pubkey,
+    serum_bids: Pubkey,
+    serum_asks: Pubkey,
+    serum_event_queue: Pubkey,
+    serum_source_token_account: Pubkey,
+    serum_dest_token_account: Pubkey,
+    serum_vault_signer: Pubkey,
+    max_borrow_amount: u64,
+    collateral_amount: u64,
+) -> Instruction {
+    let program_id = id();
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
+        &program_id,
+    );
+
+    let mut accounts = vec![
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(manager_key, false),
+        AccountMeta::new_readonly(manager_authority_key, false),
+        AccountMeta::new(collateral_market_reserve_key, false),
+        AccountMeta::new(collateral_supply_account_key, false),
+        AccountMeta::new(loan_market_reserve_key, false),
+        AccountMeta::new(loan_supply_account_key, false),
+        AccountMeta::new(user_obligation_key, false),
+        AccountMeta::new_readonly(user_authority, true),
+        AccountMeta::new_readonly(spl_token::id(), false),
+        AccountMeta::new_readonly(swap_program, false),
+        AccountMeta::new(amm_key, false),
+        AccountMeta::new_readonly(amm_authority, false),
+        AccountMeta::new(amm_open_orders, false),
+        AccountMeta::new(amm_target_orders, false),
+        AccountMeta::new(pool_source_token_account, false),
+        AccountMeta::new(pool_dest_token_account, false),
+        AccountMeta::new_readonly(serum_program, false),
+        AccountMeta::new(serum_market, false),
+        AccountMeta::new(serum_bids, false),
+        AccountMeta::new(serum_asks, false),
+        AccountMeta::new(serum_event_queue, false),
+        AccountMeta::new(serum_source_token_account, false),
+        AccountMeta::new(serum_dest_token_account, false),
+        AccountMeta::new_readonly(serum_vault_signer, false),
+    ];
+    if let Some(friend_obligation_key) = friend_obligation_key {
+        accounts.insert(8, AccountMeta::new_readonly(friend_obligation_key, false))
+    }
+
+    Instruction {
+        program_id,
+        accounts,
+        data: LendingInstruction::OpenLeveragePositionByRaydium(max_borrow_amount, collateral_amount).pack(),
+    }
+}
+
 #[cfg(feature = "unique-credit")]
 pub fn init_unique_credit(
     manager_key: Pubkey,

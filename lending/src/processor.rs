@@ -1712,6 +1712,8 @@ fn process_easy_repay_by_orca(
         // deposit back to collateral reserve
         let mint_amount = collateral_market_reserve.deposit(collateral_amount_after)?;
         user_obligation.pledge::<true>(mint_amount, None, collateral_index, &collateral_market_reserve)?;
+    } else {
+        user_obligation.close_empty_collateral(collateral_index);
     }
     
     // validate health
@@ -1816,6 +1818,8 @@ fn process_easy_repay_by_raydium(
         // deposit back to collateral reserve
         let mint_amount = collateral_market_reserve.deposit(max_collateral_amount - collateral_amount)?;
         user_obligation.pledge::<true>(mint_amount, None, collateral_index, &collateral_market_reserve)?;
+    } else {
+        user_obligation.close_empty_collateral(collateral_index);
     }
     
     // validate health

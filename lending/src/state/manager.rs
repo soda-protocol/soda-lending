@@ -11,11 +11,8 @@ use solana_program::{
 /// Lending market obligation state
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Manager {
-    ///
     pub version: u8,
-    /// Bump seed for derived authority address
     pub bump_seed: u8,
-    /// Admin authority
     pub owner: Pubkey,
 }
 

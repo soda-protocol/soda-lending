@@ -19,22 +19,16 @@ use std::{convert::TryInto, any::Any};
 ///
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct TokenConfig {
-    ///
     pub mint_pubkey: Pubkey,
-    ///
     pub supply_account: Pubkey,
-    ///
     pub decimal: u8,
 }
 
 ///
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct CollateralConfig {
-    ///
     pub borrow_value_ratio: u8,
-    ///
     pub liquidation_value_ratio: u8,
-    ///
     pub liquidation_penalty_ratio: u8,
 }
 
@@ -55,11 +49,8 @@ impl Param for CollateralConfig {
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CollateralInfo {
-    ///
     pub sotoken_mint_pubkey: Pubkey,
-    ///
     pub total_mint: u64,
-    ///
     pub config: CollateralConfig,
 }
 
@@ -85,13 +76,9 @@ impl CollateralInfo {
 ///
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct LiquidityConfig {
-    ///
     pub close_ratio: u8,
-    ///
     pub borrow_tax_rate: u8,
-    ///
     pub flash_loan_fee_rate: u64,
-    ///
     pub max_deposit: u64,
 }
 
@@ -114,19 +101,12 @@ impl Param for LiquidityConfig {
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct LiquidityInfo {
-    ///
     pub enable: bool,
-    ///
     pub available: u64,
-    ///
     pub flash_loan_fee: u64,
-    ///
     pub acc_borrow_rate_wads: Decimal,
-    ///
     pub borrowed_amount_wads: Decimal,
-    ///
     pub insurance_wads: Decimal,
-    ///
     pub config: LiquidityConfig,
 }
 
@@ -259,21 +239,13 @@ impl LiquidityInfo {
 /// Lending market reserve state
 #[derive(Clone, Debug, PartialEq)]
 pub struct MarketReserve {
-    /// Version of the struct
     pub version: u8,
-    ///
     pub last_update: LastUpdate,
-    /// 
     pub manager: Pubkey,
-    ///
     pub token_config: TokenConfig,
-    ///
     pub oracle_info: OracleInfo,
-    ///
     pub collateral_info: CollateralInfo,
-    ///
     pub liquidity_info: LiquidityInfo,
-    ///
     pub rate_model: RateModel,
 }
 
