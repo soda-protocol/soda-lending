@@ -113,7 +113,7 @@ fn load<T: Pod>(data: &[u8]) -> Result<&T, PodCastError> {
 
 pub fn get_pyth_price(data: &[u8], clock: &Clock) -> Result<Decimal, ProgramError> {
     #[cfg(not(feature = "devnet"))]
-    const STALE_AFTER_SLOTS_ELAPSED: u64 = 20;
+    const STALE_AFTER_SLOTS_ELAPSED: u64 = 30;
     #[cfg(feature = "devnet")]
     const STALE_AFTER_SLOTS_ELAPSED: u64 = 1000;
 
