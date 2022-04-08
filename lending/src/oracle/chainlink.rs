@@ -81,9 +81,6 @@ pub struct Config {
 }
 
 pub fn get_chainlink_price(account_info: &AccountInfo, clock: &Clock) -> Result<Decimal, ProgramError> {
-    #[cfg(not(feature = "devnet"))]
-    const STALE_AFTER_SECS_ELAPSED: i64 = 30;
-    #[cfg(feature = "devnet")]
     const STALE_AFTER_SECS_ELAPSED: i64 = 1000;
 
     let data = account_info.try_borrow_data()?;
