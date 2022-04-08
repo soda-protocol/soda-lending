@@ -4,18 +4,20 @@ use solana_program::{
     msg,
     clock::Clock,
     program_error::ProgramError,
+    account_info::AccountInfo,
 };
 use switchboard_program::fast_parse_switchboard_result;
 
 use crate::{error::LendingError, math::{Decimal, TryDiv}};
 
-pub fn get_switchboard_price(data: &[u8], clock: &Clock) -> Result<Decimal, ProgramError> {
+pub fn get_switchboard_price(account_info: &AccountInfo, clock: &Clock) -> Result<Decimal, ProgramError> {
     #[cfg(not(feature = "devnet"))]
-    const STALE_AFTER_SLOTS_ELAPSED: u64 = 10;
+    const STALE_AFTER_SLOTS_ELAPSED: u64 = 60;
     #[cfg(feature = "devnet")]
     const STALE_AFTER_SLOTS_ELAPSED: u64 = 1000;
 
-    let result = fast_parse_switchboard_result(data).result;
+    let data = account_info.try_borrow_data()?;
+    let result = fast_parse_switchboard_result(&data).result;
 
     let slots_eplased = clock.slot
         .checked_sub(result.round_open_slot)
