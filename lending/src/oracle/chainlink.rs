@@ -14,7 +14,7 @@ use solana_program::{
     clock::{Clock, UnixTimestamp},
     program_pack::IsInitialized,
     pubkey::Pubkey,
-    program_error::ProgramError,
+    program_error::ProgramError, account_info::AccountInfo,
 };
 use crate::{error::LendingError, math::{Decimal, TryDiv}};
 
@@ -80,9 +80,13 @@ pub struct Config {
     pub decimals: u8,
 }
 
-pub fn get_chainlink_price(data: &[u8], clock: &Clock) -> Result<Decimal, ProgramError> {
-    const STALE_AFTER_SECS_ELAPSED: i64 = 500;
+pub fn get_chainlink_price(account_info: &AccountInfo, clock: &Clock) -> Result<Decimal, ProgramError> {
+    #[cfg(not(feature = "devnet"))]
+    const STALE_AFTER_SECS_ELAPSED: i64 = 30;
+    #[cfg(feature = "devnet")]
+    const STALE_AFTER_SECS_ELAPSED: i64 = 1000;
 
+    let data = account_info.try_borrow_data()?;
     let aggregator = try_from_slice_unchecked::<Aggregator>(&data[..4096])?;
     if !aggregator.is_initialized() {
         return Err(ProgramError::UninitializedAccount);

@@ -366,7 +366,7 @@ fn process_refresh_market_reserves(
             }
         
             // update
-            market_reserve.oracle_info.update_price(&price_oracle_info.try_borrow_data()?, clock)?;
+            market_reserve.oracle_info.update_price(price_oracle_info, clock)?;
             market_reserve.accrue_interest(clock.slot)?;
             market_reserve.last_update.update_slot(clock.slot, false);
             // pack
