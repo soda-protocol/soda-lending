@@ -1,4 +1,4 @@
-#![deny(missing_docs)]
+#![allow(missing_docs)]
 
 //! A lending program for the Solana blockchain.
 
@@ -7,11 +7,11 @@ pub mod error;
 pub mod entrypoint;
 pub mod instruction;
 pub mod invoker;
-pub mod lp_oracle;
 pub mod oracle;
 pub mod math;
 pub mod processor;
 pub mod state;
+pub mod macros;
 
 // Export current sdk types for downstream users building with a different sdk version
 use solana_program;
@@ -24,7 +24,6 @@ solana_program::declare_id!("Soda111Jv27so2PRBd6ofRptC6dKxosdN5ByFhCcR3V");
 
 /// Data
 pub trait Data: Sized {
-    ///
     fn to_vec(self) -> Vec<u8>;
 }
 

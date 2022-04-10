@@ -9,19 +9,12 @@ use solana_program::{
 };
 
 pub struct UniqueCredit {
-    /// Version of the struct
     pub version: u8,
-    ///
     pub owner: Pubkey,
-    ///
     pub manager: Pubkey,
-    ///
     pub reserve: Pubkey,
-    ///
     pub borrow_limit: u64,
-    ///
     pub acc_borrow_rate_wads: Decimal,
-    ///
     pub borrowed_amount_wads: Decimal,
 }
 

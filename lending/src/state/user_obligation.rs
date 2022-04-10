@@ -27,13 +27,9 @@ const MIN_LOANS_VALUE: u128 = 100_000_000_000_000_000;
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Collateral {
-    ///
     pub reserve: Pubkey,
-    ///
     pub amount: u64,
-    ///
     pub borrow_value_ratio: u8,
-    ///
     pub liquidation_value_ratio: u8,
 }
 
@@ -108,13 +104,9 @@ impl Pack for Collateral {
 ///
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Loan {
-    ///
     pub reserve: Pubkey,
-    /// Borrow rate used for calculating interest
     pub acc_borrow_rate_wads: Decimal,
-    /// Amount of liquidity borrowed plus interest
     pub borrowed_amount_wads: Decimal,
-    ///
     pub close_ratio: u8,
 }
 
@@ -206,25 +198,15 @@ impl Pack for Loan {
 /// Lending market obligation state
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct UserObligation {
-    /// Version of the struct
     pub version: u8,
-    ///
     pub last_update: LastUpdate,
-    ///
     pub manager: Pubkey,
-    ///
     pub owner: Pubkey,
-    ///
     pub friend: COption<Pubkey>,
-    /// 
     pub collaterals: Vec<Collateral>,
-    ///
     pub collaterals_borrow_value: Decimal,
-    ///
     pub collaterals_liquidation_value: Decimal,
-    ///
     pub loans: Vec<Loan>,
-    ///
     pub loans_value: Decimal,
 }
 
@@ -567,6 +549,14 @@ impl UserObligation {
 
         Ok(amount)
     }
+
+    ///
+    pub fn close_empty_collateral(&mut self, index: usize) {
+        if self.collaterals[index].amount == 0 {
+            self.collaterals.remove(index);
+        }
+    }
+
     ///
     pub fn redeem_without_loan(
         &mut self,

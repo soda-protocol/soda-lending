@@ -67,9 +67,15 @@ pub enum LendingInstruction {
     /// 22
     FlashLoan(u8, u64),
     /// 23
-    EasyRepayWithOrca(u64, u64),
+    EasyRepayByOrca(u64, u64),
     /// 24
-    OpenLeveragePositionWithOrca(u64, u64),
+    OpenLeveragePositionByOrca(u64, u64),
+    /// 25
+    OpenLeveragePositionByDualOrcaRouter(u64, u64),
+    /// 26
+    EasyRepayByRaydium(u64, u64),
+    /// 27
+    OpenLeveragePositionByRaydium(u64, u64),
     /// 100
     #[cfg(feature = "unique-credit")]
     InitUniqueCredit(Pubkey, u64),
@@ -194,12 +200,27 @@ impl LendingInstruction {
             23 => {
                 let (sotoken_amount, rest) = Self::unpack_u64(rest)?;
                 let (min_repay_amount, _rest) = Self::unpack_u64(rest)?;
-                Self::EasyRepayWithOrca(sotoken_amount, min_repay_amount)
+                Self::EasyRepayByOrca(sotoken_amount, min_repay_amount)
             }
             24 => {
                 let (borrow_amount, rest) = Self::unpack_u64(rest)?;
                 let (min_collateral_amount, _rest) = Self::unpack_u64(rest)?;
-                Self::OpenLeveragePositionWithOrca(borrow_amount, min_collateral_amount)
+                Self::OpenLeveragePositionByOrca(borrow_amount, min_collateral_amount)
+            }
+            25 => {
+                let (borrow_amount, rest) = Self::unpack_u64(rest)?;
+                let (min_collateral_amount, _rest) = Self::unpack_u64(rest)?;
+                Self::OpenLeveragePositionByDualOrcaRouter(borrow_amount, min_collateral_amount)
+            }
+            26 => {
+                let (max_sotoken_amount, rest) = Self::unpack_u64(rest)?;
+                let (repay_amount, _rest) = Self::unpack_u64(rest)?;
+                Self::EasyRepayByRaydium(max_sotoken_amount, repay_amount)
+            }
+            27 => {
+                let (max_borrow_amount, rest) = Self::unpack_u64(rest)?;
+                let (collateral_amount, _rest) = Self::unpack_u64(rest)?;
+                Self::OpenLeveragePositionByRaydium(max_borrow_amount, collateral_amount)
             }
             #[cfg(feature = "unique-credit")]
             100 => {
@@ -476,15 +497,30 @@ impl LendingInstruction {
                 buf.extend_from_slice(&tag.to_le_bytes());
                 buf.extend_from_slice(&amount.to_le_bytes());
             }
-            Self::EasyRepayWithOrca(sotoken_amount, min_repay_amount) => {
+            Self::EasyRepayByOrca(sotoken_amount, min_repay_amount) => {
                 buf.push(23);
                 buf.extend_from_slice(&sotoken_amount.to_le_bytes());
                 buf.extend_from_slice(&min_repay_amount.to_le_bytes());
             }
-            Self::OpenLeveragePositionWithOrca(borrow_amount, min_collateral_amount) => {
+            Self::OpenLeveragePositionByOrca(borrow_amount, min_collateral_amount) => {
                 buf.push(24);
                 buf.extend_from_slice(&borrow_amount.to_le_bytes());
                 buf.extend_from_slice(&min_collateral_amount.to_le_bytes());
+            }
+            Self::OpenLeveragePositionByDualOrcaRouter(borrow_amount, min_collateral_amount) => {
+                buf.push(25);
+                buf.extend_from_slice(&borrow_amount.to_le_bytes());
+                buf.extend_from_slice(&min_collateral_amount.to_le_bytes());
+            }
+            Self::EasyRepayByRaydium(max_sotoken_amount, repay_amount) => {
+                buf.push(26);
+                buf.extend_from_slice(&max_sotoken_amount.to_le_bytes());
+                buf.extend_from_slice(&repay_amount.to_le_bytes());
+            }
+            Self::OpenLeveragePositionByRaydium(max_borrow_amount, collateral_amount) => {
+                buf.push(27);
+                buf.extend_from_slice(&max_borrow_amount.to_le_bytes());
+                buf.extend_from_slice(&collateral_amount.to_le_bytes());
             }
             #[cfg(feature = "unique-credit")]
             Self::InitUniqueCredit(authority, amount) => {
@@ -1236,7 +1272,7 @@ pub fn easy_repay_with_orca(
     Instruction {
         program_id,
         accounts,
-        data: LendingInstruction::EasyRepayWithOrca(sotoken_amount, min_repay_amount).pack(),
+        data: LendingInstruction::EasyRepayByOrca(sotoken_amount, min_repay_amount).pack(),
     }
 }
 
@@ -1292,7 +1328,149 @@ pub fn open_leverage_position_with_orca(
     Instruction {
         program_id,
         accounts,
-        data: LendingInstruction::OpenLeveragePositionWithOrca(borrow_amount, min_collateral_amount).pack(),
+        data: LendingInstruction::OpenLeveragePositionByOrca(borrow_amount, min_collateral_amount).pack(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn open_leverage_position_with_dual_orca_router(
+    manager_key: Pubkey,
+    collateral_market_reserve_key: Pubkey,
+    collateral_supply_account_key: Pubkey,
+    loan_market_reserve_key: Pubkey,
+    loan_supply_account_key: Pubkey,
+    user_obligation_key: Pubkey,
+    friend_obligation_key: Option<Pubkey>,
+    user_authority: Pubkey,
+    swap_program: Pubkey,
+    user_temp_token_account_key: Pubkey,
+    pool_1_key: Pubkey,
+    pool_1_authority: Pubkey,
+    pool_1_lp_token_mint_key: Pubkey,
+    pool_1_source_token_account_key: Pubkey,
+    pool_1_dest_token_account_key: Pubkey,
+    pool_1_fee_account: Pubkey,
+    pool_2_key: Pubkey,
+    pool_2_authority: Pubkey,
+    pool_2_lp_token_mint_key: Pubkey,
+    pool_2_source_token_account_key: Pubkey,
+    pool_2_dest_token_account_key: Pubkey,
+    pool_2_fee_account: Pubkey,
+    borrow_amount: u64,
+    min_collateral_amount: u64,
+) -> Instruction {
+    let program_id = id();
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
+        &program_id,
+    );
+
+    let mut accounts = vec![
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(manager_key, false),
+        AccountMeta::new_readonly(manager_authority_key, false),
+        AccountMeta::new(collateral_market_reserve_key, false),
+        AccountMeta::new(collateral_supply_account_key, false),
+        AccountMeta::new(loan_market_reserve_key, false),
+        AccountMeta::new(loan_supply_account_key, false),
+        AccountMeta::new(user_obligation_key, false),
+        AccountMeta::new_readonly(user_authority, true),
+        AccountMeta::new_readonly(spl_token::id(), false),
+        AccountMeta::new_readonly(swap_program, false),
+        AccountMeta::new(user_temp_token_account_key, false),
+        AccountMeta::new_readonly(pool_1_key, false),
+        AccountMeta::new_readonly(pool_1_authority, false),
+        AccountMeta::new(pool_1_lp_token_mint_key, false),
+        AccountMeta::new(pool_1_source_token_account_key, false),
+        AccountMeta::new(pool_1_dest_token_account_key, false),
+        AccountMeta::new(pool_1_fee_account, false),
+        AccountMeta::new_readonly(pool_2_key, false),
+        AccountMeta::new_readonly(pool_2_authority, false),
+        AccountMeta::new(pool_2_lp_token_mint_key, false),
+        AccountMeta::new(pool_2_source_token_account_key, false),
+        AccountMeta::new(pool_2_dest_token_account_key, false),
+        AccountMeta::new(pool_2_fee_account, false),
+    ];
+    if let Some(friend_obligation_key) = friend_obligation_key {
+        accounts.insert(8, AccountMeta::new_readonly(friend_obligation_key, false))
+    }
+
+    Instruction {
+        program_id,
+        accounts,
+        data: LendingInstruction::OpenLeveragePositionByDualOrcaRouter(borrow_amount, min_collateral_amount).pack(),
+    }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn open_leverage_position_with_raydium(
+    manager_key: Pubkey,
+    collateral_market_reserve_key: Pubkey,
+    collateral_supply_account_key: Pubkey,
+    loan_market_reserve_key: Pubkey,
+    loan_supply_account_key: Pubkey,
+    user_obligation_key: Pubkey,
+    friend_obligation_key: Option<Pubkey>,
+    user_authority: Pubkey,
+    swap_program: Pubkey,
+    amm_key: Pubkey,
+    amm_authority: Pubkey,
+    amm_open_orders: Pubkey,
+    amm_target_orders: Pubkey,
+    pool_source_token_account: Pubkey,
+    pool_dest_token_account: Pubkey,
+    serum_program: Pubkey,
+    serum_market: Pubkey,
+    serum_bids: Pubkey,
+    serum_asks: Pubkey,
+    serum_event_queue: Pubkey,
+    serum_source_token_account: Pubkey,
+    serum_dest_token_account: Pubkey,
+    serum_vault_signer: Pubkey,
+    max_borrow_amount: u64,
+    collateral_amount: u64,
+) -> Instruction {
+    let program_id = id();
+    let (manager_authority_key, _bump_seed) = Pubkey::find_program_address(
+        &[manager_key.as_ref()],
+        &program_id,
+    );
+
+    let mut accounts = vec![
+        AccountMeta::new_readonly(sysvar::clock::id(), false),
+        AccountMeta::new_readonly(manager_key, false),
+        AccountMeta::new_readonly(manager_authority_key, false),
+        AccountMeta::new(collateral_market_reserve_key, false),
+        AccountMeta::new(collateral_supply_account_key, false),
+        AccountMeta::new(loan_market_reserve_key, false),
+        AccountMeta::new(loan_supply_account_key, false),
+        AccountMeta::new(user_obligation_key, false),
+        AccountMeta::new_readonly(user_authority, true),
+        AccountMeta::new_readonly(spl_token::id(), false),
+        AccountMeta::new_readonly(swap_program, false),
+        AccountMeta::new(amm_key, false),
+        AccountMeta::new_readonly(amm_authority, false),
+        AccountMeta::new(amm_open_orders, false),
+        AccountMeta::new(amm_target_orders, false),
+        AccountMeta::new(pool_source_token_account, false),
+        AccountMeta::new(pool_dest_token_account, false),
+        AccountMeta::new_readonly(serum_program, false),
+        AccountMeta::new(serum_market, false),
+        AccountMeta::new(serum_bids, false),
+        AccountMeta::new(serum_asks, false),
+        AccountMeta::new(serum_event_queue, false),
+        AccountMeta::new(serum_source_token_account, false),
+        AccountMeta::new(serum_dest_token_account, false),
+        AccountMeta::new_readonly(serum_vault_signer, false),
+    ];
+    if let Some(friend_obligation_key) = friend_obligation_key {
+        accounts.insert(8, AccountMeta::new_readonly(friend_obligation_key, false))
+    }
+
+    Instruction {
+        program_id,
+        accounts,
+        data: LendingInstruction::OpenLeveragePositionByRaydium(max_borrow_amount, collateral_amount).pack(),
     }
 }
 
