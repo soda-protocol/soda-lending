@@ -9,7 +9,6 @@ use crate::{Data, invoker::process_invoke, check_pubkey};
 
 use super::Swapper;
 
-// Raydium devnet does not exist!
 const RAYDIUM_PROGRAM: Pubkey = solana_program::pubkey!("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8");
 const SERUM_PROGRAM: Pubkey = solana_program::pubkey!("9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin");
 const RAYDIUM_POOL_RAY_USDT: Pubkey = solana_program::pubkey!("DVa7Qmb5ct9RCpaU7UTpSaf3GVMYz17vNVU67XpdCRut");
