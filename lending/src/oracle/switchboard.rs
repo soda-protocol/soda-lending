@@ -11,7 +11,7 @@ use switchboard_program::fast_parse_switchboard_result;
 use crate::{error::LendingError, math::{Decimal, TryDiv}};
 
 pub fn get_switchboard_price(account_info: &AccountInfo, clock: &Clock) -> Result<Decimal, ProgramError> {
-    const STALE_AFTER_SLOTS_ELAPSED: u64 = 80;
+    const STALE_AFTER_SLOTS_ELAPSED: u64 = 100;
 
     let data = account_info.try_borrow_data()?;
     let result = fast_parse_switchboard_result(&data).result;
