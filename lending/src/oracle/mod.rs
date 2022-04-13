@@ -2,6 +2,7 @@
 mod pyth;
 mod chainlink;
 mod switchboard;
+mod dex_oracle;
 
 pub use pyth::*;
 pub use chainlink::*;
