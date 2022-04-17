@@ -7,6 +7,12 @@ pub use raydium::*;
 
 use solana_program::{program_error::ProgramError, entrypoint::ProgramResult};
 
+pub type DexType = u8;
+
+pub const ORCA: DexType = 0;
+pub const ORCA_TWICE: DexType = 1;
+pub const RAYDIUM: DexType = 2;
+
 #[macro_export]
 macro_rules! check_pubkey {
     ($ini:expr, $pool:expr, $($x:expr), *) => {
