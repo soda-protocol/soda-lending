@@ -20,12 +20,12 @@ use crate::{
     assert_uninitialized,
     handle_amount,
     Data,
-    dex::{OrcaSwapContext, Swapper, RaydiumSwapContext},
+    dex::{OrcaSwapContext, Swapper, RaydiumSwapContext, DexType, ORCA, RAYDIUM, ORCA_TWICE},
     error::LendingError,
     instruction::LendingInstruction,
     invoker::*,
     state::*,
-    oracle::OracleConfig, math::Decimal,
+    oracle::OracleConfig,
     get_rent,
     get_clock,
     create_manager,
@@ -167,25 +167,37 @@ pub fn process_instruction(
             msg!("Instruction: Flash Loan: amount = {}", amount);
             process_flash_loan(program_id, accounts, tag, amount)
         }
-        LendingInstruction::EasyRepayByOrca(sotoken_amount, min_repay_amount) => {
-            msg!("Instruction: Easy Repay By Orca: collateral amount = {}, min repay amount {}", sotoken_amount, min_repay_amount);
-            process_easy_repay_by_orca(program_id, accounts, sotoken_amount, min_repay_amount)
+        LendingInstruction::EasyRepayByOrcaBaseIn(sotoken_amount, min_repay_amount) => {
+            msg!("Instruction: Easy Repay By Orca with Base In: collateral amount = {}, min repay amount {}", sotoken_amount, min_repay_amount);
+            process_easy_repay_base_in::<ORCA>(program_id, accounts, sotoken_amount, min_repay_amount)
         }
-        LendingInstruction::OpenLeveragePositionByOrca(borrow_amount, min_collateral_amount) => {
-            msg!("Instruction: Open Leverage Position By Orca: borrow amount = {}, min collateral amount {}", borrow_amount, min_collateral_amount);
-            process_open_leverage_position_by_orca::<false>(program_id, accounts, borrow_amount, min_collateral_amount)
+        LendingInstruction::OpenLeveragePositionByOrcaBaseIn(borrow_amount, min_collateral_amount) => {
+            msg!("Instruction: Open Leverage Position By Orca with Base In: borrow amount = {}, min collateral amount {}", borrow_amount, min_collateral_amount);
+            process_open_leverage_position_base_in::<ORCA>(program_id, accounts, borrow_amount, min_collateral_amount)
         }
-        LendingInstruction::OpenLeveragePositionByDualOrcaRouter(borrow_amount, min_collateral_amount) => {
-            msg!("Instruction: Open Leverage Position By Dual Orca Router: borrow amount = {}, min collateral amount {}", borrow_amount, min_collateral_amount);
-            process_open_leverage_position_by_orca::<true>(program_id, accounts, borrow_amount, min_collateral_amount)
+        LendingInstruction::EasyRepayByOrcaTwiceBaseIn(sotoken_amount, min_repay_amount) => {
+            msg!("Instruction: Easy Repay By Orca Twice with Base In: collateral amount = {}, min repay amount {}", sotoken_amount, min_repay_amount);
+            process_easy_repay_base_in::<ORCA_TWICE>(program_id, accounts, sotoken_amount, min_repay_amount)
         }
-        LendingInstruction::EasyRepayByRaydium(max_sotoken_amount, repay_amount) => {
-            msg!("Instruction: Easy Repay By Orca: max collateral amount = {}, repay amount {}", max_sotoken_amount, repay_amount);
-            process_easy_repay_by_raydium(program_id, accounts, max_sotoken_amount, repay_amount)
+        LendingInstruction::OpenLeveragePositionByOrcaTwiceBaseIn(borrow_amount, min_collateral_amount) => {
+            msg!("Instruction: Open Leverage Position By Orca Twice with Base In: borrow amount = {}, min collateral amount {}", borrow_amount, min_collateral_amount);
+            process_open_leverage_position_base_in::<ORCA_TWICE>(program_id, accounts, borrow_amount, min_collateral_amount)
         }
-        LendingInstruction::OpenLeveragePositionByRaydium(max_borrow_amount, collateral_amount) => {
-            msg!("Instruction: Open Leverage Position By Orca: max borrow amount = {}, collateral amount {}", max_borrow_amount, collateral_amount);
-            process_open_leverage_position_by_raydium(program_id, accounts, max_borrow_amount, collateral_amount)
+        LendingInstruction::EasyRepayByRaydiumBaseIn(sotoken_amount, min_repay_amount) => {
+            msg!("Instruction: Easy Repay By Raydium with Base In: collateral amount = {}, min repay amount {}", sotoken_amount, min_repay_amount);
+            process_easy_repay_base_in::<RAYDIUM>(program_id, accounts, sotoken_amount, min_repay_amount)
+        }
+        LendingInstruction::EasyRepayByRaydiumBaseOut(max_sotoken_amount, repay_amount) => {
+            msg!("Instruction: Easy Repay By Raydium with Base Out: max collateral amount = {}, repay amount {}", max_sotoken_amount, repay_amount);
+            process_easy_repay_base_out::<RAYDIUM>(program_id, accounts, max_sotoken_amount, repay_amount)
+        }
+        LendingInstruction::OpenLeveragePositionByRaydiumBaseIn(borrow_amount, min_collateral_amount) => {
+            msg!("Instruction: Open Leverage Position By Raydium with Base In: borrow amount = {}, min collateral amount {}", borrow_amount, min_collateral_amount);
+            process_open_leverage_position_base_in::<RAYDIUM>(program_id, accounts, borrow_amount, min_collateral_amount)
+        }
+        LendingInstruction::OpenLeveragePositionByRaydiumBaseOut(max_borrow_amount, collateral_amount) => {
+            msg!("Instruction: Open Leverage Position By Raydium with Base In: max borrow amount = {}, collateral amount {}", max_borrow_amount, collateral_amount);
+            process_open_leverage_position_base_out::<RAYDIUM>(program_id, accounts, max_borrow_amount, collateral_amount)
         }
         #[cfg(feature = "unique-credit")]
         LendingInstruction::InitUniqueCredit(authority, amount) => {
@@ -300,7 +312,7 @@ fn process_init_market_reserve(
     // 9
     get_manager_owner!(manager_owner_info; account_info_iter, manager);
     // 10
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     let market_reserve = MarketReserve::new(
         clock.slot,
@@ -320,7 +332,7 @@ fn process_init_market_reserve(
 
     // init manager token account
     process_token_init_account(
-        token_program_id,
+        token_program_info,
         supply_token_account_info,
         token_mint_info,
         rent_info,
@@ -329,7 +341,7 @@ fn process_init_market_reserve(
 
     // init sotoken mint
     process_token_init_mint(
-        token_program_id,
+        token_program_info,
         sotoken_mint_info,
         rent_info,
         manager_authority_info.key,
@@ -408,7 +420,7 @@ fn process_deposit_or_withdraw<const IS_DEPOSIT: bool>(
     // 9
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
     // 10
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // accrue interest
     market_reserve.accrue_interest(clock.slot)?;
@@ -423,7 +435,7 @@ fn process_deposit_or_withdraw<const IS_DEPOSIT: bool>(
 
         // transfer from user to manager
         process_token_transfer(
-            token_program_id,
+            token_program_info,
             user_token_account_info,
             supply_token_account_info,
             user_authority_info,
@@ -433,7 +445,7 @@ fn process_deposit_or_withdraw<const IS_DEPOSIT: bool>(
 
         // mint to user
         process_token_mint_to(
-            token_program_id,
+            token_program_info,
             sotoken_mint_info,
             user_sotoken_account_info,
             manager_authority_info,
@@ -448,7 +460,7 @@ fn process_deposit_or_withdraw<const IS_DEPOSIT: bool>(
     
         // burn sotoken
         process_token_burn(
-            token_program_id,
+            token_program_info,
             user_sotoken_account_info,
             sotoken_mint_info,
             user_authority_info,
@@ -458,7 +470,7 @@ fn process_deposit_or_withdraw<const IS_DEPOSIT: bool>(
     
         // transfer from manager to user
         process_token_transfer(
-            token_program_id,
+            token_program_info,
             supply_token_account_info,
             user_token_account_info,
             manager_authority_info,
@@ -611,7 +623,7 @@ fn process_pledge_collateral(
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
     let user_sotoken_account = Account::unpack(&user_sotoken_account_info.try_borrow_data()?)?;
     // 6
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // handle obligation
     let balance = get_available_balance(user_sotoken_account, user_authority_info.key);
@@ -626,7 +638,7 @@ fn process_pledge_collateral(
     
     // burn from user
     process_token_burn(
-        token_program_id,
+        token_program_info,
         user_sotoken_account_info,
         sotoken_mint_info,
         user_authority_info,
@@ -660,7 +672,7 @@ fn process_deposit_and_pledge(
     let user_token_account_info = next_account_info(account_info_iter)?;
     let user_token_account = Account::unpack(&user_token_account_info.try_borrow_data()?)?;
     // 7
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // accrue interest
     market_reserve.accrue_interest(clock.slot)?;
@@ -681,7 +693,7 @@ fn process_deposit_and_pledge(
 
     // transfer token to manager
     process_token_transfer(
-        token_program_id,
+        token_program_info,
         user_token_account_info,
         supply_token_account_info,
         user_authority_info,
@@ -721,7 +733,7 @@ fn process_redeem_collateral(
     // 8/9
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
     // 9/10
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // redeem in obligation
     let index = user_obligation.find_collateral(market_reserve_info.key)?;
@@ -732,7 +744,7 @@ fn process_redeem_collateral(
     
     // mint to user
     process_token_mint_to(
-        token_program_id,
+        token_program_info,
         sotoken_mint_info,
         user_sotoken_account_info,
         manager_authority_info,
@@ -772,7 +784,7 @@ fn process_redeem_and_withdraw<const WITH_LOAN: bool>(
     // 8/9
     let user_token_account_info = next_account_info(account_info_iter)?;
     // 9/10
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // redeem in obligation
     let index = user_obligation.find_collateral(market_reserve_info.key)?;
@@ -791,7 +803,7 @@ fn process_redeem_and_withdraw<const WITH_LOAN: bool>(
 
     // transfer from manager to user
     process_token_transfer(
-        token_program_id,
+        token_program_info,
         supply_account_info,
         user_token_account_info,
         manager_authority_info,
@@ -828,7 +840,7 @@ fn process_redeem_collateral_without_loan(
     // 7/8
     let user_sotoken_account_info = next_account_info(account_info_iter)?;
     // 8/9
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // redeem in obligation
     let index = user_obligation.find_collateral(market_reserve_info.key)?;
@@ -839,7 +851,7 @@ fn process_redeem_collateral_without_loan(
     
     // mint to user
     process_token_mint_to(
-        token_program_id,
+        token_program_info,
         sotoken_mint_info,
         user_sotoken_account_info,
         manager_authority_info,
@@ -886,7 +898,7 @@ fn process_replace_collateral(
     let user_in_sotoken_account_info = next_account_info(account_info_iter)?;
     let user_in_sotoken_account = Account::unpack(&user_in_sotoken_account_info.try_borrow_data()?)?;
     // 13/14
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // replace
     let out_index = user_obligation.find_collateral(out_market_reserve_info.key)?;
@@ -908,7 +920,7 @@ fn process_replace_collateral(
 
     // mint to user
     process_token_mint_to(
-        token_program_id,
+        token_program_info,
         out_sotoken_mint_info,
         user_out_sotoken_account_info,
         manager_authority_info,
@@ -918,7 +930,7 @@ fn process_replace_collateral(
 
     // burn from user
     process_token_burn(
-        token_program_id,
+        token_program_info,
         user_in_sotoken_account_info,
         in_sotoken_mint_info,
         user_authority_info,
@@ -958,7 +970,7 @@ fn process_borrow_liquidity(
     // 8/9
     let user_token_account_info = next_account_info(account_info_iter)?;
     // 9/10
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // borrow
     let amount = if let Ok(index) = user_obligation.find_loan(market_reserve_info.key) {
@@ -987,7 +999,7 @@ fn process_borrow_liquidity(
 
     // transfer token to user
     process_token_transfer(
-        token_program_id,
+        token_program_info,
         supply_account_info,
         user_token_account_info,
         manager_authority_info,
@@ -1021,7 +1033,7 @@ fn process_repay_loan(
     let user_token_account_info = next_account_info(account_info_iter)?;
     let user_balance = Account::unpack(&user_token_account_info.try_borrow_data()?)?.amount;
     // 7
-    let token_program_id = next_account_info(account_info_iter)?;    
+    let token_program_info = next_account_info(account_info_iter)?;    
 
     // accrue interest
     market_reserve.accrue_interest(clock.slot)?;
@@ -1039,7 +1051,7 @@ fn process_repay_loan(
 
     // transfer to manager
     process_token_transfer(
-        token_program_id,
+        token_program_info,
         user_token_account_info,
         supply_account_info,
         user_authority_info,
@@ -1085,7 +1097,7 @@ fn process_liquidate<const IS_COLLATERAL: bool>(
     // 11/12
     let liquidator_sotoken_account_info = next_account_info(account_info_iter)?;
     // 12/13
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // liquidate
     let collateral_index = user_obligation.find_collateral(collateral_market_reserve_info.key)?;
@@ -1109,7 +1121,7 @@ fn process_liquidate<const IS_COLLATERAL: bool>(
 
     // transfer token to manager
     process_token_transfer(
-        token_program_id,
+        token_program_info,
         liquidator_token_account_info,
         supply_token_account_info,
         liquidator_authority_info,
@@ -1119,7 +1131,7 @@ fn process_liquidate<const IS_COLLATERAL: bool>(
 
     // mint to user
     process_token_mint_to(
-        token_program_id,
+        token_program_info,
         sotoken_mint_info,
         liquidator_sotoken_account_info,
         manager_authority_info,
@@ -1154,7 +1166,7 @@ fn process_flash_loan(
     // 6
     let receiver_authority_info = next_account_info(account_info_iter)?;
     // 7
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
     // 8
     get_receiver_program!(receiver_program_id; account_info_iter, program_id);
 
@@ -1173,7 +1185,7 @@ fn process_flash_loan(
 
     // approve to receiver
     process_token_approve(
-        token_program_id,
+        token_program_info,
         supply_account_info,
         receiver_authority_info,
         manager_authority_info,
@@ -1186,7 +1198,7 @@ fn process_flash_loan(
         clock_info.clone(),
         supply_account_info.clone(),
         receiver_authority_info.clone(),
-        token_program_id.clone(),
+        token_program_info.clone(),
     ];
     // 9 ~
     flash_loan_instruction_account_infos.extend(account_info_iter.map(|account_info| account_info.clone()));
@@ -1199,7 +1211,7 @@ fn process_flash_loan(
     )?;
 
     process_token_revoke(
-        token_program_id,
+        token_program_info,
         supply_account_info,
         manager_authority_info,
         signer_seeds,
@@ -1249,7 +1261,7 @@ fn process_flash_liquidate<const IS_COLLATERAL: bool>(
     // 9/10
     let user_authority_info = next_account_info(account_info_iter)?;
     // 10/11
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
     // 11/12
     get_receiver_program!(flash_program_id; account_info_iter, program_id);
 
@@ -1288,7 +1300,7 @@ fn process_flash_liquidate<const IS_COLLATERAL: bool>(
 
     // transfer collateral from manager to user
     process_token_approve(
-        token_program_id,
+        token_program_info,
         collateral_supply_account_info,
         user_authority_info,
         manager_authority_info,
@@ -1302,7 +1314,7 @@ fn process_flash_liquidate<const IS_COLLATERAL: bool>(
         collateral_supply_account_info.clone(),
         loan_supply_account_info.clone(),
         user_authority_info.clone(),
-        token_program_id.clone(),
+        token_program_info.clone(),
     ];
     // 12/13 ~
     flash_instruction_account_infos.extend(account_info_iter.map(|account_info| account_info.clone()));
@@ -1315,7 +1327,7 @@ fn process_flash_liquidate<const IS_COLLATERAL: bool>(
     )?;
 
     process_token_revoke(
-        token_program_id,
+        token_program_info,
         collateral_supply_account_info,
         manager_authority_info,
         signer_seeds,
@@ -1333,7 +1345,7 @@ fn process_flash_liquidate<const IS_COLLATERAL: bool>(
 }
 
 // must after update obligation
-fn process_open_leverage_position_by_orca<const DUAL_ROUTER: bool>(
+fn process_open_leverage_position_base_in<const DEX_TYPE: DexType>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     borrow_amount: u64,
@@ -1369,83 +1381,124 @@ fn process_open_leverage_position_by_orca<const DUAL_ROUTER: bool>(
     // 9/10
     get_user_obligation_owner!(user_authority_info; account_info_iter, user_obligation);
     // 10/11
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
+    // 11/12
+    let swap_program_info = next_account_info(account_info_iter)?;
 
     // user borrow from reserve first
     let borrow_amount = calculate_amount(borrow_amount, loan_market_reserve.liquidity_info.available);
-    let collateral_amount = if DUAL_ROUTER {
-        let swap_program = next_account_info(account_info_iter)?;
-        let temp_token_account = next_account_info(account_info_iter)?;
-        let swap_ctx_1 = OrcaSwapContext {
-            swap_program,
-            token_program: token_program_id,
-            pool_info: next_account_info(account_info_iter)?,
-            pool_authority: next_account_info(account_info_iter)?,
-            pool_lp_token_mint: next_account_info(account_info_iter)?,
-            pool_source_token_account: next_account_info(account_info_iter)?,
-            pool_dest_token_account: next_account_info(account_info_iter)?,
-            pool_fee_account: next_account_info(account_info_iter)?,
-            user_source_token_account: loan_supply_account_info,
-            user_dest_token_account: temp_token_account,
-            user_authority: manager_authority_info,
-            signer_seeds,
-        };
-        let swap_ctx_2 = OrcaSwapContext {
-            swap_program,
-            token_program: token_program_id,
-            pool_info: next_account_info(account_info_iter)?,
-            pool_authority: next_account_info(account_info_iter)?,
-            pool_lp_token_mint: next_account_info(account_info_iter)?,
-            pool_source_token_account: next_account_info(account_info_iter)?,
-            pool_dest_token_account: next_account_info(account_info_iter)?,
-            pool_fee_account: next_account_info(account_info_iter)?,
-            user_source_token_account: temp_token_account,
-            user_dest_token_account: collateral_supply_account_info,
-            user_authority: user_authority_info,
-            signer_seeds: &[],
-        };
-        // check ctx
-        if !swap_ctx_1.is_supported() || !swap_ctx_2.is_supported() {
-            return Err(LendingError::InvalidDexAccounts.into());
+    let collateral_amount = match DEX_TYPE {
+        ORCA => {
+            let swap_ctx = OrcaSwapContext {
+                swap_program: swap_program_info,
+                token_program: token_program_info,
+                pool_info: next_account_info(account_info_iter)?,
+                pool_authority: next_account_info(account_info_iter)?,
+                pool_lp_token_mint: next_account_info(account_info_iter)?,
+                pool_source_token_account: next_account_info(account_info_iter)?,
+                pool_dest_token_account: next_account_info(account_info_iter)?,
+                pool_fee_account: next_account_info(account_info_iter)?,
+                user_source_token_account: loan_supply_account_info,
+                user_dest_token_account: collateral_supply_account_info,
+                user_authority: manager_authority_info,
+                signer_seeds,
+            };
+            // check ctx
+            if !swap_ctx.is_supported() {
+                return Err(LendingError::InvalidDexAccounts.into());
+            }
+            // before swap
+            let collateral_amount_before = swap_ctx.get_user_dest_token_balance()?;
+            // do swap
+            swap_ctx.swap_base_in(borrow_amount, min_collateral_amount)?;
+            // after swap
+            swap_ctx.get_user_dest_token_balance()?
+                .checked_sub(collateral_amount_before)
+                .ok_or(LendingError::MathOverflow)?
         }
-        // before swap
-        let collateral_amount_before = swap_ctx_2.get_user_dest_token_balance()?;
-        // do swap 1
-        swap_ctx_1.swap_base_in(borrow_amount, 1)?;
-        let temp_amount = swap_ctx_1.get_user_dest_token_balance()?;
-        // do swap 2
-        swap_ctx_2.swap_base_in(temp_amount, min_collateral_amount)?;
-        // after swap
-        swap_ctx_2.get_user_dest_token_balance()?
-            .checked_sub(collateral_amount_before)
-            .ok_or(LendingError::MathOverflow)?
-    } else {
-        let swap_ctx = OrcaSwapContext {
-            swap_program: next_account_info(account_info_iter)?,
-            token_program: token_program_id,
-            pool_info: next_account_info(account_info_iter)?,
-            pool_authority: next_account_info(account_info_iter)?,
-            pool_lp_token_mint: next_account_info(account_info_iter)?,
-            pool_source_token_account: next_account_info(account_info_iter)?,
-            pool_dest_token_account: next_account_info(account_info_iter)?,
-            pool_fee_account: next_account_info(account_info_iter)?,
-            user_source_token_account: loan_supply_account_info,
-            user_dest_token_account: collateral_supply_account_info,
-            user_authority: manager_authority_info,
-            signer_seeds,
-        };
-        // check ctx
-        if !swap_ctx.is_supported() {
-            return Err(LendingError::InvalidDexAccounts.into());
+        ORCA_TWICE => {
+            let temp_token_account = next_account_info(account_info_iter)?;
+            let swap_ctx_1 = OrcaSwapContext {
+                swap_program: swap_program_info,
+                token_program: token_program_info,
+                pool_info: next_account_info(account_info_iter)?,
+                pool_authority: next_account_info(account_info_iter)?,
+                pool_lp_token_mint: next_account_info(account_info_iter)?,
+                pool_source_token_account: next_account_info(account_info_iter)?,
+                pool_dest_token_account: next_account_info(account_info_iter)?,
+                pool_fee_account: next_account_info(account_info_iter)?,
+                user_source_token_account: loan_supply_account_info,
+                user_dest_token_account: temp_token_account,
+                user_authority: manager_authority_info,
+                signer_seeds,
+            };
+            let swap_ctx_2 = OrcaSwapContext {
+                swap_program: swap_program_info,
+                token_program: token_program_info,
+                pool_info: next_account_info(account_info_iter)?,
+                pool_authority: next_account_info(account_info_iter)?,
+                pool_lp_token_mint: next_account_info(account_info_iter)?,
+                pool_source_token_account: next_account_info(account_info_iter)?,
+                pool_dest_token_account: next_account_info(account_info_iter)?,
+                pool_fee_account: next_account_info(account_info_iter)?,
+                user_source_token_account: temp_token_account,
+                user_dest_token_account: collateral_supply_account_info,
+                user_authority: user_authority_info,
+                signer_seeds: &[],
+            };
+            // check ctx
+            if !swap_ctx_1.is_supported() || !swap_ctx_2.is_supported() {
+                return Err(LendingError::InvalidDexAccounts.into());
+            }
+            // before swap
+            let collateral_amount_before = swap_ctx_2.get_user_dest_token_balance()?;
+            // do swap 1
+            swap_ctx_1.swap_base_in(borrow_amount, 1)?;
+            let temp_amount = swap_ctx_1.get_user_dest_token_balance()?;
+            // do swap 2
+            swap_ctx_2.swap_base_in(temp_amount, min_collateral_amount)?;
+            // after swap
+            swap_ctx_2.get_user_dest_token_balance()?
+                .checked_sub(collateral_amount_before)
+                .ok_or(LendingError::MathOverflow)?
         }
-        // before swap
-        let collateral_amount_before = swap_ctx.get_user_dest_token_balance()?;
-        // do swap
-        swap_ctx.swap_base_in(borrow_amount, min_collateral_amount)?;
-        // after swap
-        swap_ctx.get_user_dest_token_balance()?
-            .checked_sub(collateral_amount_before)
-            .ok_or(LendingError::MathOverflow)?
+        RAYDIUM => {
+            let swap_ctx = RaydiumSwapContext {
+                swap_program: swap_program_info,
+                token_program: token_program_info,
+                amm_info: next_account_info(account_info_iter)?,
+                amm_authority: next_account_info(account_info_iter)?,
+                amm_open_orders: next_account_info(account_info_iter)?,
+                amm_target_orders: next_account_info(account_info_iter)?,
+                pool_source_token_account: next_account_info(account_info_iter)?,
+                pool_dest_token_account: next_account_info(account_info_iter)?,
+                serum_program: next_account_info(account_info_iter)?,
+                serum_market: next_account_info(account_info_iter)?,
+                serum_bids: next_account_info(account_info_iter)?,
+                serum_asks: next_account_info(account_info_iter)?,
+                serum_event_queue: next_account_info(account_info_iter)?,
+                serum_source_token_account: next_account_info(account_info_iter)?,
+                serum_dest_token_account: next_account_info(account_info_iter)?,
+                serum_vault_signer: next_account_info(account_info_iter)?,
+                user_source_token_account: loan_supply_account_info,
+                user_dest_token_account: collateral_supply_account_info,
+                user_authority: manager_authority_info,
+                signer_seeds,
+            };
+            // check ctx
+            if !swap_ctx.is_supported() {
+                return Err(LendingError::InvalidDexAccounts.into());
+            }
+            // before swap
+            let collateral_amount_before = swap_ctx.get_user_dest_token_balance()?;
+            // do swap
+            swap_ctx.swap_base_in(borrow_amount, min_collateral_amount)?;
+            // after swap
+            swap_ctx.get_user_dest_token_balance()?
+                .checked_sub(collateral_amount_before)
+                .ok_or(LendingError::MathOverflow)?
+        }
+        _ => unreachable!("unexpected dex type"),
     };
     
     // deposit
@@ -1488,7 +1541,7 @@ fn process_open_leverage_position_by_orca<const DUAL_ROUTER: bool>(
 }
 
 // must after update obligation
-fn process_open_leverage_position_by_raydium(
+fn process_open_leverage_position_base_out<const DEX_TYPE: DexType>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     max_borrow_amount: u64,
@@ -1524,44 +1577,80 @@ fn process_open_leverage_position_by_raydium(
     // 9/10
     get_user_obligation_owner!(user_authority_info; account_info_iter, user_obligation);
     // 10/11
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
+    // 11/12
+    let swap_program_info = next_account_info(account_info_iter)?;
 
     // user borrow from reserve first
     let max_borrow_amount = calculate_amount(max_borrow_amount, loan_market_reserve.liquidity_info.available);
-    let swap_ctx = RaydiumSwapContext {
-        swap_program: next_account_info(account_info_iter)?,
-        token_program: token_program_id,
-        amm_info: next_account_info(account_info_iter)?,
-        amm_authority: next_account_info(account_info_iter)?,
-        amm_open_orders: next_account_info(account_info_iter)?,
-        amm_target_orders: next_account_info(account_info_iter)?,
-        pool_source_token_account: next_account_info(account_info_iter)?,
-        pool_dest_token_account: next_account_info(account_info_iter)?,
-        serum_program: next_account_info(account_info_iter)?,
-        serum_market: next_account_info(account_info_iter)?,
-        serum_bids: next_account_info(account_info_iter)?,
-        serum_asks: next_account_info(account_info_iter)?,
-        serum_event_queue: next_account_info(account_info_iter)?,
-        serum_source_token_account: next_account_info(account_info_iter)?,
-        serum_dest_token_account: next_account_info(account_info_iter)?,
-        serum_vault_signer: next_account_info(account_info_iter)?,
-        user_source_token_account: loan_supply_account_info,
-        user_dest_token_account: collateral_supply_account_info,
-        user_authority: manager_authority_info,
-        signer_seeds,
+    let borrow_amount = match DEX_TYPE {
+        ORCA => {
+            let swap_ctx = OrcaSwapContext {
+                swap_program: swap_program_info,
+                token_program: token_program_info,
+                pool_info: next_account_info(account_info_iter)?,
+                pool_authority: next_account_info(account_info_iter)?,
+                pool_lp_token_mint: next_account_info(account_info_iter)?,
+                pool_source_token_account: next_account_info(account_info_iter)?,
+                pool_dest_token_account: next_account_info(account_info_iter)?,
+                pool_fee_account: next_account_info(account_info_iter)?,
+                user_source_token_account: loan_supply_account_info,
+                user_dest_token_account: collateral_supply_account_info,
+                user_authority: manager_authority_info,
+                signer_seeds,
+            };
+            // check ctx
+            if !swap_ctx.is_supported() {
+                return Err(LendingError::InvalidDexAccounts.into());
+            }
+            // before swap
+            let loan_amount_before = swap_ctx.get_user_source_token_balance()?;
+            // do swap
+            swap_ctx.swap_base_out(max_borrow_amount, collateral_amount)?;
+            // after swap
+            loan_amount_before
+                .checked_sub(swap_ctx.get_user_source_token_balance()?)
+                .ok_or(LendingError::MathOverflow)?
+        }
+        ORCA_TWICE => unimplemented!("Orca twice router does not support base out"),
+        RAYDIUM => {
+            let swap_ctx = RaydiumSwapContext {
+                swap_program: swap_program_info,
+                token_program: token_program_info,
+                amm_info: next_account_info(account_info_iter)?,
+                amm_authority: next_account_info(account_info_iter)?,
+                amm_open_orders: next_account_info(account_info_iter)?,
+                amm_target_orders: next_account_info(account_info_iter)?,
+                pool_source_token_account: next_account_info(account_info_iter)?,
+                pool_dest_token_account: next_account_info(account_info_iter)?,
+                serum_program: next_account_info(account_info_iter)?,
+                serum_market: next_account_info(account_info_iter)?,
+                serum_bids: next_account_info(account_info_iter)?,
+                serum_asks: next_account_info(account_info_iter)?,
+                serum_event_queue: next_account_info(account_info_iter)?,
+                serum_source_token_account: next_account_info(account_info_iter)?,
+                serum_dest_token_account: next_account_info(account_info_iter)?,
+                serum_vault_signer: next_account_info(account_info_iter)?,
+                user_source_token_account: loan_supply_account_info,
+                user_dest_token_account: collateral_supply_account_info,
+                user_authority: manager_authority_info,
+                signer_seeds,
+            };
+            // check ctx
+            if !swap_ctx.is_supported() {
+                return Err(LendingError::InvalidDexAccounts.into());
+            }
+            // before swap
+            let loan_amount_before = swap_ctx.get_user_source_token_balance()?;
+            // do swap
+            swap_ctx.swap_base_out(max_borrow_amount, collateral_amount)?;
+            // after swap
+            loan_amount_before
+                .checked_sub(swap_ctx.get_user_source_token_balance()?)
+                .ok_or(LendingError::MathOverflow)?
+        }
+        _ => unreachable!("unexpected dex type"),
     };
-    // check ctx
-    if !swap_ctx.is_supported() {
-        return Err(LendingError::InvalidDexAccounts.into());
-    }
-    // before swap
-    let loan_amount_before = swap_ctx.get_user_source_token_balance()?;
-    // do swap
-    swap_ctx.swap_base_out(max_borrow_amount, collateral_amount)?;
-    // after swap
-    let borrow_amount = loan_amount_before
-        .checked_sub(swap_ctx.get_user_source_token_balance()?)
-        .ok_or(LendingError::MathOverflow)?;
     
     // accure interest
     collateral_market_reserve.accrue_interest(clock.slot)?;
@@ -1602,7 +1691,7 @@ fn process_open_leverage_position_by_raydium(
     MarketReserve::pack(collateral_market_reserve, &mut collateral_market_reserve_info.try_borrow_mut_data()?)
 }
 
-fn process_easy_repay_by_orca(
+fn process_easy_repay_base_in<const DEX_TYPE: DexType>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     sotoken_amount: u64,
@@ -1636,9 +1725,11 @@ fn process_easy_repay_by_orca(
     // 9?
     get_friend_obligation!(friend_obligation; account_info_iter, user_obligation, clock);
     // 9/10
-    get_user_obligation_owner!(user_obligation_owner_info; account_info_iter, user_obligation);
+    get_user_obligation_owner!(user_authority_info; account_info_iter, user_obligation);
     // 10/11
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
+    // 11/12
+    let swap_program_info = next_account_info(account_info_iter)?;
 
     let collateral_index = user_obligation.find_collateral(collateral_market_reserve_info.key)?;
     // redeem without remove
@@ -1648,40 +1739,123 @@ fn process_easy_repay_by_orca(
     collateral_market_reserve.last_update.update_slot(clock.slot, true);
     let collateral_amount = collateral_market_reserve.withdraw(sotoken_amount)?;
 
-    let mut swap_ctx = OrcaSwapContext {
-        swap_program: next_account_info(account_info_iter)?,
-        token_program: token_program_id,
-        pool_info: next_account_info(account_info_iter)?,
-        pool_authority: next_account_info(account_info_iter)?,
-        pool_lp_token_mint: next_account_info(account_info_iter)?,
-        pool_source_token_account: next_account_info(account_info_iter)?,
-        pool_dest_token_account: next_account_info(account_info_iter)?,
-        pool_fee_account: next_account_info(account_info_iter)?,
-        user_source_token_account: collateral_supply_account_info,
-        user_dest_token_account: loan_supply_account_info,
-        user_authority: manager_authority_info,
-        signer_seeds,
+    let actual_repay_amount = match DEX_TYPE {
+        ORCA => {
+            let swap_ctx = OrcaSwapContext {
+                swap_program: swap_program_info,
+                token_program: token_program_info,
+                pool_info: next_account_info(account_info_iter)?,
+                pool_authority: next_account_info(account_info_iter)?,
+                pool_lp_token_mint: next_account_info(account_info_iter)?,
+                pool_source_token_account: next_account_info(account_info_iter)?,
+                pool_dest_token_account: next_account_info(account_info_iter)?,
+                pool_fee_account: next_account_info(account_info_iter)?,
+                user_source_token_account: collateral_supply_account_info,
+                user_dest_token_account: loan_supply_account_info,
+                user_authority: manager_authority_info,
+                signer_seeds,
+            };
+            // check ctx
+            if !swap_ctx.is_supported() {
+                return Err(LendingError::InvalidDexAccounts.into());
+            }
+            // before swap
+            let loan_amount_before = swap_ctx.get_user_dest_token_balance()?;
+            // do swap
+            swap_ctx.swap_base_in(collateral_amount, min_repay_amount)?;
+            // after swap
+            swap_ctx.get_user_dest_token_balance()?
+                .checked_sub(loan_amount_before)
+                .ok_or(LendingError::MathOverflow)?
+        }
+        ORCA_TWICE => {
+            let temp_token_account = next_account_info(account_info_iter)?;
+            let swap_ctx_1 = OrcaSwapContext {
+                swap_program: swap_program_info,
+                token_program: token_program_info,
+                pool_info: next_account_info(account_info_iter)?,
+                pool_authority: next_account_info(account_info_iter)?,
+                pool_lp_token_mint: next_account_info(account_info_iter)?,
+                pool_source_token_account: next_account_info(account_info_iter)?,
+                pool_dest_token_account: next_account_info(account_info_iter)?,
+                pool_fee_account: next_account_info(account_info_iter)?,
+                user_source_token_account: collateral_supply_account_info,
+                user_dest_token_account: temp_token_account,
+                user_authority: manager_authority_info,
+                signer_seeds,
+            };
+            let swap_ctx_2 = OrcaSwapContext {
+                swap_program: swap_program_info,
+                token_program: token_program_info,
+                pool_info: next_account_info(account_info_iter)?,
+                pool_authority: next_account_info(account_info_iter)?,
+                pool_lp_token_mint: next_account_info(account_info_iter)?,
+                pool_source_token_account: next_account_info(account_info_iter)?,
+                pool_dest_token_account: next_account_info(account_info_iter)?,
+                pool_fee_account: next_account_info(account_info_iter)?,
+                user_source_token_account: temp_token_account,
+                user_dest_token_account: loan_supply_account_info,
+                user_authority: user_authority_info,
+                signer_seeds: &[],
+            };
+            // check ctx
+            if !swap_ctx_1.is_supported() || !swap_ctx_2.is_supported() {
+                return Err(LendingError::InvalidDexAccounts.into());
+            }
+            // before swap
+            let loan_amount_before = swap_ctx_2.get_user_dest_token_balance()?;
+            // do swap 1
+            swap_ctx_1.swap_base_in(collateral_amount, 1)?;
+            let temp_amount = swap_ctx_1.get_user_dest_token_balance()?;
+            // do swap 2
+            swap_ctx_2.swap_base_in(temp_amount, min_repay_amount)?;
+            // after swap
+            swap_ctx_2.get_user_dest_token_balance()?
+                .checked_sub(loan_amount_before)
+                .ok_or(LendingError::MathOverflow)?
+        }
+        RAYDIUM => {
+            let swap_ctx = RaydiumSwapContext {
+                swap_program: swap_program_info,
+                token_program: token_program_info,
+                amm_info: next_account_info(account_info_iter)?,
+                amm_authority: next_account_info(account_info_iter)?,
+                amm_open_orders: next_account_info(account_info_iter)?,
+                amm_target_orders: next_account_info(account_info_iter)?,
+                pool_source_token_account: next_account_info(account_info_iter)?,
+                pool_dest_token_account: next_account_info(account_info_iter)?,
+                serum_program: next_account_info(account_info_iter)?,
+                serum_market: next_account_info(account_info_iter)?,
+                serum_bids: next_account_info(account_info_iter)?,
+                serum_asks: next_account_info(account_info_iter)?,
+                serum_event_queue: next_account_info(account_info_iter)?,
+                serum_source_token_account: next_account_info(account_info_iter)?,
+                serum_dest_token_account: next_account_info(account_info_iter)?,
+                serum_vault_signer: next_account_info(account_info_iter)?,
+                user_source_token_account: collateral_supply_account_info,
+                user_dest_token_account: loan_supply_account_info,
+                user_authority: manager_authority_info,
+                signer_seeds,
+            };
+            // check ctx
+            if !swap_ctx.is_supported() {
+                return Err(LendingError::InvalidDexAccounts.into());
+            }
+            // before swap
+            let loan_amount_before = swap_ctx.get_user_dest_token_balance()?;
+            // do swap
+            swap_ctx.swap_base_in(collateral_amount, min_repay_amount)?;
+            // after swap
+            swap_ctx.get_user_dest_token_balance()?
+                .checked_sub(loan_amount_before)
+                .ok_or(LendingError::MathOverflow)?
+        }
+        _ => unreachable!("unexpected dex type"),
     };
-    // check ctx
-    if !swap_ctx.is_supported() {
-        return Err(LendingError::InvalidDexAccounts.into());
-    }
-    // before swap
-    let loan_amount_before = swap_ctx.get_user_dest_token_balance()?;
-    // do swap
-    swap_ctx.swap_base_in(collateral_amount, min_repay_amount)?;
-    // after swap
-    let actual_repay_amount = swap_ctx.get_user_dest_token_balance()?
-        .checked_sub(loan_amount_before)
-        .ok_or(LendingError::MathOverflow)?;
 
     let loan_index = user_obligation.find_loan(loan_market_reserve_info.key)?;
     let settle = user_obligation.repay::<true>(
-        if Decimal::from(actual_repay_amount) < user_obligation.loans[loan_index].borrowed_amount_wads {
-            Some(actual_repay_amount)
-        } else {
-            None
-        },
+        Some(actual_repay_amount),
         u64::MAX,
         loan_index,
         &loan_market_reserve,
@@ -1691,30 +1865,6 @@ fn process_easy_repay_by_orca(
     loan_market_reserve.last_update.update_slot(clock.slot, true);
     // user repay in loan reserve
     loan_market_reserve.liquidity_info.repay(&settle)?;
-
-    if actual_repay_amount > settle.amount {
-        let pool_dest_token_account = swap_ctx.pool_source_token_account;
-        swap_ctx.pool_source_token_account = swap_ctx.pool_dest_token_account;
-        swap_ctx.pool_dest_token_account = pool_dest_token_account;
-
-        let user_dest_token_account = swap_ctx.user_source_token_account;
-        swap_ctx.user_source_token_account = swap_ctx.user_dest_token_account;
-        swap_ctx.user_dest_token_account = user_dest_token_account;
-
-        // before swap
-        let collateral_amount_before = swap_ctx.get_user_dest_token_balance()?;
-        // do swap back
-        swap_ctx.swap_base_in(actual_repay_amount - settle.amount, 1)?;
-        // after swap
-        let collateral_amount_after = swap_ctx.get_user_dest_token_balance()?
-            .checked_sub(collateral_amount_before)
-            .ok_or(LendingError::MathOverflow)?;
-        // deposit back to collateral reserve
-        let mint_amount = collateral_market_reserve.deposit(collateral_amount_after)?;
-        user_obligation.pledge::<true>(mint_amount, None, collateral_index, &collateral_market_reserve)?;
-    } else {
-        user_obligation.close_empty_collateral(collateral_index);
-    }
     
     // validate health
     user_obligation.validate_health(friend_obligation)?;
@@ -1725,7 +1875,7 @@ fn process_easy_repay_by_orca(
     MarketReserve::pack(collateral_market_reserve, &mut collateral_market_reserve_info.try_borrow_mut_data()?)
 }
 
-fn process_easy_repay_by_raydium(
+fn process_easy_repay_base_out<const DEX_TYPE: DexType>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
     max_sotoken_amount: u64,
@@ -1758,9 +1908,11 @@ fn process_easy_repay_by_raydium(
     // 9?
     get_friend_obligation!(friend_obligation; account_info_iter, user_obligation, clock);
     // 9/10
-    get_user_obligation_owner!(user_obligation_owner_info; account_info_iter, user_obligation);
+    get_user_obligation_owner!(user_authority_info; account_info_iter, user_obligation);
     // 10/11
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
+    // 11/12
+    let swap_program_info = next_account_info(account_info_iter)?;
 
     let collateral_index = user_obligation.find_collateral(collateral_market_reserve_info.key)?;
     // redeem
@@ -1779,40 +1931,74 @@ fn process_easy_repay_by_raydium(
     // user repay in loan reserve
     loan_market_reserve.liquidity_info.repay(&settle)?;
     
-    let swap_ctx = RaydiumSwapContext {
-        swap_program: next_account_info(account_info_iter)?,
-        token_program: token_program_id,
-        amm_info: next_account_info(account_info_iter)?,
-        amm_authority: next_account_info(account_info_iter)?,
-        amm_open_orders: next_account_info(account_info_iter)?,
-        amm_target_orders: next_account_info(account_info_iter)?,
-        pool_source_token_account: next_account_info(account_info_iter)?,
-        pool_dest_token_account: next_account_info(account_info_iter)?,
-        serum_program: next_account_info(account_info_iter)?,
-        serum_market: next_account_info(account_info_iter)?,
-        serum_bids: next_account_info(account_info_iter)?,
-        serum_asks: next_account_info(account_info_iter)?,
-        serum_event_queue: next_account_info(account_info_iter)?,
-        serum_source_token_account: next_account_info(account_info_iter)?,
-        serum_dest_token_account: next_account_info(account_info_iter)?,
-        serum_vault_signer: next_account_info(account_info_iter)?,
-        user_source_token_account: collateral_supply_account_info,
-        user_dest_token_account: loan_supply_account_info,
-        user_authority: manager_authority_info,
-        signer_seeds,
+    let collateral_amount = match DEX_TYPE {
+        ORCA => {
+            let swap_ctx = OrcaSwapContext {
+                swap_program: swap_program_info,
+                token_program: token_program_info,
+                pool_info: next_account_info(account_info_iter)?,
+                pool_authority: next_account_info(account_info_iter)?,
+                pool_lp_token_mint: next_account_info(account_info_iter)?,
+                pool_source_token_account: next_account_info(account_info_iter)?,
+                pool_dest_token_account: next_account_info(account_info_iter)?,
+                pool_fee_account: next_account_info(account_info_iter)?,
+                user_source_token_account: collateral_supply_account_info,
+                user_dest_token_account: loan_supply_account_info,
+                user_authority: manager_authority_info,
+                signer_seeds,
+            };
+            // check ctx
+            if !swap_ctx.is_supported() {
+                return Err(LendingError::InvalidDexAccounts.into());
+            }
+            // before swap
+            let collateral_amount_before = swap_ctx.get_user_source_token_balance()?;
+            // dp swap
+            swap_ctx.swap_base_out(max_collateral_amount, settle.amount)?;
+            // after swap
+            collateral_amount_before
+                .checked_sub(swap_ctx.get_user_source_token_balance()?)
+                .ok_or(LendingError::MathOverflow)?
+        }
+        ORCA_TWICE => unimplemented!("Orca twice router does not support base out"),
+        RAYDIUM => {
+            let swap_ctx = RaydiumSwapContext {
+                swap_program: swap_program_info,
+                token_program: token_program_info,
+                amm_info: next_account_info(account_info_iter)?,
+                amm_authority: next_account_info(account_info_iter)?,
+                amm_open_orders: next_account_info(account_info_iter)?,
+                amm_target_orders: next_account_info(account_info_iter)?,
+                pool_source_token_account: next_account_info(account_info_iter)?,
+                pool_dest_token_account: next_account_info(account_info_iter)?,
+                serum_program: next_account_info(account_info_iter)?,
+                serum_market: next_account_info(account_info_iter)?,
+                serum_bids: next_account_info(account_info_iter)?,
+                serum_asks: next_account_info(account_info_iter)?,
+                serum_event_queue: next_account_info(account_info_iter)?,
+                serum_source_token_account: next_account_info(account_info_iter)?,
+                serum_dest_token_account: next_account_info(account_info_iter)?,
+                serum_vault_signer: next_account_info(account_info_iter)?,
+                user_source_token_account: collateral_supply_account_info,
+                user_dest_token_account: loan_supply_account_info,
+                user_authority: manager_authority_info,
+                signer_seeds,
+            };
+            // check ctx
+            if !swap_ctx.is_supported() {
+                return Err(LendingError::InvalidDexAccounts.into());
+            }
+            // before swap
+            let collateral_amount_before = swap_ctx.get_user_source_token_balance()?;
+            // dp swap
+            swap_ctx.swap_base_out(max_collateral_amount, settle.amount)?;
+            // after swap
+            collateral_amount_before
+                .checked_sub(swap_ctx.get_user_source_token_balance()?)
+                .ok_or(LendingError::MathOverflow)?
+        }
+        _ => unreachable!("unexpected dex type"),
     };
-    // check ctx
-    if !swap_ctx.is_supported() {
-        return Err(LendingError::InvalidDexAccounts.into());
-    }
-    // before swap
-    let collateral_amount_before = swap_ctx.get_user_source_token_balance()?;
-    // dp swap
-    swap_ctx.swap_base_out(max_collateral_amount, settle.amount)?;
-    // after swap
-    let collateral_amount = collateral_amount_before
-        .checked_sub(swap_ctx.get_user_source_token_balance()?)
-        .ok_or(LendingError::MathOverflow)?;
 
     if max_collateral_amount > collateral_amount {
         // deposit back to collateral reserve
@@ -1900,7 +2086,7 @@ fn process_borrow_liquidity_by_unique_credit(
     // 7
     get_unique_credit_owner!(authority_info; account_info_iter, unique_credit);
     // 8
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // accrue interest
     market_reserve.accrue_interest(clock.slot)?;
@@ -1916,7 +2102,7 @@ fn process_borrow_liquidity_by_unique_credit(
 
     // approve to credit owner
     process_token_approve(
-        token_program_id,
+        token_program_info,
         supply_token_account_info,
         authority_info,
         manager_authority_info,
@@ -1959,7 +2145,7 @@ fn process_repay_loan_by_unique_credit(
     }
     let source_token_account = Account::unpack(&source_token_account_info.try_borrow_data()?)?;
     // 8
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // accrue interest
     market_reserve.accrue_interest(clock.slot)?;
@@ -1975,7 +2161,7 @@ fn process_repay_loan_by_unique_credit(
 
     // transfer token to market reserve
     process_token_transfer(
-        token_program_id,
+        token_program_info,
         source_token_account_info,
         supply_token_account_info,
         manager_authority_info,
@@ -2048,7 +2234,7 @@ fn process_reduce_insurance(
     // 6
     let receiver_token_account_info = next_account_info(account_info_iter)?;
     // 7
-    let token_program_id = next_account_info(account_info_iter)?;
+    let token_program_info = next_account_info(account_info_iter)?;
 
     // reduce insurance
     market_reserve.liquidity_info.reduce_insurance(amount)?;
@@ -2056,7 +2242,7 @@ fn process_reduce_insurance(
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
     // transfer
     process_token_transfer(
-        token_program_id,
+        token_program_info,
         supply_token_account_info,
         receiver_token_account_info,
         manager_authority_info,

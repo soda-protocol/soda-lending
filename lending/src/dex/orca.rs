@@ -104,6 +104,6 @@ impl<'a, 'b> Swapper<'a, 'b> for OrcaSwapContext<'a, 'b> {
     }
 
     fn swap_base_out(&self, _max_amount_in: u64, _amount_out: u64) -> ProgramResult {
-        unreachable!("Orca is not support for swap base out")
+        unimplemented!("Orca does not provide swap base out");
     }
 }
