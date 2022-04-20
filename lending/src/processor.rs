@@ -1229,6 +1229,7 @@ fn process_flash_loan(
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)
 }
 
+#[inline(never)]
 fn process_flash_liquidate<const IS_COLLATERAL: bool>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -1345,6 +1346,7 @@ fn process_flash_liquidate<const IS_COLLATERAL: bool>(
 }
 
 // must after update obligation
+#[inline(never)]
 fn process_open_leverage_position_base_in<const DEX_TYPE: DexType>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -1541,6 +1543,7 @@ fn process_open_leverage_position_base_in<const DEX_TYPE: DexType>(
 }
 
 // must after update obligation
+#[inline(never)]
 fn process_open_leverage_position_base_out<const DEX_TYPE: DexType>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -1691,6 +1694,7 @@ fn process_open_leverage_position_base_out<const DEX_TYPE: DexType>(
     MarketReserve::pack(collateral_market_reserve, &mut collateral_market_reserve_info.try_borrow_mut_data()?)
 }
 
+#[inline(never)]
 fn process_easy_repay_base_in<const DEX_TYPE: DexType>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
@@ -1875,6 +1879,7 @@ fn process_easy_repay_base_in<const DEX_TYPE: DexType>(
     MarketReserve::pack(collateral_market_reserve, &mut collateral_market_reserve_info.try_borrow_mut_data()?)
 }
 
+#[inline(never)]
 fn process_easy_repay_base_out<const DEX_TYPE: DexType>(
     program_id: &Pubkey,
     accounts: &[AccountInfo],
