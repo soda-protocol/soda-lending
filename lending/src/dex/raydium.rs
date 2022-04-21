@@ -9,8 +9,12 @@ use crate::{Data, invoker::process_invoke, check_pubkey};
 
 use super::Swapper;
 
+// mainnet
 const RAYDIUM_PROGRAM: Pubkey = solana_program::pubkey!("675kPX9MHTjS2zt1qfr1NYHuzeLXfQM9H24wFSUt1Mp8");
 const SERUM_PROGRAM: Pubkey = solana_program::pubkey!("9xQeWvG816bUx9EPjHmaT23yvVM2ZWbrrpZb9PusVFin");
+const RAYDIUM_POOL_SOL_USDC: Pubkey = solana_program::pubkey!("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2");
+const RAYDIUM_POOL_SOL_USDT: Pubkey = solana_program::pubkey!("7XawhbbxtsRcQA8KTkHT9f9nc6d69UwqCDh6U5EEbEmX");
+const RAYDIUM_POOL_BTC_MSOL: Pubkey = solana_program::pubkey!("ynV2H2b7FcRBho2TvE25Zc4gDeuu2N45rUw9DuJYjJ9");
 const RAYDIUM_POOL_BTC_SRM: Pubkey = solana_program::pubkey!("DvxLb4NnQUYq1gErk35HVt9g8kxjNbviJfiZX1wqraMv");
 const RAYDIUM_POOL_BTC_USDC: Pubkey = solana_program::pubkey!("6kbC5epG18DF2DwPEW34tBy5pGFS7pEGALR3v5MGxgc5");
 const RAYDIUM_POOL_ETH_MSOL: Pubkey = solana_program::pubkey!("Ghj3v2qYbSp6XqmH4NV4KRu4Rrgqoh2Ra7L9jEdsbNzF");
@@ -23,11 +27,16 @@ const RAYDIUM_POOL_RAY_SOL: Pubkey = solana_program::pubkey!("AVs9TA4nWDzfPJE9gG
 const RAYDIUM_POOL_RAY_SRM: Pubkey = solana_program::pubkey!("GaqgfieVmnmY4ZsZHHA6L5RSVzCGL3sKx4UgHBaYNy8m");
 const RAYDIUM_POOL_RAY_USDC: Pubkey = solana_program::pubkey!("6UmmUiYoBjSrhakAobJw8BvkmJtDVxaeBtbt7rxWo1mg");
 const RAYDIUM_POOL_RAY_USDT: Pubkey = solana_program::pubkey!("DVa7Qmb5ct9RCpaU7UTpSaf3GVMYz17vNVU67XpdCRut");
-const RAYDIUM_POOL_SOL_USDC: Pubkey = solana_program::pubkey!("58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2");
-const RAYDIUM_POOL_SOL_USDT: Pubkey = solana_program::pubkey!("7XawhbbxtsRcQA8KTkHT9f9nc6d69UwqCDh6U5EEbEmX");
 const RAYDIUM_POOL_SRM_SOL: Pubkey = solana_program::pubkey!("EvWJC2mnmu9C9aQrsJLXw8FhUcwBzFEUQsP1E5Y6a5N7");
 const RAYDIUM_POOL_SRM_USDC: Pubkey = solana_program::pubkey!("8tzS7SkUZyHPQY7gLqsMCXZ5EDCgjESUHcB17tiR1h3Z");
 const RAYDIUM_POOL_SRM_USDT: Pubkey = solana_program::pubkey!("af8HJg2ffWoKJ6vKvkWJUJ9iWbRR83WgXs8HPs26WGr");
+const RAYDIUM_POOL_MSOL_RAY: Pubkey = solana_program::pubkey!("6gpZ9JkLoYvpA5cwdyPZFsDw6tkbPyyXM5FqRqHxMCny");
+const RAYDIUM_POOL_MSOL_SOL: Pubkey = solana_program::pubkey!("EGyhb2uLAsRUbRx9dNFBjMVYnFaASWMvD6RE1aEf2LxL");
+const RAYDIUM_POOL_MSOL_USDC: Pubkey = solana_program::pubkey!("ZfvDXXUhZDzDVsapffUyXHj9ByCoPjP4thL6YXcZ9ix");
+const RAYDIUM_POOL_MSOL_USDT: Pubkey = solana_program::pubkey!("BhuMVCzwFVZMSuc1kBbdcAnXwFg9p4HJp7A9ddwYjsaF");
+const RAYDIUM_POOL_WBWBNB_USDC: Pubkey = solana_program::pubkey!("Fb1WR1kYvG1tHu4pwAxXQpdKT8Grh9i7ES9rZusLg7D6");
+const RAYDIUM_POOL_WEWETH_SOL: Pubkey = solana_program::pubkey!("4yrHms7ekgTBgJg77zJ33TsWrraqHsCXDtuSZqUsuGHb");
+const RAYDIUM_POOL_WEWETH_USDC: Pubkey = solana_program::pubkey!("EoNrn8iUhwgJySD1pHu8Qxm5gSQqLK3za4m8xzD2RuEb");
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct SwapInstructionBaseIn {
@@ -96,6 +105,9 @@ impl<'a, 'b> Swapper<'a, 'b> for RaydiumSwapContext<'a, 'b> {
         check_pubkey!(
             self.swap_program.key == &RAYDIUM_PROGRAM && self.serum_program.key == &SERUM_PROGRAM,
             self.amm_info.key,
+            &RAYDIUM_POOL_SOL_USDC,
+            &RAYDIUM_POOL_SOL_USDT,
+            &RAYDIUM_POOL_BTC_MSOL,
             &RAYDIUM_POOL_BTC_SRM,
             &RAYDIUM_POOL_BTC_USDC,
             &RAYDIUM_POOL_ETH_SOL,
@@ -108,11 +120,16 @@ impl<'a, 'b> Swapper<'a, 'b> for RaydiumSwapContext<'a, 'b> {
             &RAYDIUM_POOL_RAY_USDC,
             &RAYDIUM_POOL_RAY_USDT,
             &RAYDIUM_POOL_RAY_SOL,
-            &RAYDIUM_POOL_SOL_USDC,
-            &RAYDIUM_POOL_SOL_USDT,
             &RAYDIUM_POOL_SRM_SOL,
             &RAYDIUM_POOL_SRM_USDC,
-            &RAYDIUM_POOL_SRM_USDT
+            &RAYDIUM_POOL_SRM_USDT,
+            &RAYDIUM_POOL_MSOL_RAY,
+            &RAYDIUM_POOL_MSOL_SOL,
+            &RAYDIUM_POOL_MSOL_USDC,
+            &RAYDIUM_POOL_MSOL_USDT,
+            &RAYDIUM_POOL_WBWBNB_USDC,
+            &RAYDIUM_POOL_WEWETH_SOL,
+            &RAYDIUM_POOL_WEWETH_USDC
         )
     }
 
