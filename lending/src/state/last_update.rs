@@ -6,8 +6,8 @@ use solana_program::{
 };
 use arrayref::{array_mut_ref, array_ref, array_refs, mut_array_refs};
 
-/// Number of slots to consider stale after, about 5s
-pub const STALE_AFTER_SLOTS_ELAPSED: u64 = 10;
+/// Number of slots to consider stale after, about 8s
+pub const STALE_AFTER_SLOTS_ELAPSED: u64 = 15;
 
 /// Last update state
 /// !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!  Remark  !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
