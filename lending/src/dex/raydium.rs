@@ -160,6 +160,7 @@ impl<'a, 'b> Swapper<'a, 'b> for RaydiumSwapContext<'a, 'b> {
             vec![
                 self.token_program.clone(),
                 self.amm_info.clone(),
+                self.amm_authority.clone(),
                 self.amm_open_orders.clone(),
                 self.amm_target_orders.clone(),
                 self.pool_source_token_account.clone(),
@@ -191,6 +192,7 @@ impl<'a, 'b> Swapper<'a, 'b> for RaydiumSwapContext<'a, 'b> {
             vec![
                 self.token_program.clone(),
                 self.amm_info.clone(),
+                self.amm_authority.clone(),
                 self.amm_open_orders.clone(),
                 self.amm_target_orders.clone(),
                 self.pool_source_token_account.clone(),
