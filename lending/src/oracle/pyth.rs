@@ -8,7 +8,7 @@ use solana_program::{msg, clock::Clock, program_error::ProgramError, account_inf
 use crate::{math::{Decimal, TryMul, TryDiv}, error::LendingError};
 
 pub fn get_pyth_price(account_info: &AccountInfo, clock: &Clock) -> Result<Decimal, ProgramError> {
-    const STALE_AFTER_SECS_ELAPSED: i64 = 40;
+    const STALE_AFTER_SECS_ELAPSED: i64 = 180;
 
     let price_feed = load_price_feed_from_account_info(account_info)?;
     let price = if let Some(price) = price_feed.get_current_price() {

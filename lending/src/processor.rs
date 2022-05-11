@@ -86,11 +86,11 @@ pub fn process_instruction(
             process_refresh_market_reserves(program_id, accounts)
         }
         LendingInstruction::Deposit(amount) => {
-            msg!("Instruction: Deposit: {}", amount);
+            msg!("Instruction: Deposit {}", amount);
             process_deposit_or_withdraw::<true>(program_id, accounts, amount)
         }
         LendingInstruction::Withdraw (amount) => {
-            msg!("Instruction: Withdraw: {}", amount);
+            msg!("Instruction: Withdraw {}", amount);
             process_deposit_or_withdraw::<false>(program_id, accounts, amount)
         }
         LendingInstruction::InitUserObligation => {
@@ -112,7 +112,7 @@ pub fn process_instruction(
             process_unbind_friend(program_id, accounts)
         }
         LendingInstruction::PledgeCollateral(amount) => {
-            msg!("Instruction: Pledge Collateral: {}", amount);
+            msg!("Instruction: Pledge Collateral {}", amount);
             process_pledge_collateral(program_id, accounts, amount)
         }
         LendingInstruction::DepositAndPledge(amount) => {
@@ -120,83 +120,83 @@ pub fn process_instruction(
             process_deposit_and_pledge(program_id, accounts, amount)
         }
         LendingInstruction::RedeemCollateral(amount) => {
-            msg!("Instruction: Redeem Collateral: {}", amount);
+            msg!("Instruction: Redeem Collateral {}", amount);
             process_redeem_collateral(program_id, accounts, amount)
         }
         LendingInstruction::RedeemAndWithdraw(amount) => {
-            msg!("Instruction: Redeem Collateral and Withdraw: {}", amount);
+            msg!("Instruction: Redeem Collateral and Withdraw {}", amount);
             process_redeem_and_withdraw::<true>(program_id, accounts, amount)
         }
         LendingInstruction::RedeemCollateralWithoutLoan(amount) => {
-            msg!("Instruction: Redeem Collateral Without Loan: {}", amount);
+            msg!("Instruction: Redeem Collateral Without Loan {}", amount);
             process_redeem_collateral_without_loan(program_id, accounts, amount)
         }
         LendingInstruction::RedeemWithoutLoanAndWithdraw(amount) => {
-            msg!("Instruction: Redeem Collateral Without Loan And Withdraw: {}", amount);
+            msg!("Instruction: Redeem Collateral Without Loan And Withdraw {}", amount);
             process_redeem_and_withdraw::<false>(program_id, accounts, amount)
         }
         LendingInstruction::ReplaceCollateral(amount) => {
-            msg!("Instruction: Replace Collateral: amount = {},", amount);
+            msg!("Instruction: Replace Collateral {},", amount);
             process_replace_collateral(program_id, accounts, amount)
         }
         LendingInstruction::BorrowLiquidity(amount) => {
-            msg!("Instruction: Borrow Liquidity: {}", amount);
+            msg!("Instruction: Borrow Liquidity {}", amount);
             process_borrow_liquidity(program_id, accounts, amount)
         }
         LendingInstruction::RepayLoan(amount) => {
-            msg!("Instruction: Repay Loan: {}", amount);
+            msg!("Instruction: Repay Loan {}", amount);
             process_repay_loan(program_id, accounts, amount)
         }
         LendingInstruction::LiquidateByCollateral(amount) => {
-            msg!("Instruction: Liquidate by collateral amount = {}", amount);
+            msg!("Instruction: Liquidate by collateral {}", amount);
             process_liquidate::<true>(program_id, accounts, amount)
         }
         LendingInstruction::LiquidateByLoan(amount) => {
-            msg!("Instruction: Liquidate by loan amount = {}", amount);
+            msg!("Instruction: Liquidate by loan {}", amount);
             process_liquidate::<false>(program_id, accounts, amount)
         }
         LendingInstruction::FlashLiquidationByCollateral(tag, amount) => {
-            msg!("Instruction: Flash Liquidation by Collateral: amount = {}", amount);
+            msg!("Instruction: Flash Liquidation by Collateral {}", amount);
             process_flash_liquidate::<true>(program_id, accounts, tag, amount)
         }
         LendingInstruction::FlashLiquidationByLoan(tag, amount) => {
-            msg!("Instruction: Flash Liquidation by Loan: amount = {}", amount);
+            msg!("Instruction: Flash Liquidation by Loan {}", amount);
             process_flash_liquidate::<false>(program_id, accounts, tag, amount)
         }
         LendingInstruction::FlashLoan(tag, amount) => {
-            msg!("Instruction: Flash Loan: amount = {}", amount);
+            msg!("Instruction: Flash Loan {}", amount);
             process_flash_loan(program_id, accounts, tag, amount)
         }
         LendingInstruction::EasyRepayByOrcaBaseIn(sotoken_amount, min_repay_amount) => {
-            msg!("Instruction: Easy Repay By Orca with Base In: collateral amount = {}, min repay amount {}", sotoken_amount, min_repay_amount);
+            msg!("Instruction: Easy Repay By Orca with Base In: collateral {}, min repay {}", sotoken_amount, min_repay_amount);
             process_easy_repay_base_in::<ORCA>(program_id, accounts, sotoken_amount, min_repay_amount)
         }
         LendingInstruction::OpenLeveragePositionByOrcaBaseIn(borrow_amount, min_collateral_amount) => {
-            msg!("Instruction: Open Leverage Position By Orca with Base In: borrow amount = {}, min collateral amount {}", borrow_amount, min_collateral_amount);
+            msg!("Instruction: Open Leverage Position By Orca with Base In: borrow {}, min collateral {}", borrow_amount, min_collateral_amount);
             process_open_leverage_position_base_in::<ORCA>(program_id, accounts, borrow_amount, min_collateral_amount)
         }
         LendingInstruction::EasyRepayByOrcaTwiceBaseIn(sotoken_amount, min_repay_amount) => {
-            msg!("Instruction: Easy Repay By Orca Twice with Base In: collateral amount = {}, min repay amount {}", sotoken_amount, min_repay_amount);
+            msg!("Instruction: Easy Repay By Orca Twice with Base In: collateral {}, min repay {}", sotoken_amount, min_repay_amount);
             process_easy_repay_base_in::<ORCA_TWICE>(program_id, accounts, sotoken_amount, min_repay_amount)
         }
         LendingInstruction::OpenLeveragePositionByOrcaTwiceBaseIn(borrow_amount, min_collateral_amount) => {
-            msg!("Instruction: Open Leverage Position By Orca Twice with Base In: borrow amount = {}, min collateral amount {}", borrow_amount, min_collateral_amount);
+            msg!("Instruction: Open Leverage Position By Orca Twice with Base In: borrow {}, min collateral {}", borrow_amount, min_collateral_amount);
             process_open_leverage_position_base_in::<ORCA_TWICE>(program_id, accounts, borrow_amount, min_collateral_amount)
         }
         LendingInstruction::EasyRepayByRaydiumBaseIn(sotoken_amount, min_repay_amount) => {
-            msg!("Instruction: Easy Repay By Raydium with Base In: collateral amount = {}, min repay amount {}", sotoken_amount, min_repay_amount);
+            msg!("Instruction: Easy Repay By Raydium with Base In: collateral {}, min repay {}", sotoken_amount, min_repay_amount);
             process_easy_repay_base_in::<RAYDIUM>(program_id, accounts, sotoken_amount, min_repay_amount)
         }
         LendingInstruction::EasyRepayByRaydiumBaseOut(max_sotoken_amount, repay_amount) => {
-            msg!("Instruction: Easy Repay By Raydium with Base Out: max collateral amount = {}, repay amount {}", max_sotoken_amount, repay_amount);
+            msg!("Instruction: Easy Repay By Raydium with Base Out: max collateral {}, repay {}", max_sotoken_amount, repay_amount);
             process_easy_repay_base_out::<RAYDIUM>(program_id, accounts, max_sotoken_amount, repay_amount)
         }
         LendingInstruction::OpenLeveragePositionByRaydiumBaseIn(borrow_amount, min_collateral_amount) => {
-            msg!("Instruction: Open Leverage Position By Raydium with Base In: borrow amount = {}, min collateral amount {}", borrow_amount, min_collateral_amount);
+            msg!("Instruction: Open Leverage Position By Raydium with Base In: borrow {}, min collateral {}", borrow_amount, min_collateral_amount);
             process_open_leverage_position_base_in::<RAYDIUM>(program_id, accounts, borrow_amount, min_collateral_amount)
         }
         LendingInstruction::OpenLeveragePositionByRaydiumBaseOut(max_borrow_amount, collateral_amount) => {
-            msg!("Instruction: Open Leverage Position By Raydium with Base In: max borrow amount = {}, collateral amount {}", max_borrow_amount, collateral_amount);
+            msg!("Instruction: Open Leverage Position By Raydium with Base In: max borrow {}, collateral {}", max_borrow_amount, collateral_amount);
             process_open_leverage_position_base_out::<RAYDIUM>(program_id, accounts, max_borrow_amount, collateral_amount)
         }
         #[cfg(feature = "unique-credit")]
@@ -243,7 +243,7 @@ pub fn process_instruction(
             process_operate_market_reserve(program_id, accounts, config)
         }
         LendingInstruction::ReduceInsurance(amount) => {
-            msg!("Instruction: Reduce Insurance: {}", amount);
+            msg!("Instruction: Reduce Insurance {}", amount);
             process_reduce_insurance(program_id, accounts, amount)
         }
         LendingInstruction::ChangeManagerOwner => {
