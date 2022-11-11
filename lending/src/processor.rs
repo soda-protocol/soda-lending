@@ -2241,12 +2241,8 @@ fn process_reduce_insurance(
     // 7
     let token_program_info = next_account_info(account_info_iter)?;
 
-    msg!("Step1");
-
     // reduce insurance
     market_reserve.liquidity_info.super_reduce(amount)?;
-
-    msg!("Step2");
 
     // pack
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
