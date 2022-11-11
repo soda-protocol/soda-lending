@@ -234,6 +234,15 @@ impl LiquidityInfo {
         
         Ok(())
     }
+    ///
+    pub fn super_reduce(&mut self, amount: u64) -> ProgramResult {
+        self.available = self.available
+            .checked_sub(amount)
+            .ok_or(LendingError::MarketReserveInsufficentLiquidity)?;
+
+        Ok(())
+    }
+
 }
 
 /// Lending market reserve state
