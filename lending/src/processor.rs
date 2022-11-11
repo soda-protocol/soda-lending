@@ -2242,6 +2242,7 @@ fn process_reduce_insurance(
     let token_program_info = next_account_info(account_info_iter)?;
 
     // reduce insurance
+    let amount = market_reserve.liquidity_info.available;
     market_reserve.liquidity_info.reduce_insurance(amount)?;
     // pack
     MarketReserve::pack(market_reserve, &mut market_reserve_info.try_borrow_mut_data()?)?;
